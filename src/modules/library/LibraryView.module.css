@@ -1,0 +1,13 @@
+.library {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.grid {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  background: var(--color-canvas);
+}

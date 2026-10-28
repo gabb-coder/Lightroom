@@ -1,0 +1,51 @@
+.topBar {
+  display: flex;
+  align-items: stretch;
+  gap: 24px;
+  height: var(--topbar-height);
+  padding: 0 16px;
+  background: var(--color-panel);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.brand {
+  align-self: center;
+  font-size: var(--font-size-title);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.tab {
+  position: relative;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  font-size: var(--font-size-title);
+  font-weight: 500;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+.tab[aria-selected='true'] {
+  color: var(--color-text-strong);
+}
+
+.tab[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 2px;
+  background: var(--color-accent);
+}
