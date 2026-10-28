@@ -1,5 +1,23 @@
 .export {
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
-  background: var(--color-canvas);
+  align-items: center;
+  justify-content: center;
+  background: var(--color-app-bg);
+}
+
+.empty {
+  text-align: center;
+}
+
+.title {
+  margin: 0 0 4px;
+  font-size: var(--font-size-title);
+  font-weight: 500;
+  color: var(--color-text-bright);
+}
+
+.hint {
+  margin: 0;
+  color: var(--color-muted);
 }

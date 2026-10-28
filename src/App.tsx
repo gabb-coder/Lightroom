@@ -1,5 +1,4 @@
 import { TopBar } from './components/TopBar';
-import { Filmstrip } from './components/Filmstrip';
 import { DevelopView } from './modules/develop/DevelopView';
 import { LibraryView } from './modules/library/LibraryView';
 import { ExportView } from './modules/export/ExportView';
@@ -25,15 +24,9 @@ export function App() {
   return (
     <div className={styles.app}>
       <TopBar />
-      <main
-        className={styles.body}
-        id={`module-${module}`}
-        role="tabpanel"
-        aria-labelledby={`tab-${module}`}
-      >
+      <div className={styles.body} id={`module-${module}`} role="tabpanel" aria-labelledby={`tab-${module}`}>
         <ModuleView module={module} />
-      </main>
-      <Filmstrip />
+      </div>
     </div>
   );
 }

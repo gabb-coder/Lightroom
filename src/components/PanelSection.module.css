@@ -1,0 +1,36 @@
+.section {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.header {
+  width: 100%;
+  height: var(--panel-header-height);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: none;
+  background: transparent;
+  color: var(--color-title);
+  font-weight: 600;
+  text-align: left;
+}
+
+.title {
+  flex: 1 1 auto;
+}
+
+.editedDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d6d6d6;
+}
+
+.body:empty {
+  display: none;
+}
+
+.body {
+  padding: 0 14px 12px;
+}

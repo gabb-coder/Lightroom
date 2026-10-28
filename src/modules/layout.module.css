@@ -1,0 +1,47 @@
+/* Three-column module layout from the mockups: two side panels with fixed
+   flex bases and a center that takes all remaining space (flex-grow 999).
+   A module can narrow the side panels by setting --left-basis / --right-basis
+   on its row. Below 900px the columns wrap and the left panel moves to the end. */
+
+.row {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.side {
+  max-width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--color-panel);
+}
+
+.left {
+  flex: 1 1 var(--left-basis, var(--left-panel-width));
+  border-right: 1px solid var(--color-border);
+}
+
+.right {
+  flex: 1 1 var(--right-basis, var(--right-panel-width));
+  border-left: 1px solid var(--color-border);
+}
+
+.center {
+  flex: 999 1 var(--center-min-width);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 900px) {
+  .side {
+    overflow-y: visible;
+  }
+
+  .left {
+    order: 3;
+  }
+}

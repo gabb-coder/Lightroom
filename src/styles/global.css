@@ -7,7 +7,6 @@
 html,
 body,
 #root {
-  height: 100%;
   margin: 0;
 }
 
@@ -16,14 +15,24 @@ body {
   color: var(--color-text);
   font-family: var(--font-family);
   font-size: var(--font-size-control);
-  line-height: 1.4;
+  line-height: 1.35;
   -webkit-font-smoothing: antialiased;
-  overflow: hidden;
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
 }
 
 button {
-  font: inherit;
-  color: inherit;
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled {
+  cursor: default;
 }
 
 :focus-visible {
@@ -39,7 +48,16 @@ button {
 .group-label {
   font-size: var(--font-size-group);
   font-weight: 500;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--color-muted);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }

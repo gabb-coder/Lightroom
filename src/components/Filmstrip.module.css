@@ -1,10 +1,32 @@
 .filmstrip {
+  flex: none;
+  height: var(--filmstrip-height);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-chrome);
+  border-top: 1px solid var(--color-border);
+}
+
+.header {
+  height: 26px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  height: var(--filmstrip-height);
-  background: var(--color-panel);
-  border-top: 1px solid var(--color-border);
+  gap: 12px;
+  padding: 0 16px;
+  color: var(--color-muted);
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.strip {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 10px;
+  overflow-x: auto;
 }
 
 .empty {

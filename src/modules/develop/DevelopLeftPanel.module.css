@@ -1,0 +1,64 @@
+.title {
+  font-weight: 600;
+  color: var(--color-title);
+}
+
+.navigator {
+  padding: 10px 14px 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.navHeader {
+  height: 24px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.navPreview {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  background: #000000;
+}
+
+.addGlyph {
+  color: var(--color-muted);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.history {
+  flex: 1 1 auto;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+}
+
+.historyHeader {
+  height: var(--panel-header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+}
+
+.historyList {
+  list-style: none;
+  margin: 0;
+  padding: 0 8px 10px;
+}
+
+.copyPaste {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+.copyPaste > button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 6px;
+}

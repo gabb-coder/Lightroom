@@ -3,7 +3,7 @@
 services:
   - type: web
     runtime: static
-    name: lightroom-web
+    name: darkslide
     branch: main
     autoDeployTrigger: commit
     buildCommand: npm ci && npm run build
