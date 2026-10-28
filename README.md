@@ -1,9 +1,10 @@
-# Darkslide
+# Lightroom Web
 
 A browser-based, Lightroom-style, non-destructive photo editor with a Library module (organize
 photos) and a Develop module (edit photos). It is a static web app with no
 backend: photos, edits and presets stay in the browser (IndexedDB) and are
-never uploaded.
+never uploaded. The name shown in the app, "Darkslide", is a placeholder
+from the design mockups; change it in `src/appName.ts`.
 
 Stack: Vite, React 18, TypeScript (strict), Zustand, Dexie, raw WebGL2,
 Vitest, Playwright.
@@ -48,7 +49,7 @@ settings live in the `render.yaml` Blueprint at the repo root.
    branch.
 2. **Create the site in Render.** In the Render Dashboard choose
    **New > Blueprint**, pick this repo, and confirm. Render reads
-   `render.yaml` and creates the `darkslide` static site with:
+   `render.yaml` and creates the `lightroom-web` static site with:
    - Build command: `npm ci && npm run build`
    - Publish directory: `dist`
    - Auto-deploy: on every commit to `main`

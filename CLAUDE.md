@@ -1,12 +1,15 @@
 # CLAUDE.md
 
-Darkslide: a browser-based, non-destructive Lightroom-style photo editor.
-Static site, no backend, deployed to Render.
+A browser-based, non-destructive Lightroom-style photo editor. Static site,
+no backend, deployed to Render. The UI name "Darkslide" is a placeholder from
+the mockups; it lives only in `src/appName.ts`.
 
 - `SPEC.md` is the source of truth for scope.
-- `design/*.dc.html` are the UI mockups (Develop, Library, Export, Kit). They
-  use a custom template format: read them for layout, sizes, colors, copy and
-  behavior, never copy or run their code. They load Google Fonts; we don't.
+- `design/README.md` explains the mockups, tokens and expected behavior; read
+  it first. `design/*.dc.html` are the mockups (Develop, Library, Export,
+  Kit). They use a custom template format: read them for layout, sizes,
+  colors, copy and behavior, never copy or run their code. They load Google
+  Fonts; we don't.
 - Where design and SPEC disagree on scope, follow SPEC and tell the user.
   Where they disagree on visuals, follow the design.
 

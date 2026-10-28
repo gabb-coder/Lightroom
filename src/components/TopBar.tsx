@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { APP_NAME } from '../appName';
 import { APP_MODULES, useAppStore, type AppModule } from '../state/appStore';
 import { ImportIcon, LogoIcon, RedoIcon, UndoIcon } from './icons';
 import controls from './controls.module.css';
@@ -43,7 +44,7 @@ export function TopBar() {
     <header className={styles.topBar} data-testid="top-bar">
       <div className={styles.brand}>
         <LogoIcon />
-        <span className={styles.wordmark}>Darkslide</span>
+        <span className={styles.wordmark}>{APP_NAME}</span>
       </div>
       <nav className={styles.tabs} role="tablist" aria-label="Modules">
         {APP_MODULES.map((module) => (

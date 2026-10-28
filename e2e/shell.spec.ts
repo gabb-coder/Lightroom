@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { APP_NAME } from '../src/appName';
 
 async function box(locator: Locator) {
   const b = await locator.boundingBox();
@@ -23,7 +24,8 @@ test.describe('app shell', () => {
     const topBar = page.getByTestId('top-bar');
     expect((await box(topBar)).height).toBe(44);
     await expect(topBar).toHaveCSS('background-color', 'rgb(22, 22, 22)');
-    await expect(topBar).toContainText('Darkslide');
+    await expect(topBar).toContainText(APP_NAME);
+    await expect(page).toHaveTitle(APP_NAME);
 
     await expectWidth(page.getByTestId('left-panel'), 248);
     await expectWidth(page.getByTestId('right-panel'), 300);
