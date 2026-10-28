@@ -19,6 +19,8 @@ const SECTIONS = [
 
 export function DevelopRightPanel() {
   const basicEdited = useDevelopStore((s) => isBasicEdited(s.settings));
+  const hasPhoto = useDevelopStore((s) => s.photo !== null);
+  const resetAll = useDevelopStore((s) => s.resetAll);
   return (
     <aside className={`${layout.side} ${layout.right}`} aria-label="Develop panels" data-testid="right-panel">
       <Histogram />
@@ -32,7 +34,7 @@ export function DevelopRightPanel() {
         <button type="button" className={controls.button} disabled>
           Previous
         </button>
-        <button type="button" className={controls.button} disabled>
+        <button type="button" className={controls.button} disabled={!hasPhoto} onClick={resetAll}>
           Reset all
         </button>
       </div>

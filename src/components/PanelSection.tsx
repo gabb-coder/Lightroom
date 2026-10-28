@@ -7,31 +7,35 @@ interface PanelSectionProps {
   defaultOpen?: boolean;
   /** Shows the "edited" dot when the panel's settings differ from defaults. */
   edited?: boolean;
-  /** Extra content at the right of the header, e.g. an add button glyph. */
-  trailing?: ReactNode;
+  /** Buttons at the right of the header, outside the toggle (e.g. "New preset"). */
+  actions?: ReactNode;
+  /** "list" uses the tighter padding of the Presets list (design). */
+  variant?: 'default' | 'list';
   children?: ReactNode;
 }
 
 /** Collapsible side-panel section (design/Kit.dc.html "Panel headers"). */
-export function PanelSection({ title, defaultOpen = false, edited = false, trailing, children }: PanelSectionProps) {
+export function PanelSection({ title, defaultOpen = false, edited = false, actions, variant = 'default', children }: PanelSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
   const bodyId = useId();
 
   return (
     <section className={styles.section} aria-label={title}>
-      <button
-        type="button"
-        className={styles.header}
-        aria-expanded={open}
-        aria-controls={bodyId}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <ChevronIcon open={open} />
-        <span className={styles.title}>{title}</span>
-        {edited && <span className={styles.editedDot} role="img" aria-label="Edited" />}
-        {trailing}
-      </button>
-      <div id={bodyId} className={styles.body} hidden={!open}>
+      <div className={styles.headerRow}>
+        <button
+          type="button"
+          className={styles.header}
+          aria-expanded={open}
+          aria-controls={bodyId}
+          onClick={() => setOpen((o) => !o)}
+        >
+          <ChevronIcon open={open} />
+          <span className={styles.title}>{title}</span>
+          {edited && <span className={styles.editedDot} role="img" aria-label="Edited" />}
+        </button>
+        {actions && <div className={styles.actions}>{actions}</div>}
+      </div>
+      <div id={bodyId} className={styles.body} data-variant={variant} hidden={!open}>
         {children}
       </div>
     </section>

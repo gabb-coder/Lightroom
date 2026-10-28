@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useAppStore, type AppModule } from '../state/appStore';
 import { useDevelopStore } from '../state/developStore';
 import { createBeforeAfterKeys } from './beforeAfterKeys';
+import { matchHistoryShortcut } from './historyShortcuts';
+import { isMacPlatform } from './platform';
 import { isTextEntryTarget, type TargetLike } from './isTextEntryTarget';
 
 const MODULE_KEYS: Readonly<Record<string, AppModule>> = {
@@ -23,9 +25,18 @@ export function useGlobalShortcuts(): void {
       toggleBefore: () => useDevelopStore.getState().toggleBefore(),
     });
 
+    const mac = isMacPlatform();
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      // Text fields keep their own shortcuts (including native Ctrl/Cmd+Z).
       if (isTextEntryTarget(event.target as TargetLike | null)) return;
+      const historyAction = matchHistoryShortcut(event, mac);
+      if (historyAction) {
+        if (!developHasPhoto()) return;
+        event.preventDefault();
+        useDevelopStore.getState()[historyAction]();
+        return;
+      }
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.key === BEFORE_AFTER_KEY) {
         if (!developHasPhoto()) return;
         event.preventDefault();

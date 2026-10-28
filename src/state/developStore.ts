@@ -1,5 +1,17 @@
 import { create } from 'zustand';
 import { defaultEditSettings, type BasicSliderKey, type EditSettings, type Treatment } from '../model/editSettings';
+import {
+  createHistory,
+  currentSettings,
+  goToHistory,
+  pushHistory,
+  redo,
+  undo,
+  type History,
+  type HistoryEntry,
+} from '../model/history';
+import { basicHistoryKey, basicHistoryLabel } from '../model/historyDisplay';
+import { applyPresetTo, type Preset } from '../model/presets';
 
 /** A decoded photo ready to render. The original file is never modified. */
 export interface LoadedPhoto {
@@ -11,6 +23,8 @@ export interface LoadedPhoto {
 
 interface DevelopState {
   photo: LoadedPhoto | null;
+  /** Every edit is a history step; `settings` is always the step at the cursor. */
+  history: History;
   settings: EditSettings;
   /** True while a slider is being dragged or scrubbed: the renderer uses the proxy. */
   interacting: boolean;
@@ -21,6 +35,11 @@ interface DevelopState {
   openPhoto: (photo: LoadedPhoto) => void;
   setBasic: (key: BasicSliderKey, value: number) => void;
   setTreatment: (treatment: Treatment) => void;
+  applyPreset: (preset: Preset) => void;
+  resetAll: () => void;
+  undo: () => void;
+  redo: () => void;
+  goToHistory: (index: number) => void;
   setInteracting: (interacting: boolean) => void;
   toggleBefore: () => void;
   setPeeking: (peeking: boolean) => void;
@@ -29,21 +48,50 @@ interface DevelopState {
 /** True when the canvas should show the original with no adjustments. */
 export const selectShowingBefore = (s: Pick<DevelopState, 'before' | 'peeking'>): boolean => s.before || s.peeking;
 
+/** State patch for a new history step. */
+function commit(history: History, entry: HistoryEntry): Pick<DevelopState, 'history' | 'settings'> {
+  return { history: pushHistory(history, entry), settings: entry.settings };
+}
+
+/** State patch for moving the history cursor. */
+function moveTo(history: History): Pick<DevelopState, 'history' | 'settings'> {
+  return { history, settings: currentSettings(history) };
+}
+
+function initialEditState(): Pick<DevelopState, 'history' | 'settings'> {
+  const settings = defaultEditSettings();
+  return { history: createHistory(settings), settings };
+}
+
 /**
- * Edit store for the open photo and its current settings. History, presets
- * and persistence build on this in M3/M4.
+ * Edit store for the open photo: its settings history and view state.
+ * Persistence builds on this in M4.
  */
 export const useDevelopStore = create<DevelopState>()((set) => ({
   photo: null,
-  settings: defaultEditSettings(),
+  ...initialEditState(),
   interacting: false,
   before: false,
   peeking: false,
-  openPhoto: (photo) => set({ photo, settings: defaultEditSettings(), interacting: false, before: false, peeking: false }),
+  openPhoto: (photo) => set({ photo, ...initialEditState(), interacting: false, before: false, peeking: false }),
   setBasic: (key, value) =>
-    set((s) => (s.settings.basic[key] === value ? s : { settings: { ...s.settings, basic: { ...s.settings.basic, [key]: value } } })),
+    set((s) => {
+      if (s.settings.basic[key] === value) return s;
+      const settings = { ...s.settings, basic: { ...s.settings.basic, [key]: value } };
+      return commit(s.history, { label: basicHistoryLabel(key), key: basicHistoryKey(key), settings });
+    }),
   setTreatment: (treatment) =>
-    set((s) => (s.settings.basic.treatment === treatment ? s : { settings: { ...s.settings, basic: { ...s.settings.basic, treatment } } })),
+    set((s) => {
+      if (s.settings.basic.treatment === treatment) return s;
+      const settings = { ...s.settings, basic: { ...s.settings.basic, treatment } };
+      return commit(s.history, { label: basicHistoryLabel('treatment'), key: basicHistoryKey('treatment'), settings });
+    }),
+  applyPreset: (preset) =>
+    set((s) => commit(s.history, { label: `Preset: ${preset.name}`, key: null, settings: applyPresetTo(s.settings, preset) })),
+  resetAll: () => set((s) => commit(s.history, { label: 'Reset all', key: null, settings: defaultEditSettings() })),
+  undo: () => set((s) => moveTo(undo(s.history))),
+  redo: () => set((s) => moveTo(redo(s.history))),
+  goToHistory: (index) => set((s) => moveTo(goToHistory(s.history, index))),
   setInteracting: (interacting) => set({ interacting }),
   toggleBefore: () => set((s) => ({ before: !s.before })),
   setPeeking: (peeking) => set({ peeking }),

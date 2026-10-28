@@ -14,6 +14,8 @@ export interface SliderDef {
   format: SliderFormat;
   /** CSS background for the track. */
   track: string;
+  /** Name in the History panel, when it differs from the label (design: "Temperature"). */
+  historyLabel?: string;
 }
 
 const PLAIN_TRACK = '#3d3d3d';
@@ -24,7 +26,7 @@ function bipolar(id: string, label: string, min: number, max: number, step: numb
 
 /** Basic panel slider definitions; ranges and steps from design/Develop.dc.html. */
 export const BASIC_SLIDERS: Readonly<Record<BasicSliderKey, SliderDef>> = {
-  temp: bipolar('temp', 'Temp', -100, 100, 1, 'int', 'linear-gradient(90deg, #4d78c9, #8a8a8a, #d4b44e)'),
+  temp: { ...bipolar('temp', 'Temp', -100, 100, 1, 'int', 'linear-gradient(90deg, #4d78c9, #8a8a8a, #d4b44e)'), historyLabel: 'Temperature' },
   tint: bipolar('tint', 'Tint', -100, 100, 1, 'int', 'linear-gradient(90deg, #4fa865, #8a8a8a, #b956b0)'),
   exposure: bipolar('exposure', 'Exposure', -5, 5, 0.05, 'ev'),
   contrast: bipolar('contrast', 'Contrast', -100, 100, 1, 'int'),
@@ -35,6 +37,27 @@ export const BASIC_SLIDERS: Readonly<Record<BasicSliderKey, SliderDef>> = {
   vibrance: bipolar('vibrance', 'Vibrance', -100, 100, 1, 'int'),
   saturation: bipolar('saturation', 'Saturation', -100, 100, 1, 'int'),
 };
+
+function unipolar(id: string, label: string, min: number, max: number, step: number, defaultValue: number, format: SliderFormat, historyLabel: string): SliderDef {
+  return { id, label, min, max, step, defaultValue, bipolar: false, format, track: PLAIN_TRACK, historyLabel };
+}
+
+/** Detail, Effects and Geometry sliders (UI arrives in M6/M9; ranges are used to validate presets now). */
+export const DETAIL_SLIDERS = {
+  sharpAmount: unipolar('sharpAmount', 'Amount', 0, 150, 1, 40, 'uint', 'Sharpening'),
+  sharpRadius: unipolar('sharpRadius', 'Radius', 0.5, 3, 0.1, 1, 'dec', 'Sharpen radius'),
+} as const satisfies Record<string, SliderDef>;
+
+export const EFFECTS_SLIDERS = {
+  vignette: { ...bipolar('vignette', 'Amount', -100, 100, 1, 'int'), historyLabel: 'Vignette' },
+  grain: unipolar('grain', 'Amount', 0, 100, 1, 0, 'uint', 'Grain'),
+  grainSize: unipolar('grainSize', 'Size', 0, 100, 1, 25, 'uint', 'Grain size'),
+} as const satisfies Record<string, SliderDef>;
+
+export const ANGLE_SLIDER: SliderDef = bipolar('angle', 'Straighten', -45, 45, 0.1, 'deg');
+
+/** Color mixer hue / saturation / luminance offsets. */
+export const HSL_RANGE = { min: -100, max: 100 } as const;
 
 const MINUS = '−';
 

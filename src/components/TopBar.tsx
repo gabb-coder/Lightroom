@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
 import { APP_NAME } from '../appName';
 import { APP_MODULES, useAppStore, type AppModule } from '../state/appStore';
+import { canRedo, canUndo } from '../model/history';
+import { useDevelopStore } from '../state/developStore';
+import { modifierLabel } from '../shortcuts/platform';
 import { ImportIcon, LogoIcon, RedoIcon, UndoIcon } from './icons';
 import controls from './controls.module.css';
 import styles from './TopBar.module.css';
@@ -11,20 +14,42 @@ const LABELS: Readonly<Record<AppModule, string>> = {
   export: 'Export',
 };
 
-/** Module-specific actions on the right of the top bar. Enabled by later milestones. */
+function UndoRedo() {
+  const hasPhoto = useDevelopStore((s) => s.photo !== null);
+  const undoable = useDevelopStore((s) => canUndo(s.history));
+  const redoable = useDevelopStore((s) => canRedo(s.history));
+  const undo = useDevelopStore((s) => s.undo);
+  const redo = useDevelopStore((s) => s.redo);
+  const mod = modifierLabel();
+  return (
+    <>
+      <button
+        type="button"
+        className={controls.iconButton}
+        aria-label="Undo"
+        title={`Undo (${mod}Z)`}
+        disabled={!hasPhoto || !undoable}
+        onClick={undo}
+      >
+        <UndoIcon />
+      </button>
+      <button
+        type="button"
+        className={controls.iconButton}
+        aria-label="Redo"
+        title={`Redo (${mod}Shift+Z)`}
+        disabled={!hasPhoto || !redoable}
+        onClick={redo}
+      >
+        <RedoIcon />
+      </button>
+    </>
+  );
+}
+
+/** Module-specific actions on the right of the top bar. */
 function ModuleActions({ module }: { module: AppModule }): ReactNode {
-  if (module === 'develop') {
-    return (
-      <>
-        <button type="button" className={controls.iconButton} aria-label="Undo" disabled>
-          <UndoIcon />
-        </button>
-        <button type="button" className={controls.iconButton} aria-label="Redo" disabled>
-          <RedoIcon />
-        </button>
-      </>
-    );
-  }
+  if (module === 'develop') return <UndoRedo />;
   if (module === 'library') {
     return (
       <button type="button" className={controls.primary} disabled>

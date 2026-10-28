@@ -1,6 +1,7 @@
-import { PanelSection } from '../../components/PanelSection';
 import controls from '../../components/controls.module.css';
 import layout from '../layout.module.css';
+import { HistoryPanel } from './HistoryPanel';
+import { PresetsPanel } from './PresetsPanel';
 import styles from './DevelopLeftPanel.module.css';
 
 const ZOOMS = ['Fit', 'Fill', '1:1'] as const;
@@ -23,17 +24,6 @@ function Navigator() {
   );
 }
 
-function History() {
-  return (
-    <section className={styles.history} aria-label="History">
-      <div className={styles.historyHeader}>
-        <span className={styles.title}>History</span>
-      </div>
-      <ol className={styles.historyList} />
-    </section>
-  );
-}
-
 export function DevelopLeftPanel() {
   return (
     <aside
@@ -42,16 +32,8 @@ export function DevelopLeftPanel() {
       data-testid="left-panel"
     >
       <Navigator />
-      <PanelSection
-        title="Presets"
-        defaultOpen
-        trailing={
-          <span aria-hidden="true" className={styles.addGlyph}>
-            +
-          </span>
-        }
-      />
-      <History />
+      <PresetsPanel />
+      <HistoryPanel />
       <div className={styles.copyPaste}>
         <button type="button" className={controls.button} disabled>
           Copy settings…

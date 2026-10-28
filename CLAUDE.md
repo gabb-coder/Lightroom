@@ -58,6 +58,12 @@ component library.
 
 - `src/model/` EditSettings (v1, extends SPEC with treatment, grainSize,
   rotation) and slider definitions (ranges/steps/defaults from the design).
+  `history.ts` (snapshots + cursor; same-key edits at the tip merge),
+  `presets.ts` (presets replace everything except geometry; JSON format),
+  `validate.ts` (`parseEditSettings` for any untrusted/stored settings).
+- `src/state/developStore.ts`: every edit goes through `commit()` into the
+  history; `settings` is always `history.entries[cursor].settings`. Use a
+  stable history key per control (`basic.exposure`) so drags merge.
 - `src/engine/` CPU reference: one file per stage + `pipeline.ts`.
   `pipelineParams()` maps settings to numbers used by BOTH CPU and GPU.
   Tone (contrast/highlights/shadows/whites/blacks) is a per-channel curve on
