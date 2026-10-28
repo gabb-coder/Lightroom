@@ -132,3 +132,23 @@ export function makeTestPhoto(width: number, height: number): RgbaPixels {
   }
   return { width, height, data };
 }
+
+/** Mean absolute per-channel difference (RGB) between two same-size images. */
+export function meanAbsDiff(a: RgbaPixels, b: RgbaPixels): number {
+  if (a.width !== b.width || a.height !== b.height) throw new Error('Image sizes differ');
+  let sum = 0;
+  for (let i = 0; i < a.data.length; i += 4) {
+    for (let c = 0; c < 3; c++) sum += Math.abs((a.data[i + c] ?? 0) - (b.data[i + c] ?? 0));
+  }
+  return sum / ((a.data.length / 4) * 3);
+}
+
+/** Number of pixels whose RGBA differs at all. */
+export function countDifferentPixels(a: RgbaPixels, b: RgbaPixels): number {
+  if (a.width !== b.width || a.height !== b.height) return Infinity;
+  let n = 0;
+  for (let i = 0; i < a.data.length; i += 4) {
+    if (a.data[i] !== b.data[i] || a.data[i + 1] !== b.data[i + 1] || a.data[i + 2] !== b.data[i + 2] || a.data[i + 3] !== b.data[i + 3]) n++;
+  }
+  return n;
+}

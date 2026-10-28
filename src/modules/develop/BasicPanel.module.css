@@ -1,3 +1,15 @@
+.treatment {
+  height: 28px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.treatmentLabel {
+  color: var(--color-muted);
+}
+
 .groupLabel {
   margin: 8px 0 2px;
 }

@@ -1,5 +1,7 @@
-import type { ChangeEvent } from 'react';
-import { formatSliderValue, isDefaultValue, snapSliderValue, type SliderDef } from '../model/sliders';
+import { useRef, type ChangeEvent } from 'react';
+import { formatSliderValue, scrubSliderValue, snapSliderValue, type SliderDef } from '../model/sliders';
+import { useLabelScrub } from './useLabelScrub';
+import { ValueField } from './ValueField';
 import styles from './SliderRow.module.css';
 
 interface SliderRowProps {
@@ -7,19 +9,38 @@ interface SliderRowProps {
   value: number;
   disabled?: boolean;
   onChange: (value: number) => void;
-  /** Called when a pointer drag starts; onDragEnd when it is released. */
+  /** Called when a drag or scrub starts; onDragEnd when it is released. */
   onDragStart?: () => void;
   onDragEnd?: () => void;
 }
 
-/** Label (78px) · track · value (48px), as in design/Develop.dc.html. */
+/**
+ * Label (78px) · track · value (48px), as in design/Develop.dc.html.
+ * Double-click the label or track to reset, drag the label to scrub, click
+ * the value to type.
+ */
 export function SliderRow({ def, value, disabled = false, onChange, onDragStart, onDragEnd }: SliderRowProps) {
   const inputId = `s-${def.id}`;
-  const edited = !isDefaultValue(def, value);
+  const scrubStart = useRef(value);
+  const reset = () => {
+    if (!disabled) onChange(def.defaultValue);
+  };
+
+  const scrub = useLabelScrub(
+    {
+      onScrubStart: () => {
+        scrubStart.current = value;
+        onDragStart?.();
+      },
+      onScrub: (dx) => onChange(scrubSliderValue(def, scrubStart.current, dx)),
+      onScrubEnd: () => onDragEnd?.(),
+    },
+    disabled,
+  );
 
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => onChange(snapSliderValue(def, Number(e.target.value)));
 
-  const handlePointerDown = () => {
+  const handleTrackPointerDown = () => {
     if (!onDragStart) return;
     onDragStart();
     const end = () => {
@@ -32,8 +53,15 @@ export function SliderRow({ def, value, disabled = false, onChange, onDragStart,
   };
 
   return (
-    <div className={styles.row}>
-      <label htmlFor={inputId} className={styles.label}>
+    <div className={styles.row} data-testid={`slider-${def.id}`}>
+      <label
+        htmlFor={inputId}
+        className={styles.label}
+        data-disabled={disabled}
+        title="Drag to adjust, double-click to reset"
+        onDoubleClick={reset}
+        {...scrub}
+      >
         {def.label}
       </label>
       <div className={styles.trackWrap}>
@@ -47,14 +75,14 @@ export function SliderRow({ def, value, disabled = false, onChange, onDragStart,
           max={def.max}
           step={def.step}
           value={value}
+          aria-valuetext={formatSliderValue(def, value)}
           disabled={disabled}
           onChange={handleChange}
-          onPointerDown={handlePointerDown}
+          onPointerDown={handleTrackPointerDown}
+          onDoubleClick={reset}
         />
       </div>
-      <output htmlFor={inputId} className={`num ${styles.value}`} data-edited={edited}>
-        {formatSliderValue(def, value)}
-      </output>
+      <ValueField def={def} value={value} disabled={disabled} onCommit={onChange} />
     </div>
   );
 }

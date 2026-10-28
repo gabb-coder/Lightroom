@@ -1,4 +1,4 @@
-import type { BasicSliderKey } from './editSettings';
+import type { BasicSliderKey, EditSettings } from './editSettings';
 
 export type SliderFormat = 'ev' | 'int' | 'uint' | 'dec' | 'deg';
 
@@ -77,4 +77,29 @@ export function snapSliderValue(def: SliderDef, v: number): number {
 
 export function isDefaultValue(def: SliderDef, v: number): boolean {
   return Math.abs(v - def.defaultValue) < 1e-6;
+}
+
+/**
+ * Parses typed text into a slider value: accepts "+1.5", "-30", "−30" (true
+ * minus) and a trailing "°". Returns null for anything that isn't a number.
+ */
+export function parseSliderValue(def: SliderDef, text: string): number | null {
+  const cleaned = text.trim().replace(/\u2212/g, '-').replace(/°$/, '').trim();
+  if (cleaned === '' || !/^[+-]?(\d+\.?\d*|\.\d+)$/.test(cleaned)) return null;
+  return snapSliderValue(def, Number(cleaned));
+}
+
+/** Pixels of label drag that sweep a slider's full range. */
+export const SCRUB_RANGE_PX = 200;
+
+/** Value after scrubbing a label `dx` pixels from where the drag started. */
+export function scrubSliderValue(def: SliderDef, startValue: number, dx: number): number {
+  return snapSliderValue(def, startValue + (dx * (def.max - def.min)) / SCRUB_RANGE_PX);
+}
+
+/** True if any Basic panel setting differs from its default (drives the "edited" dot). */
+export function isBasicEdited(settings: EditSettings): boolean {
+  const { treatment, ...sliders } = settings.basic;
+  if (treatment !== 'color') return true;
+  return (Object.keys(sliders) as BasicSliderKey[]).some((key) => !isDefaultValue(BASIC_SLIDERS[key], sliders[key]));
 }

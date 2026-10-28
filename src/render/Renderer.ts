@@ -2,13 +2,25 @@ import type { PipelineParams } from '../engine/pipeline';
 import { createProgram, createTexture, type RgbaImage, type TextureSource } from './gl';
 import { DEVELOP_FRAGMENT_SHADER, VERTEX_SHADER } from './shaders';
 
-interface Uniforms {
-  source: WebGLUniformLocation | null;
-  flipY: WebGLUniformLocation | null;
-  exposureGain: WebGLUniformLocation | null;
-  contrastAmount: WebGLUniformLocation | null;
-  saturationScale: WebGLUniformLocation | null;
-}
+const UNIFORM_NAMES = [
+  'source',
+  'flipY',
+  'whiteBalance',
+  'exposureGain',
+  'contrast',
+  'highlights',
+  'shadows',
+  'whites',
+  'blacks',
+  'vibrance',
+  'saturationScale',
+  'bw',
+] as const;
+
+type Uniforms = Record<(typeof UNIFORM_NAMES)[number], WebGLUniformLocation | null>;
+
+/** Which uploaded copy of the photo to render. */
+export type SourceKind = 'full' | 'proxy' | 'histogram';
 
 interface SizedTexture {
   texture: WebGLTexture;
@@ -19,28 +31,22 @@ interface SizedTexture {
 export type RenderCanvas = HTMLCanvasElement | OffscreenCanvas;
 
 /**
- * Runs the develop pipeline on the GPU. Holds a full-resolution texture and
- * an optional downscaled proxy for interactive drags.
+ * Runs the develop pipeline on the GPU. Holds a full-resolution texture, a
+ * downscaled proxy for interactive drags and a small copy for the histogram.
  */
 export class Renderer {
   private readonly program: WebGLProgram;
   private readonly uniforms: Uniforms;
-  private full: SizedTexture | null = null;
-  private proxy: SizedTexture | null = null;
+  private textures: Partial<Record<SourceKind, SizedTexture>> = {};
 
   private constructor(
     private readonly canvas: RenderCanvas,
     private readonly gl: WebGL2RenderingContext,
   ) {
     this.program = createProgram(gl, VERTEX_SHADER, DEVELOP_FRAGMENT_SHADER);
-    const at = (name: string) => gl.getUniformLocation(this.program, name);
-    this.uniforms = {
-      source: at('u_source'),
-      flipY: at('u_flipY'),
-      exposureGain: at('u_exposureGain'),
-      contrastAmount: at('u_contrastAmount'),
-      saturationScale: at('u_saturationScale'),
-    };
+    const uniforms = {} as Uniforms;
+    for (const name of UNIFORM_NAMES) uniforms[name] = gl.getUniformLocation(this.program, `u_${name}`);
+    this.uniforms = uniforms;
   }
 
   /** Throws if WebGL2 is unavailable. */
@@ -61,25 +67,25 @@ export class Renderer {
   }
 
   get hasImage(): boolean {
-    return this.full !== null;
+    return this.textures.full !== undefined;
   }
 
-  setImage(full: TextureSource, proxy: TextureSource | null): void {
+  /** Uploads the photo. Missing proxy/histogram copies fall back to the full one. */
+  setImage(sources: { full: TextureSource; proxy?: TextureSource | null; histogram?: TextureSource | null }): void {
     this.clearImage();
-    this.full = this.upload(full);
-    this.proxy = proxy ? this.upload(proxy) : null;
+    this.textures.full = this.upload(sources.full);
+    if (sources.proxy) this.textures.proxy = this.upload(sources.proxy);
+    if (sources.histogram) this.textures.histogram = this.upload(sources.histogram);
   }
 
   clearImage(): void {
-    if (this.full) this.gl.deleteTexture(this.full.texture);
-    if (this.proxy) this.gl.deleteTexture(this.proxy.texture);
-    this.full = null;
-    this.proxy = null;
+    for (const t of Object.values(this.textures)) this.gl.deleteTexture(t.texture);
+    this.textures = {};
   }
 
   /** Draws to the canvas, resizing it to the chosen source. Returns that size. */
-  draw(params: PipelineParams, useProxy: boolean): { width: number; height: number } {
-    const source = this.pickSource(useProxy);
+  draw(params: PipelineParams, kind: SourceKind): { width: number; height: number } {
+    const source = this.pickSource(kind);
     if (this.canvas.width !== source.width) this.canvas.width = source.width;
     if (this.canvas.height !== source.height) this.canvas.height = source.height;
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
@@ -88,9 +94,9 @@ export class Renderer {
   }
 
   /** Renders into an offscreen RGBA8 framebuffer and reads it back, rows top-first. */
-  readPixels(params: PipelineParams, useProxy = false): RgbaImage {
+  readPixels(params: PipelineParams, kind: SourceKind = 'full'): RgbaImage {
     const { gl } = this;
-    const source = this.pickSource(useProxy);
+    const source = this.pickSource(kind);
     const target = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, target);
     gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, source.width, source.height);
@@ -113,8 +119,8 @@ export class Renderer {
     this.gl.deleteProgram(this.program);
   }
 
-  private pickSource(useProxy: boolean): SizedTexture {
-    const source = useProxy && this.proxy ? this.proxy : this.full;
+  private pickSource(kind: SourceKind): SizedTexture {
+    const source = this.textures[kind] ?? this.textures.full;
     if (!source) throw new Error('No image loaded');
     return source;
   }
@@ -131,9 +137,16 @@ export class Renderer {
     gl.bindTexture(gl.TEXTURE_2D, source.texture);
     gl.uniform1i(uniforms.source, 0);
     gl.uniform1i(uniforms.flipY, flipY ? 1 : 0);
+    gl.uniform3f(uniforms.whiteBalance, ...params.whiteBalance);
     gl.uniform1f(uniforms.exposureGain, params.exposureGain);
-    gl.uniform1f(uniforms.contrastAmount, params.contrastAmount);
+    gl.uniform1f(uniforms.contrast, params.tone.contrast);
+    gl.uniform1f(uniforms.highlights, params.tone.highlights);
+    gl.uniform1f(uniforms.shadows, params.tone.shadows);
+    gl.uniform1f(uniforms.whites, params.tone.whites);
+    gl.uniform1f(uniforms.blacks, params.tone.blacks);
+    gl.uniform1f(uniforms.vibrance, params.vibrance);
     gl.uniform1f(uniforms.saturationScale, params.saturationScale);
+    gl.uniform1i(uniforms.bw, params.bw ? 1 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 }

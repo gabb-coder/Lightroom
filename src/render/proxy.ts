@@ -1,6 +1,9 @@
 /** Long edge of the interactive preview used while a slider is dragged. */
 export const PROXY_LONG_EDGE = 1500;
 
+/** Long edge of the rendered copy the histogram is computed from. */
+export const HISTOGRAM_LONG_EDGE = 512;
+
 export interface Size {
   width: number;
   height: number;

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { containSize } from '../../hooks/fitSize';
 import { useElementSize } from '../../hooks/useElementSize';
 import { attachRenderer } from '../../render/rendererController';
-import type { LoadedPhoto } from '../../state/developStore';
+import { selectShowingBefore, useDevelopStore, type LoadedPhoto } from '../../state/developStore';
 import styles from './PhotoCanvas.module.css';
 
 /**
@@ -14,6 +14,7 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState<string | null>(null);
   const area = useElementSize(areaRef);
+  const showingBefore = useDevelopStore(selectShowingBefore);
   const fit = containSize(area, photo.width / photo.height);
 
   useEffect(() => {
@@ -37,6 +38,11 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
             aria-label={`Edited photo: ${photo.name}`}
             data-testid="photo-canvas"
           />
+          {showingBefore && (
+            <div className={styles.beforeBadge} data-testid="before-badge">
+              Before
+            </div>
+          )}
         </div>
       )}
     </div>

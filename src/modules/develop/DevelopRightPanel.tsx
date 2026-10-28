@@ -1,5 +1,8 @@
 import { PanelSection } from '../../components/PanelSection';
 import { BasicPanel } from './BasicPanel';
+import { Histogram } from './Histogram';
+import { isBasicEdited } from '../../model/sliders';
+import { useDevelopStore } from '../../state/developStore';
 import controls from '../../components/controls.module.css';
 import layout from '../layout.module.css';
 import styles from './DevelopRightPanel.module.css';
@@ -14,24 +17,13 @@ const SECTIONS = [
   { title: 'Crop and geometry', open: false },
 ] as const;
 
-function Histogram() {
-  return (
-    <section className={styles.histogram} aria-label="Histogram">
-      <div className={styles.histBox} data-testid="histogram">
-        <svg viewBox="0 0 268 84" preserveAspectRatio="none" role="img" aria-label="Histogram (no photo)">
-          <path d="M0 21H268M0 42H268M0 63H268M67 0V84M134 0V84M201 0V84" stroke="#262626" strokeWidth="1" />
-        </svg>
-      </div>
-    </section>
-  );
-}
-
 export function DevelopRightPanel() {
+  const basicEdited = useDevelopStore((s) => isBasicEdited(s.settings));
   return (
     <aside className={`${layout.side} ${layout.right}`} aria-label="Develop panels" data-testid="right-panel">
       <Histogram />
       {SECTIONS.map(({ title, open }) => (
-        <PanelSection key={title} title={title} defaultOpen={open}>
+        <PanelSection key={title} title={title} defaultOpen={open} edited={title === 'Basic' && basicEdited}>
           {title === 'Basic' ? <BasicPanel /> : null}
         </PanelSection>
       ))}

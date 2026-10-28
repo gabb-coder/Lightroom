@@ -87,3 +87,10 @@
   color: var(--color-text);
   font-size: var(--font-size-group);
 }
+
+/* Wider segments with control-size text (Treatment, Curve channel). Must
+   come after .segment so it wins at equal specificity. */
+.segmentWide {
+  padding: 0 12px;
+  font-size: var(--font-size-control);
+}

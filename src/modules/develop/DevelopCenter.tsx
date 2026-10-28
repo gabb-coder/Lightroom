@@ -11,9 +11,19 @@ import styles from './DevelopCenter.module.css';
 const STARS = [1, 2, 3, 4, 5] as const;
 
 function Toolbar() {
+  const hasPhoto = useDevelopStore((s) => s.photo !== null);
+  const before = useDevelopStore((s) => s.before);
+  const toggleBefore = useDevelopStore((s) => s.toggleBefore);
   return (
     <div className={styles.toolbar} role="toolbar" aria-label="Photo tools" data-testid="toolbar">
-      <button type="button" className={`${controls.button} ${styles.toolButton}`} aria-pressed={false} disabled>
+      <button
+        type="button"
+        className={`${controls.button} ${styles.toolButton}`}
+        aria-pressed={before}
+        disabled={!hasPhoto}
+        title={'Before / After (\\, hold to peek)'}
+        onClick={toggleBefore}
+      >
         <BeforeAfterIcon />
         Before / After
       </button>

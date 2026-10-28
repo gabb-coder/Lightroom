@@ -60,6 +60,10 @@ component library.
   rotation) and slider definitions (ranges/steps/defaults from the design).
 - `src/engine/` CPU reference: one file per stage + `pipeline.ts`.
   `pipelineParams()` maps settings to numbers used by BOTH CPU and GPU.
+  Tone (contrast/highlights/shadows/whites/blacks) is a per-channel curve on
+  q = x^(1/2.2) composed of individually monotonic parts; keep it that way.
+- Histogram: computed from a 512px rendered copy after every render
+  (`rendererController.ts`), never from the original.
 - `src/render/shaders.ts` GLSL twin of each engine stage; `Renderer.ts` owns
   WebGL2; `rendererController.ts` is the only store->GPU bridge (rAF
   coalescing, proxy while `interacting`, full-res otherwise).
@@ -82,4 +86,7 @@ component library.
 - `npm run typecheck` / `npm run lint` / `npm test` / `npm run test:e2e`
 
 E2E tests run against `vite preview` on port 4173 (built first). Playwright
-is pinned to the version of the pre-installed Chromium.
+is pinned to the version of the pre-installed Chromium. WebGL runs on
+SwiftShader in headless tests, so it is slow: use `smallPhotoPng` for tests
+that render many times, and `test.slow()` for long loops. Pixel comparisons
+use canvas screenshots (`canvasPixels`), which hide overlay badges.

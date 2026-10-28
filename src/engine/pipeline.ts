@@ -1,7 +1,9 @@
 import { clamp01, linearToSrgb, mapRgb, srgbToLinear, type Rgb } from './color';
-import { applyContrast, contrastAmount } from './contrast';
 import { applyExposure, exposureGain } from './exposure';
-import { applySaturation, saturationScale } from './saturation';
+import { applySaturation, applyVibrance, saturationScale, vibranceAmount } from './saturation';
+import { applyTone, toneParams, type ToneParams } from './tone';
+import { applyTreatment } from './treatment';
+import { applyWhiteBalance, whiteBalanceGains } from './whiteBalance';
 import type { EditSettings } from '../model/editSettings';
 
 /**
@@ -9,25 +11,34 @@ import type { EditSettings } from '../model/editSettings';
  * the WebGL shader consume these, so slider-to-math mapping lives in one place.
  */
 export interface PipelineParams {
+  whiteBalance: Rgb;
   exposureGain: number;
-  contrastAmount: number;
+  tone: ToneParams;
+  vibrance: number;
   saturationScale: number;
+  bw: boolean;
 }
 
 export function pipelineParams(settings: EditSettings): PipelineParams {
-  const { exposure, contrast, saturation } = settings.basic;
+  const b = settings.basic;
   return {
-    exposureGain: exposureGain(exposure),
-    contrastAmount: contrastAmount(contrast),
-    saturationScale: saturationScale(saturation),
+    whiteBalance: whiteBalanceGains(b.temp, b.tint),
+    exposureGain: exposureGain(b.exposure),
+    tone: toneParams(b),
+    vibrance: vibranceAmount(b.vibrance),
+    saturationScale: saturationScale(b.saturation),
+    bw: b.treatment === 'bw',
   };
 }
 
 /** Runs the linear-light stages, in pipeline order. */
 export function processLinear(c: Rgb, p: PipelineParams): Rgb {
-  let out = applyExposure(c, p.exposureGain);
-  out = applyContrast(out, p.contrastAmount);
+  let out = applyWhiteBalance(c, p.whiteBalance);
+  out = applyExposure(out, p.exposureGain);
+  out = applyTone(out, p.tone);
+  out = applyVibrance(out, p.vibrance);
   out = applySaturation(out, p.saturationScale);
+  out = applyTreatment(out, p.bw);
   return out;
 }
 

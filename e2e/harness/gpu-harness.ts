@@ -49,7 +49,7 @@ function maxDiff(a: Uint8Array | Uint8ClampedArray, b: Uint8Array | Uint8Clamped
 
 const source = testImage();
 const renderer = Renderer.create(new OffscreenCanvas(1, 1));
-renderer.setImage(source, null);
+renderer.setImage({ full: source });
 
 function runGpuCheck(basic: Partial<BasicSettings>): GpuCheckResult {
   const settings = defaultEditSettings();
