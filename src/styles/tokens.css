@@ -17,6 +17,11 @@
   --color-border-control: #3a3a3a;
   --color-border-soft: #262626;
 
+  /* Sliders */
+  --color-slider-track: #3d3d3d;
+  --color-slider-tick: #5c5c5c;
+  --color-slider-thumb: #d6d6d6;
+
   /* Text */
   --color-text: #cfcfcf;
   --color-text-bright: #e2e2e2;

@@ -1,4 +1,5 @@
 import { PanelSection } from '../../components/PanelSection';
+import { BasicPanel } from './BasicPanel';
 import controls from '../../components/controls.module.css';
 import layout from '../layout.module.css';
 import styles from './DevelopRightPanel.module.css';
@@ -30,7 +31,9 @@ export function DevelopRightPanel() {
     <aside className={`${layout.side} ${layout.right}`} aria-label="Develop panels" data-testid="right-panel">
       <Histogram />
       {SECTIONS.map(({ title, open }) => (
-        <PanelSection key={title} title={title} defaultOpen={open} />
+        <PanelSection key={title} title={title} defaultOpen={open}>
+          {title === 'Basic' ? <BasicPanel /> : null}
+        </PanelSection>
       ))}
       <div className={styles.spacer} />
       <div className={styles.footer}>

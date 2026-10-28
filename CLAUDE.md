@@ -54,6 +54,19 @@ component library.
   self-hosted in `public/fonts/`.
 - Canvas 2D / CSS filters are never used for the edits themselves.
 
+## Code map
+
+- `src/model/` EditSettings (v1, extends SPEC with treatment, grainSize,
+  rotation) and slider definitions (ranges/steps/defaults from the design).
+- `src/engine/` CPU reference: one file per stage + `pipeline.ts`.
+  `pipelineParams()` maps settings to numbers used by BOTH CPU and GPU.
+- `src/render/shaders.ts` GLSL twin of each engine stage; `Renderer.ts` owns
+  WebGL2; `rendererController.ts` is the only store->GPU bridge (rAF
+  coalescing, proxy while `interacting`, full-res otherwise).
+- `e2e/harness/` test-only page served by the Vite dev server (port 5174);
+  `e2e/gpu.spec.ts` compares readPixels output with the CPU reference
+  (±2/255). Set `LOG_GPU_DIFF=1` to print the max differences.
+
 ## UI conventions
 
 - Tokens live in `src/styles/tokens.css`; shared buttons/segmented controls in

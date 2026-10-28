@@ -1,5 +1,10 @@
+import { useRef, useState, type DragEvent } from 'react';
 import { BeforeAfterIcon, CropIcon, PickIcon, RejectIcon, StarIcon } from '../../components/icons';
 import controls from '../../components/controls.module.css';
+import { ACCEPTED_TYPES } from '../../io/loadPhoto';
+import { useDevelopStore, type LoadedPhoto } from '../../state/developStore';
+import { PhotoCanvas } from './PhotoCanvas';
+import { usePhotoOpener } from './usePhotoOpener';
 import layout from '../layout.module.css';
 import styles from './DevelopCenter.module.css';
 
@@ -36,18 +41,84 @@ function Toolbar() {
   );
 }
 
+function InfoStrip({ photo }: { photo: LoadedPhoto | null }) {
+  return (
+    <div className={styles.infoStrip} data-testid="info-strip">
+      {photo ? (
+        <>
+          <span className={styles.fileName}>{photo.name}</span>
+          <span>
+            {photo.width} × {photo.height}
+          </span>
+        </>
+      ) : (
+        <span>No photo open</span>
+      )}
+    </div>
+  );
+}
+
+function EmptyStage({ onOpen, error }: { onOpen: () => void; error: string | null }) {
+  return (
+    <div className={styles.empty}>
+      <p className={styles.emptyTitle}>No photo open</p>
+      <p className={styles.emptyHint}>Drop a JPEG or PNG here, or open one from your computer.</p>
+      <button type="button" className={`${controls.button} ${styles.openButton}`} onClick={onOpen}>
+        Open photo…
+      </button>
+      {error && (
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function DevelopCenter() {
+  const photo = useDevelopStore((s) => s.photo);
+  const { openFiles, error } = usePhotoOpener();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const onDragOver = (e: DragEvent) => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setDragOver(true);
+  };
+  const onDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    void openFiles(e.dataTransfer.files);
+  };
+
   return (
     <main className={`${layout.center} ${styles.center}`} aria-label="Photo canvas">
-      <div className={styles.infoStrip} data-testid="info-strip">
-        <span>No photo open</span>
+      <InfoStrip photo={photo} />
+      <div
+        className={styles.stage}
+        data-testid="canvas"
+        data-drag-over={dragOver}
+        onDragOver={onDragOver}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+      >
+        {photo ? <PhotoCanvas photo={photo} /> : <EmptyStage onOpen={() => inputRef.current?.click()} error={error} />}
       </div>
-      <div className={styles.stage} data-testid="canvas">
-        <div className={styles.empty}>
-          <p className={styles.emptyTitle}>No photo open</p>
-          <p className={styles.emptyHint}>Import photos in the Library to start editing.</p>
-        </div>
-      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ACCEPTED_TYPES.join(',')}
+        className="visually-hidden"
+        tabIndex={-1}
+        aria-hidden="true"
+        data-testid="file-input"
+        onChange={(e) => {
+          void openFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
       <Toolbar />
     </main>
   );

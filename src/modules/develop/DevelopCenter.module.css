@@ -24,6 +24,25 @@
   padding: 8px 24px 16px;
 }
 
+.stage[data-drag-over='true'] {
+  outline: 2px dashed var(--color-accent);
+  outline-offset: -8px;
+}
+
+.fileName {
+  color: var(--color-text-bright);
+  font-weight: 500;
+}
+
+.openButton {
+  margin-top: 12px;
+}
+
+.error {
+  margin: 10px 0 0;
+  color: var(--color-text-bright);
+}
+
 .empty {
   text-align: center;
 }
