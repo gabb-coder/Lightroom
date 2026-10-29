@@ -184,6 +184,10 @@ component library.
   `render/textWatermark.ts` draws the line once in Inter on a transparent
   PNG (main thread, fonts loaded), which then goes through the exact logo
   path (export worker, preview).
+  Clicking the preview enlarges it (portal over everything, Esc/click
+  closes only it): the photo is re-rendered with its live edits at about
+  screen size (`settingsSync.renderEditedPreview`, on the thumbnail
+  client, no watermark) and the mark is overlaid with the same math.
 - Interface (M22): every shortcut is listed in `shortcuts/shortcutList.ts`
   (the `?` / top-bar dialog renders it; a unit test reads the handler
   sources and fails if a handled key is missing, so add new shortcuts
