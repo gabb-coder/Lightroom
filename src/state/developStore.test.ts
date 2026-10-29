@@ -4,12 +4,12 @@ import { historyEntryValue } from '../model/historyDisplay';
 import { SAMPLE_PRESETS } from '../model/presets';
 import { useDevelopStore, type LoadedPhoto } from './developStore';
 
-const fakePhoto = (name: string): LoadedPhoto => ({ name, width: 4, height: 3, bitmap: {} as ImageBitmap });
+const fakePhoto = (name: string): LoadedPhoto => ({ id: name, name, width: 4, height: 3, bitmap: {} as ImageBitmap });
 const store = () => useDevelopStore.getState();
 const labels = () => store().history.entries.map((e) => [e.label, historyEntryValue(e)]);
 
 describe('developStore', () => {
-  beforeEach(() => store().openPhoto(fakePhoto('a.jpg')));
+  beforeEach(() => store().loadPhoto(fakePhoto('a.jpg')));
 
   it('records each edit as a history step, merging consecutive changes to one slider', () => {
     store().setBasic('exposure', 0.2);
@@ -84,9 +84,23 @@ describe('developStore', () => {
 
   it('opening a photo starts a fresh history', () => {
     store().setBasic('saturation', -40);
-    store().openPhoto(fakePhoto('b.jpg'));
+    store().loadPhoto(fakePhoto('b.jpg'));
     expect(store().settings).toEqual(defaultEditSettings());
     expect(store().history.entries).toHaveLength(1);
     expect(store().photo?.name).toBe('b.jpg');
+  });
+});
+
+describe('loading a saved photo', () => {
+  it('restores its saved history and cursor', () => {
+    store().loadPhoto(fakePhoto('a.jpg'));
+    store().setBasic('exposure', 0.5);
+    store().setBasic('contrast', 10);
+    store().undo();
+    const saved = store().history;
+    store().loadPhoto(fakePhoto('b.jpg'));
+    store().loadPhoto(fakePhoto('a.jpg'), saved);
+    expect(store().history).toBe(saved);
+    expect(store().settings.basic).toMatchObject({ exposure: 0.5, contrast: 0 });
   });
 });

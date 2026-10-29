@@ -4,6 +4,7 @@ import { APP_MODULES, useAppStore, type AppModule } from '../state/appStore';
 import { canRedo, canUndo } from '../model/history';
 import { useDevelopStore } from '../state/developStore';
 import { modifierLabel } from '../shortcuts/platform';
+import { openImportPicker } from '../state/importActions';
 import { ImportIcon, LogoIcon, RedoIcon, UndoIcon } from './icons';
 import controls from './controls.module.css';
 import styles from './TopBar.module.css';
@@ -52,7 +53,7 @@ function ModuleActions({ module }: { module: AppModule }): ReactNode {
   if (module === 'develop') return <UndoRedo />;
   if (module === 'library') {
     return (
-      <button type="button" className={controls.primary} disabled>
+      <button type="button" className={controls.primary} onClick={openImportPicker}>
         <ImportIcon />
         Import
       </button>

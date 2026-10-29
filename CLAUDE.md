@@ -70,6 +70,16 @@ component library.
   q = x^(1/2.2) composed of individually monotonic parts; keep it that way.
 - Histogram: computed from a 512px rendered copy after every render
   (`rendererController.ts`), never from the original.
+- `src/db/db.ts` Dexie catalog: photos, originals (never modified),
+  thumbnails (base + edited), edits (history per photo), presets. Anything
+  read back goes through `parseEditSettings` / `parseStoredHistory`.
+- `src/state/bootstrap.ts` starts the catalog services: liveQuery -> library
+  store, photo session (selected photo -> Develop, only while Develop is open),
+  debounced edit persistence (`flushEdits()`), edited-thumbnail updater.
+- `src/workers/thumbnail.worker.ts` decode + EXIF date + JPEG thumbnails, and
+  JPEG-encodes rendered previews for edited thumbnails.
+- Library grid is virtualized (`modules/library/gridLayout.ts` math mirrors
+  the CSS); keep cell heights explicit so the math stays exact.
 - `src/render/shaders.ts` GLSL twin of each engine stage; `Renderer.ts` owns
   WebGL2; `rendererController.ts` is the only store->GPU bridge (rAF
   coalescing, proxy while `interacting`, full-res otherwise).
@@ -96,3 +106,5 @@ is pinned to the version of the pre-installed Chromium. WebGL runs on
 SwiftShader in headless tests, so it is slow: use `smallPhotoPng` for tests
 that render many times, and `test.slow()` for long loops. Pixel comparisons
 use canvas screenshots (`canvasPixels`), which hide overlay badges.
+Each test gets a fresh browser context, so IndexedDB starts empty. No
+fake-indexeddb in unit tests: DB behavior is covered by e2e tests.

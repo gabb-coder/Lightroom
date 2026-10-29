@@ -1,4 +1,5 @@
 import { TopBar } from './components/TopBar';
+import { ImportInput } from './components/ImportInput';
 import { DevelopView } from './modules/develop/DevelopView';
 import { LibraryView } from './modules/library/LibraryView';
 import { ExportView } from './modules/export/ExportView';
@@ -27,6 +28,7 @@ export function App() {
       <div className={styles.body} id={`module-${module}`} role="tabpanel" aria-labelledby={`tab-${module}`}>
         <ModuleView module={module} />
       </div>
+      <ImportInput />
     </div>
   );
 }

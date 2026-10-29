@@ -15,6 +15,8 @@ import { applyPresetTo, type Preset } from '../model/presets';
 
 /** A decoded photo ready to render. The original file is never modified. */
 export interface LoadedPhoto {
+  /** Catalog id. */
+  id: string;
   name: string;
   width: number;
   height: number;
@@ -32,7 +34,8 @@ interface DevelopState {
   before: boolean;
   /** True while `\` is held down to peek at the original. */
   peeking: boolean;
-  openPhoto: (photo: LoadedPhoto) => void;
+  /** Shows a photo with its saved history (or a fresh one). Closes the previous bitmap. */
+  loadPhoto: (photo: LoadedPhoto, history?: History) => void;
   setBasic: (key: BasicSliderKey, value: number) => void;
   setTreatment: (treatment: Treatment) => void;
   applyPreset: (preset: Preset) => void;
@@ -58,14 +61,14 @@ function moveTo(history: History): Pick<DevelopState, 'history' | 'settings'> {
   return { history, settings: currentSettings(history) };
 }
 
-function initialEditState(): Pick<DevelopState, 'history' | 'settings'> {
-  const settings = defaultEditSettings();
-  return { history: createHistory(settings), settings };
+function initialEditState(history?: History): Pick<DevelopState, 'history' | 'settings'> {
+  const h = history ?? createHistory(defaultEditSettings());
+  return { history: h, settings: currentSettings(h) };
 }
 
 /**
  * Edit store for the open photo: its settings history and view state.
- * Persistence builds on this in M4.
+ * Saved to the catalog by state/editPersistence.ts.
  */
 export const useDevelopStore = create<DevelopState>()((set) => ({
   photo: null,
@@ -73,7 +76,11 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
   interacting: false,
   before: false,
   peeking: false,
-  openPhoto: (photo) => set({ photo, ...initialEditState(), interacting: false, before: false, peeking: false }),
+  loadPhoto: (photo, history) =>
+    set((s) => {
+      if (s.photo && s.photo.bitmap !== photo.bitmap) s.photo.bitmap.close?.();
+      return { photo, ...initialEditState(history), interacting: false, before: false, peeking: false };
+    }),
   setBasic: (key, value) =>
     set((s) => {
       if (s.settings.basic[key] === value) return s;

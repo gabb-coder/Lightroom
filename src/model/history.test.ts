@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { defaultEditSettings, type EditSettings } from './editSettings';
-import { canRedo, canUndo, createHistory, currentSettings, goToHistory, pushHistory, redo, undo, type History } from './history';
+import {
+  canRedo,
+  canUndo,
+  createHistory,
+  currentSettings,
+  goToHistory,
+  parseStoredHistory,
+  pushHistory,
+  redo,
+  undo,
+  type History,
+} from './history';
 
 function withBasic(base: EditSettings, patch: Partial<EditSettings['basic']>): EditSettings {
   return { ...base, basic: { ...base.basic, ...patch } };
@@ -89,5 +100,37 @@ describe('history', () => {
     expect(goToHistory(h, 7)).toBe(h);
     h = goToHistory(h, 2);
     expect(currentSettings(h).basic.contrast).toBe(20);
+  });
+});
+
+describe('parseStoredHistory', () => {
+  it('round-trips a stored history exactly', () => {
+    let h = createHistory(defaultEditSettings());
+    h = edit(h, 'exposure', 0.35);
+    h = edit(h, 'treatment', 'bw');
+    h = undo(h);
+    expect(parseStoredHistory(JSON.parse(JSON.stringify(h)))).toEqual(h);
+  });
+
+  it('drops bad entries, validates settings and clamps the cursor', () => {
+    const parsed = parseStoredHistory({
+      entries: [
+        { label: 'Import', key: null, settings: {} },
+        'junk',
+        { label: 'Exposure', key: 'basic.exposure', settings: { basic: { exposure: 99 } } },
+      ],
+      cursor: 12,
+    });
+    expect(parsed.entries).toHaveLength(2);
+    expect(parsed.cursor).toBe(1);
+    expect(currentSettings(parsed).basic.exposure).toBe(5);
+  });
+
+  it('falls back to a fresh history', () => {
+    for (const raw of [null, 3, { entries: [] }, { entries: 'x' }]) {
+      const h = parseStoredHistory(raw);
+      expect(h.entries).toHaveLength(1);
+      expect(currentSettings(h)).toEqual(defaultEditSettings());
+    }
   });
 });

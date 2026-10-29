@@ -3,6 +3,7 @@ import { pipelineParams } from '../engine/pipeline';
 import { defaultEditSettings } from '../model/editSettings';
 import { selectShowingBefore, useDevelopStore, type LoadedPhoto } from '../state/developStore';
 import { useHistogramStore } from '../state/histogramStore';
+import { usePreviewStore } from '../state/previewStore';
 import { Renderer } from './Renderer';
 import { fitLongEdge, HISTOGRAM_LONG_EDGE, PROXY_LONG_EDGE, resizeBitmap } from './proxy';
 
@@ -40,7 +41,11 @@ export function attachRenderer(canvas: HTMLCanvasElement, onError: (message: str
     const before = selectShowingBefore(state);
     const params = before ? BEFORE_PARAMS : pipelineParams(state.settings);
     renderer.draw(params, state.interacting ? 'proxy' : 'full');
-    useHistogramStore.getState().setHistogram(computeHistogram(renderer.readPixels(params, 'histogram').data));
+    const small = renderer.readPixels(params, 'histogram');
+    useHistogramStore.getState().setHistogram(computeHistogram(small.data));
+    if (!before && !state.interacting && state.photo) {
+      usePreviewStore.getState().setPreview({ photoId: state.photo.id, settings: state.settings, image: small });
+    }
     canvas.dataset.renderMode = state.interacting ? 'proxy' : 'full';
     canvas.dataset.view = before ? 'before' : 'after';
     canvas.dataset.renderCount = String(++renderCount);
@@ -63,6 +68,8 @@ export function attachRenderer(canvas: HTMLCanvasElement, onError: (message: str
       renderer.setImage(textures);
       schedule();
     } catch (error) {
+      // A newer photo replaced this one mid-load (its bitmap may be closed): not an error.
+      if (disposed || loadedPhoto !== photo) return;
       onError(error instanceof Error ? error.message : String(error));
     }
   };

@@ -1,0 +1,19 @@
+.thumb {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000000;
+}
+
+.thumb[data-dimmed='true'] {
+  opacity: 0.45;
+}
+
+/* The whole photo, letterboxed: portrait photos aren't cropped in the grid. */
+.img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}

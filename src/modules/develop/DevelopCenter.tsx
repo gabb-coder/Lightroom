@@ -1,10 +1,10 @@
-import { useRef, useState, type DragEvent } from 'react';
 import { BeforeAfterIcon, CropIcon, PickIcon, RejectIcon, StarIcon } from '../../components/icons';
 import controls from '../../components/controls.module.css';
-import { ACCEPTED_TYPES } from '../../io/loadPhoto';
+import { useFileDrop } from '../../components/useFileDrop';
+import { openImportPicker } from '../../state/importActions';
+import { useLibraryStore } from '../../state/libraryStore';
 import { useDevelopStore, type LoadedPhoto } from '../../state/developStore';
 import { PhotoCanvas } from './PhotoCanvas';
-import { usePhotoOpener } from './usePhotoOpener';
 import layout from '../layout.module.css';
 import styles from './DevelopCenter.module.css';
 
@@ -68,17 +68,33 @@ function InfoStrip({ photo }: { photo: LoadedPhoto | null }) {
   );
 }
 
-function EmptyStage({ onOpen, error }: { onOpen: () => void; error: string | null }) {
+function EmptyStage() {
+  const libraryEmpty = useLibraryStore((s) => s.loaded && s.photos.length === 0);
+  const importing = useLibraryStore((s) => s.importing);
+  const message = useLibraryStore((s) => s.importMessage);
   return (
     <div className={styles.empty}>
-      <p className={styles.emptyTitle}>No photo open</p>
-      <p className={styles.emptyHint}>Drop a JPEG or PNG here, or open one from your computer.</p>
-      <button type="button" className={`${controls.button} ${styles.openButton}`} onClick={onOpen}>
-        Open photo…
-      </button>
-      {error && (
+      {importing ? (
+        <p className={styles.emptyTitle}>
+          Importing {importing.done} of {importing.total}…
+        </p>
+      ) : libraryEmpty ? (
+        <>
+          <p className={styles.emptyTitle}>No photos yet</p>
+          <p className={styles.emptyHint}>Drop JPEG or PNG files here, or import them from your computer.</p>
+          <button type="button" className={`${controls.button} ${styles.openButton}`} onClick={openImportPicker}>
+            Import photos…
+          </button>
+        </>
+      ) : (
+        <>
+          <p className={styles.emptyTitle}>No photo open</p>
+          <p className={styles.emptyHint}>Pick a photo in the filmstrip, or drop more photos here.</p>
+        </>
+      )}
+      {message && (
         <p className={styles.error} role="alert">
-          {error}
+          {message}
         </p>
       )}
     </div>
@@ -87,48 +103,14 @@ function EmptyStage({ onOpen, error }: { onOpen: () => void; error: string | nul
 
 export function DevelopCenter() {
   const photo = useDevelopStore((s) => s.photo);
-  const { openFiles, error } = usePhotoOpener();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [dragOver, setDragOver] = useState(false);
-
-  const onDragOver = (e: DragEvent) => {
-    if (!e.dataTransfer.types.includes('Files')) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-    setDragOver(true);
-  };
-  const onDrop = (e: DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    void openFiles(e.dataTransfer.files);
-  };
+  const { dragOver, handlers } = useFileDrop();
 
   return (
     <main className={`${layout.center} ${styles.center}`} aria-label="Photo canvas">
       <InfoStrip photo={photo} />
-      <div
-        className={styles.stage}
-        data-testid="canvas"
-        data-drag-over={dragOver}
-        onDragOver={onDragOver}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={onDrop}
-      >
-        {photo ? <PhotoCanvas photo={photo} /> : <EmptyStage onOpen={() => inputRef.current?.click()} error={error} />}
+      <div className={styles.stage} data-testid="canvas" data-drag-over={dragOver} {...handlers}>
+        {photo ? <PhotoCanvas photo={photo} /> : <EmptyStage />}
       </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={ACCEPTED_TYPES.join(',')}
-        className="visually-hidden"
-        tabIndex={-1}
-        aria-hidden="true"
-        data-testid="file-input"
-        onChange={(e) => {
-          void openFiles(e.target.files);
-          e.target.value = '';
-        }}
-      />
       <Toolbar />
     </main>
   );

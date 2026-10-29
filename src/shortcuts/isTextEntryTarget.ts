@@ -29,3 +29,13 @@ export function isTextEntryTarget(target: TargetLike | null): boolean {
   if (tag === 'input') return !NON_TEXT_INPUT_TYPES.has((target.type ?? 'text').toLowerCase());
   return false;
 }
+
+/**
+ * True when arrow keys belong to the focused control (sliders, selects and
+ * any text field), so they must not move between photos.
+ */
+export function isArrowKeyTarget(target: TargetLike | null): boolean {
+  if (!target) return false;
+  const tag = target.tagName?.toLowerCase();
+  return tag === 'input' || tag === 'select' || tag === 'textarea' || Boolean(target.isContentEditable);
+}

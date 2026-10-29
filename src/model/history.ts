@@ -1,4 +1,5 @@
-import type { EditSettings } from './editSettings';
+import { defaultEditSettings, type EditSettings } from './editSettings';
+import { parseEditSettings } from './validate';
 
 /**
  * Undo history: a list of settings snapshots plus a cursor. The canvas always
@@ -68,4 +69,29 @@ export function redo(history: History): History {
 export function goToHistory(history: History, index: number): History {
   if (index < 0 || index >= history.entries.length || index === history.cursor) return history;
   return { ...history, cursor: index };
+}
+
+/**
+ * Rebuilds a history read back from storage: every snapshot is validated, bad
+ * entries are dropped and the cursor is clamped. Falls back to a fresh history.
+ */
+export function parseStoredHistory(raw: unknown): History {
+  if (typeof raw !== 'object' || raw === null) return createHistory(defaultEditSettings());
+  const r = raw as { entries?: unknown; cursor?: unknown };
+  const entries: HistoryEntry[] = [];
+  if (Array.isArray(r.entries)) {
+    for (const e of r.entries as unknown[]) {
+      if (typeof e !== 'object' || e === null) continue;
+      const entry = e as { label?: unknown; key?: unknown; settings?: unknown };
+      if (typeof entry.label !== 'string') continue;
+      entries.push({
+        label: entry.label,
+        key: typeof entry.key === 'string' ? entry.key : null,
+        settings: parseEditSettings(entry.settings),
+      });
+    }
+  }
+  if (entries.length === 0) return createHistory(defaultEditSettings());
+  const cursor = typeof r.cursor === 'number' && Number.isInteger(r.cursor) ? Math.min(Math.max(r.cursor, 0), entries.length - 1) : entries.length - 1;
+  return { entries, cursor };
 }

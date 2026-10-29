@@ -4,7 +4,8 @@ import { useDevelopStore } from '../state/developStore';
 import { createBeforeAfterKeys } from './beforeAfterKeys';
 import { matchHistoryShortcut } from './historyShortcuts';
 import { isMacPlatform } from './platform';
-import { isTextEntryTarget, type TargetLike } from './isTextEntryTarget';
+import { isArrowKeyTarget, isTextEntryTarget, type TargetLike } from './isTextEntryTarget';
+import { neighborId, useLibraryStore, visiblePhotos } from '../state/libraryStore';
 
 const MODULE_KEYS: Readonly<Record<string, AppModule>> = {
   g: 'library',
@@ -37,6 +38,15 @@ export function useGlobalShortcuts(): void {
         return;
       }
       if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        if (isArrowKeyTarget(event.target as TargetLike | null)) return;
+        const { photos, view, selectedId, select } = useLibraryStore.getState();
+        const next = neighborId(visiblePhotos(photos, view), selectedId, event.key === 'ArrowLeft' ? -1 : 1);
+        if (!next) return;
+        event.preventDefault();
+        select(next);
+        return;
+      }
       if (event.key === BEFORE_AFTER_KEY) {
         if (!developHasPhoto()) return;
         event.preventDefault();
