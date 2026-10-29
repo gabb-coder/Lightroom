@@ -12,12 +12,21 @@
 export const WATERMARK_POSITIONS = ['top-left', 'top', 'top-right', 'left', 'center', 'right', 'bottom-left', 'bottom', 'bottom-right'] as const;
 export type WatermarkPosition = (typeof WATERMARK_POSITIONS)[number];
 
+/** One of the nine grid positions, or a spot set by dragging (M25). */
+export type WatermarkAnchor = WatermarkPosition | 'custom';
+
 export interface WatermarkPlacement {
-  position: WatermarkPosition;
+  position: WatermarkAnchor;
   /** Logo width as a percentage of the photo's width (1–100). */
   size: number;
   /** Gap to the photo's edges as a percentage of its shorter side (0–25). */
   inset: number;
+  /**
+   * For 'custom': where the logo sits in the room left between the margins,
+   * 0 (left / top) to 1 (right / bottom). The grid positions are 0, ½ and 1.
+   */
+  x?: number;
+  y?: number;
 }
 
 export interface Size {
@@ -32,11 +41,8 @@ export interface Rect {
   height: number;
 }
 
-/**
- * Where the logo goes on an image, in whole pixels. Keeps the logo's aspect,
- * and shrinks it if it wouldn't fit between the insets.
- */
-export function watermarkRect(image: Size, logo: Size, p: WatermarkPlacement): Rect {
+/** The logo's size, the margin, and the room left to move it in, in whole pixels. */
+function layout(image: Size, logo: Size, p: WatermarkPlacement) {
   const inset = Math.round((Math.min(image.width, image.height) * p.inset) / 100);
   const room = { width: Math.max(1, image.width - 2 * inset), height: Math.max(1, image.height - 2 * inset) };
   let width = (image.width * p.size) / 100;
@@ -44,9 +50,49 @@ export function watermarkRect(image: Size, logo: Size, p: WatermarkPlacement): R
   const fit = Math.min(1, room.width / width, room.height / height);
   width = Math.max(1, Math.round(width * fit));
   height = Math.max(1, Math.round(height * fit));
+  return { inset, width, height, free: { x: room.width - width, y: room.height - height } };
+}
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+/** Where the logo sits in its free room, 0–1 across and down. */
+export function placementFractions(p: WatermarkPlacement): { x: number; y: number } {
+  if (p.position === 'custom') return { x: clamp01(p.x ?? 0.5), y: clamp01(p.y ?? 0.5) };
   const [row, col] = cellOf(p.position);
-  const along = (free: number, cell: number) => (cell === 0 ? inset : cell === 2 ? inset + free : inset + Math.round(free / 2));
-  return { x: along(room.width - width, col), y: along(room.height - height, row), width, height };
+  return { x: col / 2, y: row / 2 };
+}
+
+/**
+ * Where the logo goes on an image, in whole pixels. Keeps the logo's aspect,
+ * and shrinks it if it wouldn't fit between the insets.
+ */
+export function watermarkRect(image: Size, logo: Size, p: WatermarkPlacement): Rect {
+  const { inset, width, height, free } = layout(image, logo, p);
+  const f = placementFractions(p);
+  return { x: inset + Math.round(free.x * f.x), y: inset + Math.round(free.y * f.y), width, height };
+}
+
+/**
+ * The inverse, for dragging: the fractions that put the logo's top-left
+ * corner nearest (left, top) in image pixels, kept between the margins.
+ */
+export function watermarkFractionsAt(image: Size, logo: Size, p: WatermarkPlacement, left: number, top: number): { x: number; y: number } {
+  const { inset, free } = layout(image, logo, p);
+  const along = (pos: number, room: number) => (room > 0 ? clamp01((pos - inset) / room) : 0.5);
+  return { x: along(left, free.x), y: along(top, free.y) };
+}
+
+/**
+ * Snaps fractions within `tolerance` of the grid (0, ½, 1) onto it; when
+ * both snap, the result is that grid position, otherwise 'custom'.
+ */
+export function snapPlacement(x: number, y: number, tolerance: number): { position: WatermarkAnchor; x: number; y: number } {
+  const snap = (v: number) => [0, 0.5, 1].find((g) => Math.abs(v - g) <= tolerance) ?? clamp01(v);
+  const sx = snap(x);
+  const sy = snap(y);
+  const onGrid = (v: number) => v === 0 || v === 0.5 || v === 1;
+  const position = onGrid(sx) && onGrid(sy) ? (WATERMARK_POSITIONS[sy * 6 + sx * 2] ?? 'custom') : 'custom';
+  return { position, x: sx, y: sy };
 }
 
 /** Row and column (0–2) of a position in the 3 × 3 grid. */

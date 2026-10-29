@@ -96,6 +96,9 @@ describe('watermark options (M23)', () => {
     expect([t.kind, t.text, t.textColor, t.textShadow]).toEqual(['text', '© Me and you', '#ffd400', false]);
     expect(normalizeWatermark({ kind: 'video', textColor: 'red', text: 'x'.repeat(500) })).toMatchObject({ kind: 'logo', textColor: '#ffffff', text: 'x'.repeat(200) });
     expect(normalizeWatermark('nope')).toEqual(DEFAULT_WATERMARK);
+    // A dragged spot (M25): 'custom' with fractions clamped to 0–1.
+    expect(normalizeWatermark({ position: 'custom', x: 0.37, y: 4 })).toMatchObject({ position: 'custom', x: 0.37, y: 1 });
+    expect(normalizeWatermark({ position: 'custom', x: 'a', y: Number.NaN })).toMatchObject({ x: 1, y: 1 });
   });
 
   it('applies only with a logo, and presets keep it', () => {

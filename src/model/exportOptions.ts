@@ -1,5 +1,5 @@
 /** Export settings (design/Export.dc.html), pure helpers and built-in presets. */
-import { WATERMARK_POSITIONS, type WatermarkPosition } from '../engine/watermark';
+import { WATERMARK_POSITIONS, type WatermarkAnchor } from '../engine/watermark';
 
 export type ExportFormat = 'jpeg' | 'png';
 export type ExportNaming = 'original' | 'custom' | 'date';
@@ -40,7 +40,11 @@ export interface WatermarkOptions {
   textColor: string;
   /** A soft shadow behind the text, so it reads on any photo. */
   textShadow: boolean;
-  position: WatermarkPosition;
+  /** A grid position, or 'custom' after dragging it in the enlarged preview (M25). */
+  position: WatermarkAnchor;
+  /** Where a 'custom' watermark sits between the margins, 0–1 across and down (engine/watermark.ts). */
+  x: number;
+  y: number;
   /** Logo width, % of the photo's width. */
   size: number;
   /** 0–100. */
@@ -61,6 +65,8 @@ export const DEFAULT_WATERMARK: WatermarkOptions = {
   textColor: '#ffffff',
   textShadow: true,
   position: 'bottom-right',
+  x: 1,
+  y: 1,
   size: 15,
   opacity: 85,
   inset: 3,
@@ -136,6 +142,7 @@ export function normalizeWatermark(raw: unknown): WatermarkOptions {
   const d = DEFAULT_WATERMARK;
   const num = (v: unknown, r: { min: number; max: number }, fallback: number) =>
     typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.min(r.max, Math.max(r.min, v))) : fallback;
+  const fraction = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : fallback);
   return {
     enabled: w.enabled === true,
     kind: w.kind === 'text' ? 'text' : 'logo',
@@ -144,7 +151,9 @@ export function normalizeWatermark(raw: unknown): WatermarkOptions {
     text: typeof w.text === 'string' ? w.text.replace(/[\r\n\t]+/g, ' ').slice(0, MAX_WATERMARK_TEXT) : d.text,
     textColor: typeof w.textColor === 'string' && /^#[0-9a-f]{6}$/i.test(w.textColor) ? w.textColor.toLowerCase() : d.textColor,
     textShadow: typeof w.textShadow === 'boolean' ? w.textShadow : d.textShadow,
-    position: WATERMARK_POSITIONS.includes(w.position as WatermarkPosition) ? (w.position as WatermarkPosition) : d.position,
+    position: w.position === 'custom' || WATERMARK_POSITIONS.some((p) => p === w.position) ? (w.position as WatermarkAnchor) : d.position,
+    x: fraction(w.x, d.x),
+    y: fraction(w.y, d.y),
     size: num(w.size, WATERMARK_RANGES.size, d.size),
     opacity: num(w.opacity, WATERMARK_RANGES.opacity, d.opacity),
     inset: num(w.inset, WATERMARK_RANGES.inset, d.inset),

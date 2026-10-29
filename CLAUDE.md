@@ -188,6 +188,11 @@ component library.
   closes only it): the photo is re-rendered with its live edits at about
   screen size (`settingsSync.renderEditedPreview`, on the thumbnail
   client, no watermark) and the mark is overlaid with the same math.
+  There the mark can be dragged or moved with the arrow keys (M25):
+  `position: 'custom'` with `x`/`y` = fractions of the room between the
+  margins (grid positions are 0, ½, 1, pixel-identical);
+  `watermarkFractionsAt` inverts `watermarkRect`, `snapPlacement` snaps
+  within 2% back onto a named grid position.
 - Interface (M22): every shortcut is listed in `shortcuts/shortcutList.ts`
   (the `?` / top-bar dialog renders it; a unit test reads the handler
   sources and fails if a handled key is missing, so add new shortcuts

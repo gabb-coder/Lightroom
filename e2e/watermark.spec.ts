@@ -140,6 +140,86 @@ test.describe('Logo watermark (M23)', () => {
     await expect(dialog(page)).toBeVisible();
   });
 
+  test('dragging the watermark in the enlarged preview moves it on the export; it snaps to the grid', async ({ page }) => {
+    test.slow();
+    const logo = makeLogo();
+    await gotoDevelop(page);
+    await openTestPhoto(page, smallPhotoPng); // 600 × 360
+    await page.getByRole('tab', { name: 'Export' }).click();
+    await dialog(page).getByRole('button', { name: 'PNG, lossless' }).click();
+    await addLogo(page, logo);
+    await dialog(page).getByRole('slider', { name: 'Size', exact: true }).fill('25');
+    await dialog(page).getByRole('slider', { name: 'Opacity', exact: true }).fill('100');
+    await page.getByRole('button', { name: 'Enlarge the watermark preview' }).click();
+    const zoom = page.getByTestId('watermark-zoom');
+    await expect(zoom).toHaveAttribute('data-sharp', 'true', { timeout: 30_000 });
+    const photo = zoom.locator('img').first();
+    const mark = page.getByTestId('watermark-zoom-logo');
+    const stored = () => page.evaluate(() => (JSON.parse(localStorage.getItem('photo-editor:ui') ?? '{}') as { exportOptions: { watermark: { position: string; x: number; y: number } } }).exportOptions.watermark);
+
+    /** Drags the mark so its top-left corner goes to (fx, fy) of the photo. */
+    const dragTo = async (fx: number, fy: number) => {
+      const big = await photo.boundingBox();
+      const box = await mark.boundingBox();
+      if (!big || !box) throw new Error('no enlarged preview');
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(big.x + fx * big.width + box.width / 2, big.y + fy * big.height + box.height / 2, { steps: 8 });
+      await page.mouse.up();
+    };
+
+    // Past the corner: kept inside the margin and snapped to "Top left".
+    await dragTo(-0.5, -0.5);
+    await expect(zoom).toBeVisible(); // a drag doesn't close the view
+    expect(await stored()).toMatchObject({ position: 'top-left', x: 0, y: 0 });
+
+    // Somewhere off the grid: a custom spot.
+    await dragTo(0.3, 0.4);
+    const placed = await stored();
+    expect(placed.position).toBe('custom');
+    const expected = watermarkRect({ width: 600, height: 360 }, logo, { position: 'custom', size: 25, inset: 3, x: placed.x, y: placed.y });
+    expect(Math.abs(expected.x / 600 - 0.3)).toBeLessThan(0.02);
+    expect(Math.abs(expected.y / 360 - 0.4)).toBeLessThan(0.02);
+    // Arrow keys nudge it by 2% of the room.
+    await mark.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect.poll(async () => (await stored()).x).toBeCloseTo(placed.x + 0.02, 6);
+    await page.keyboard.press('ArrowLeft');
+    await expect.poll(async () => (await stored()).x).toBeCloseTo(placed.x, 6);
+    const big = await photo.boundingBox();
+    const shown = await mark.boundingBox();
+    if (!big || !shown) throw new Error('no enlarged preview');
+    expect(Math.abs((shown.x - big.x) / big.width - expected.x / 600)).toBeLessThan(0.01);
+    expect(Math.abs((shown.y - big.y) / big.height - expected.y / 360)).toBeLessThan(0.01);
+    await page.mouse.move(shown.x + shown.width / 2, shown.y + shown.height / 2);
+    await page.screenshot({ path: 'test-results/screenshots/m25-watermark-drag.png' });
+
+    await page.keyboard.press('Escape');
+    await expect(zoom).toHaveCount(0);
+    await expect(dialog(page).locator('[role="radio"][aria-checked="true"]')).toHaveCount(0);
+    await expect(dialog(page).getByText('Custom spot, dragged in the enlarged preview.')).toBeVisible();
+    await page.getByTestId('watermark-preview').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: 'test-results/screenshots/m25-watermark-custom.png' });
+
+    // The export puts it exactly there.
+    const download = page.waitForEvent('download');
+    await dialog(page).getByRole('button', { name: 'Export 1 photo' }).click();
+    const exported = decodePng(await readFile(await (await download).path()));
+    const source = makeTestPhoto(600, 360);
+    const rendered = renderRgba8(source.data, source, pipelineParams(defaultEditSettings()));
+    const reference = { width: 600, height: 360, data: new Uint8ClampedArray(rendered.data) };
+    expect(applyWatermark(reference, logo, { position: 'custom', size: 25, inset: 3, x: placed.x, y: placed.y }, 1)).toEqual(expected);
+    let maxDiff = 0;
+    for (let i = 0; i < reference.data.length; i++) if (i % 4 !== 3) maxDiff = Math.max(maxDiff, Math.abs((exported.data[i] ?? 0) - (reference.data[i] ?? 0)));
+    console.log(`dragged watermark export vs CPU reference: max diff ${maxDiff}/255`);
+    expect(maxDiff).toBeLessThanOrEqual(2);
+
+    // A grid square puts it back.
+    await page.getByRole('tab', { name: 'Export' }).click();
+    await dialog(page).getByRole('radio', { name: 'Bottom right' }).click();
+    expect(await stored()).toMatchObject({ position: 'bottom-right', x: 1, y: 1 });
+  });
+
   test('logos are kept in the catalog, can be removed, survive a reload and come back from a backup', async ({ page, browser }) => {
     await gotoLibrary(page);
     await importViaButton(page, testFiles(1));

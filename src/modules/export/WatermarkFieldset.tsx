@@ -1,9 +1,17 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import controls from '../../components/controls.module.css';
 import { useThumbnailUrl } from '../../components/useThumbnailUrl';
 import type { LogoRecord, PhotoRecord } from '../../db/db';
-import { watermarkRect, WATERMARK_POSITIONS, type WatermarkPosition } from '../../engine/watermark';
+import {
+  placementFractions,
+  snapPlacement,
+  watermarkFractionsAt,
+  watermarkRect,
+  WATERMARK_POSITIONS,
+  type WatermarkAnchor,
+  type WatermarkPosition,
+} from '../../engine/watermark';
 import { MAX_WATERMARK_TEXT, WATERMARK_RANGES, type WatermarkKind, type WatermarkOptions } from '../../model/exportOptions';
 import { renderTextWatermark } from '../../render/textWatermark';
 import { useExportStore } from '../../state/exportStore';
@@ -87,7 +95,7 @@ function Slider({ id, label, value, range, unit, disabled, onChange }: {
 }
 
 /** 3 × 3 grid of positions. */
-function PositionPicker({ value, disabled, onChange }: { value: WatermarkPosition; disabled: boolean; onChange: (p: WatermarkPosition) => void }) {
+function PositionPicker({ value, disabled, onChange }: { value: WatermarkAnchor; disabled: boolean; onChange: (p: WatermarkPosition) => void }) {
   return (
     <div className={styles.positions} role="radiogroup" aria-label="Watermark position">
       {WATERMARK_POSITIONS.map((p) => (
@@ -109,31 +117,112 @@ function PositionPicker({ value, disabled, onChange }: { value: WatermarkPositio
   );
 }
 
+type Size = { width: number; height: number };
+
+/** Where a dragged watermark goes (engine/watermark.ts `snapPlacement`). */
+type Placement = Pick<WatermarkOptions, 'position' | 'x' | 'y'>;
+
+/** Dragging within this share of the free room of a grid position lands on it. */
+const SNAP = 0.02;
+
+/** A large virtual copy of an image of `size`, so whole-pixel rounding doesn't show at preview size. */
+function virtualImage(size: Size): Size {
+  const scale = 4000 / Math.max(size.width, size.height);
+  return { width: Math.round(size.width * scale), height: Math.round(size.height * scale) };
+}
+
 /** Where the watermark sits on an image of `size`, as fractions of it (same math as the export). */
-function useMarkFractions(size: { width: number; height: number } | null, mark: WatermarkImage, w: WatermarkOptions) {
-  // Work in a large virtual image so whole-pixel rounding doesn't show at preview size.
+function useMarkFractions(size: Size | null, mark: WatermarkImage, w: WatermarkOptions) {
   return useMemo(() => {
     if (!size) return null;
-    const scale = 4000 / Math.max(size.width, size.height);
-    const image = { width: Math.round(size.width * scale), height: Math.round(size.height * scale) };
+    const image = virtualImage(size);
     const r = watermarkRect(image, mark, w);
     return { left: r.x / image.width, top: r.y / image.height, width: r.width / image.width, height: r.height / image.height };
   }, [size, mark, w]);
 }
 
-/** A photo with the watermark laid over it where the export will put it. Display only. */
-function MarkedImage({ src, alt, mark, w, className, testId }: { src: string; alt: string; mark: WatermarkImage; w: WatermarkOptions; className: string | undefined; testId: string }) {
-  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+/** Arrow keys move a watermark by 2% of its free room (Shift: 10%). */
+function nudged(e: KeyboardEvent<HTMLElement>, w: WatermarkOptions): Placement | null {
+  const step = e.shiftKey ? 0.1 : 0.02;
+  const moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+  const move = moves[e.key];
+  if (!move) return null;
+  const f = placementFractions(w);
+  return snapPlacement(f.x + move[0], f.y + move[1], 1e-6);
+}
+
+/**
+ * A photo with the watermark laid over it where the export will put it.
+ * Display only, except that with `onPlace` the watermark can be dragged
+ * (or moved with the arrow keys) to a new spot.
+ */
+function MarkedImage({ src, alt, mark, w, className, testId, onPlace }: {
+  src: string;
+  alt: string;
+  mark: WatermarkImage;
+  w: WatermarkOptions;
+  className: string | undefined;
+  testId: string;
+  onPlace?: (p: Placement) => void;
+}) {
+  const [size, setSize] = useState<Size | null>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ pointer: number; x: number; y: number; left: number; top: number } | null>(null);
   const rect = useMarkFractions(size, mark, w);
   const pct = (v: number) => `${(v * 100).toFixed(3)}%`;
   const logoStyle: CSSProperties | undefined = rect
     ? { left: pct(rect.left), top: pct(rect.top), width: pct(rect.width), height: pct(rect.height), opacity: w.opacity / 100 }
     : undefined;
   const frameStyle = size ? ({ aspectRatio: `${size.width} / ${size.height}`, '--aspect': size.width / size.height } as CSSProperties) : undefined;
+
+  const startDrag = (e: PointerEvent<HTMLImageElement>) => {
+    if (!size || e.button !== 0) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const r = watermarkRect(virtualImage(size), mark, w);
+    drag.current = { pointer: e.pointerId, x: e.clientX, y: e.clientY, left: r.x, top: r.y };
+  };
+  const moveDrag = (e: PointerEvent<HTMLImageElement>) => {
+    const d = drag.current;
+    const frame = frameRef.current;
+    if (!d || d.pointer !== e.pointerId || !size || !frame || !onPlace) return;
+    const image = virtualImage(size);
+    const scale = image.width / frame.getBoundingClientRect().width;
+    const f = watermarkFractionsAt(image, mark, w, d.left + (e.clientX - d.x) * scale, d.top + (e.clientY - d.y) * scale);
+    onPlace(snapPlacement(f.x, f.y, SNAP));
+  };
+  const endDrag = (e: PointerEvent<HTMLImageElement>) => {
+    if (drag.current?.pointer === e.pointerId) drag.current = null;
+  };
+
   return (
-    <div className={className} style={frameStyle}>
+    <div ref={frameRef} className={className} style={frameStyle} onClick={onPlace ? (e) => e.stopPropagation() : undefined}>
       <img src={src} alt={alt} onLoad={(e) => setSize({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} />
-      {rect && <img className={styles.previewLogo} src={mark.url} alt="" style={logoStyle} data-testid={testId} />}
+      {rect && !onPlace && <img className={styles.previewLogo} src={mark.url} alt="" style={logoStyle} data-testid={testId} />}
+      {rect && onPlace && (
+        <img
+          className={`${styles.previewLogo} ${styles.movable}`}
+          src={mark.url}
+          alt=""
+          role="button"
+          tabIndex={0}
+          aria-label="Watermark: drag or use the arrow keys to move it"
+          title="Drag to move"
+          draggable={false}
+          style={logoStyle}
+          data-testid={testId}
+          onPointerDown={startDrag}
+          onPointerMove={moveDrag}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onKeyDown={(e) => {
+            const p = nudged(e, w);
+            if (!p) return;
+            e.preventDefault();
+            onPlace(p);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -174,7 +263,14 @@ function useSharpImage(photo: PhotoRecord): string | null {
 }
 
 /** The preview filling the window: click anywhere or press Esc to close. */
-function PreviewZoom({ photo, thumb, mark, w, onClose }: { photo: PhotoRecord; thumb: string; mark: WatermarkImage; w: WatermarkOptions; onClose: () => void }) {
+function PreviewZoom({ photo, thumb, mark, w, onPlace, onClose }: {
+  photo: PhotoRecord;
+  thumb: string;
+  mark: WatermarkImage;
+  w: WatermarkOptions;
+  onPlace: (p: Placement) => void;
+  onClose: () => void;
+}) {
   const sharp = useSharpImage(photo);
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => closeRef.current?.focus(), []);
@@ -188,15 +284,22 @@ function PreviewZoom({ photo, thumb, mark, w, onClose }: { photo: PhotoRecord; t
         data-testid="watermark-zoom"
         data-sharp={sharp ? 'true' : 'false'}
         onKeyDown={(e) => {
-          // Keep the Export dialog open, and focus on the one button here.
+          // Keep the Export dialog open, and focus inside this view.
           e.stopPropagation();
-          if (e.key === 'Escape' || e.key === 'Tab') e.preventDefault();
-          if (e.key === 'Escape') onClose();
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            onClose();
+          } else if (e.key === 'Tab') {
+            e.preventDefault();
+            const stops = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[tabindex="0"], button'));
+            const at = stops.indexOf(document.activeElement as HTMLElement);
+            stops[(at + (e.shiftKey ? stops.length - 1 : 1)) % stops.length]?.focus();
+          }
         }}
       >
-        <MarkedImage src={sharp ?? thumb} alt={`${photo.fileName} with the watermark, enlarged`} mark={mark} w={w} className={styles.zoomFrame} testId="watermark-zoom-logo" />
+        <MarkedImage src={sharp ?? thumb} alt={`${photo.fileName} with the watermark, enlarged`} mark={mark} w={w} className={styles.zoomFrame} testId="watermark-zoom-logo" onPlace={onPlace} />
         <div className={styles.zoomBar}>
-          <span>{sharp ? 'Click anywhere or press Esc to close.' : 'Rendering a sharper preview…'}</span>
+          <span>{sharp ? 'Drag the watermark to move it. Esc or a click outside the photo closes.' : 'Rendering a sharper preview…'}</span>
           <button ref={closeRef} type="button" className={controls.iconButton} aria-label="Close preview" onClick={onClose}>
             <svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
               <path d="M4 4l8 8M12 4l-8 8" />
@@ -214,7 +317,7 @@ function PreviewZoom({ photo, thumb, mark, w, onClose }: { photo: PhotoRecord; t
  * put it, using the same placement math (engine/watermark.ts). Display only.
  * Clicking it shows it enlarged.
  */
-function Preview({ photo, mark, w }: { photo: PhotoRecord; mark: WatermarkImage; w: WatermarkOptions }) {
+function Preview({ photo, mark, w, onPlace }: { photo: PhotoRecord; mark: WatermarkImage; w: WatermarkOptions; onPlace: (p: Placement) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const thumb = useThumbnailUrl(photo, ref);
@@ -226,7 +329,7 @@ function Preview({ photo, mark, w }: { photo: PhotoRecord; mark: WatermarkImage;
   return (
     <div ref={ref} className={styles.preview} data-testid="watermark-preview">
       {thumb && (
-        <button ref={buttonRef} type="button" className={styles.previewButton} aria-label="Enlarge the watermark preview" title="Click to enlarge" onClick={() => setZoomed(true)}>
+        <button ref={buttonRef} type="button" className={styles.previewButton} aria-label="Enlarge the watermark preview" title="Click to enlarge; drag the watermark there to move it" onClick={() => setZoomed(true)}>
           <MarkedImage src={thumb} alt={`Preview of ${photo.fileName} with the watermark`} mark={mark} w={w} className={styles.previewFrame} testId="watermark-preview-logo" />
           <span className={styles.enlargeIcon} aria-hidden="true">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -235,7 +338,7 @@ function Preview({ photo, mark, w }: { photo: PhotoRecord; mark: WatermarkImage;
           </span>
         </button>
       )}
-      {zoomed && thumb && <PreviewZoom photo={photo} thumb={thumb} mark={mark} w={w} onClose={close} />}
+      {zoomed && thumb && <PreviewZoom photo={photo} thumb={thumb} mark={mark} w={w} onPlace={onPlace} onClose={close} />}
     </div>
   );
 }
@@ -381,14 +484,20 @@ export function WatermarkFieldset() {
         {!isText && <LogoFields w={w} logo={logo} off={off} set={set} />}
 
         <span className={dialog.label}>Position</span>
-        <PositionPicker value={w.position} disabled={off} onChange={(position) => set({ position })} />
+        <PositionPicker value={w.position} disabled={off} onChange={(position) => set({ position, ...placementFractions({ ...w, position }) })} />
+        {w.position === 'custom' && (
+          <>
+            <span />
+            <span className={dialog.hint}>Custom spot, dragged in the enlarged preview. Pick a square to snap it back.</span>
+          </>
+        )}
         <Slider id="ex-wm-size" label="Size" value={w.size} range={WATERMARK_RANGES.size} unit="%" disabled={off} onChange={(size) => set({ size })} />
         <Slider id="ex-wm-opacity" label="Opacity" value={w.opacity} range={WATERMARK_RANGES.opacity} unit="%" disabled={off} onChange={(opacity) => set({ opacity })} />
         <Slider id="ex-wm-inset" label="Margin" value={w.inset} range={WATERMARK_RANGES.inset} unit="%" disabled={off} onChange={(inset) => set({ inset })} />
         {w.enabled && mark && photo && (
           <>
             <span className={dialog.label}>Preview</span>
-            <Preview photo={photo} mark={mark} w={w} />
+            <Preview photo={photo} mark={mark} w={w} onPlace={set} />
           </>
         )}
       </div>
