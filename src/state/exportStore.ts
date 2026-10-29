@@ -4,14 +4,15 @@ import { downloadBlob } from '../io/download';
 import {
   BUILTIN_EXPORT_PRESETS,
   exportFileName,
-  LOCATION_KEYS,
+  hasWatermark,
+  KEPT_KEYS,
   normalizeExportOptions,
   sameLook,
   subfolderOf,
   type ExportOptions,
   type ExportPreset,
   uniqueFileNames,
-  withLocation,
+  withKept,
   zipEntryPath,
   zipFileName,
 } from '../model/exportOptions';
@@ -69,13 +70,13 @@ export const useExportStore = create<ExportState>()((set, get) => ({
   setOptions: (patch) => {
     const options = normalizeExportOptions({ ...get().options, ...patch });
     writeUiPrefs({ exportOptions: { ...options } });
-    // Changing only where files go keeps the highlighted preset.
-    const locationOnly = Object.keys(patch).every((k) => (LOCATION_KEYS as readonly string[]).includes(k));
+    // Changing only where files go, or the logo, keeps the highlighted preset.
+    const locationOnly = Object.keys(patch).every((k) => (KEPT_KEYS as readonly string[]).includes(k));
     set((s) => ({ options, presetId: locationOnly ? s.presetId : null }));
   },
   applyPreset: (preset) => {
-    // A preset is a look; where files go stays as chosen.
-    const options = withLocation(normalizeExportOptions(preset.options), get().options);
+    // A preset is a look; where files go and the logo stay as chosen.
+    const options = withKept(normalizeExportOptions(preset.options), get().options);
     writeUiPrefs({ exportOptions: { ...options } });
     set({ options, presetId: preset.id });
   },
@@ -121,11 +122,17 @@ export function exportTargets(): string[] {
 }
 
 /** Renders one photo in the worker (or on the page, see exportClient). */
-async function renderOne(photoId: string, options: ExportOptions, onProgress: (fraction: number) => void): Promise<Blob> {
+async function renderOne(photoId: string, options: ExportOptions, onProgress: (fraction: number) => void, logo: Blob | null): Promise<Blob> {
   const original = await getOriginal(photoId);
   if (!original) throw new Error('This photo is no longer in the catalog.');
   const settings = await settingsOf(photoId);
-  return (await exportInWorker(original.blob, settings, options, (stage) => onProgress(STAGE_PROGRESS[stage]))).blob;
+  return (await exportInWorker(original.blob, settings, options, (stage) => onProgress(STAGE_PROGRESS[stage]), logo)).blob;
+}
+
+/** The watermark logo file for these options, or null (no watermark, or the logo is gone). */
+async function logoFor(options: ExportOptions): Promise<Blob | null> {
+  if (!hasWatermark(options) || !options.watermark.logoId) return null;
+  return (await db.logos.get(options.watermark.logoId))?.blob ?? null;
 }
 
 /** Where a batch's files go, and what the done message says. */
@@ -182,6 +189,7 @@ export async function runExport(): Promise<void> {
   const names = uniqueFileNames(records.map((r, i) => (r ? exportFileName(options, r, i + 1) : '')));
   const total = ids.length;
   const out = await delivery(options, total, folder);
+  const logo = await logoFor(options);
   const failed: string[] = [];
   let lastError = '';
   for (let index = 0; index < total; index++) {
@@ -193,7 +201,7 @@ export async function runExport(): Promise<void> {
     try {
       const id = ids[index];
       if (!id || !records[index]) throw new Error('This photo is no longer in the catalog.');
-      await out.deliver(fileName, await renderOne(id, options, progress));
+      await out.deliver(fileName, await renderOne(id, options, progress, logo));
     } catch (error) {
       if (error instanceof ExportCancelled) return finish({ status: 'cancelled', fileName, index, total, progress: index / total });
       failed.push(records[index]?.fileName ?? fileName);

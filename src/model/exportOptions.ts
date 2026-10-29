@@ -1,4 +1,5 @@
 /** Export settings (design/Export.dc.html), pure helpers and built-in presets. */
+import { WATERMARK_POSITIONS, type WatermarkPosition } from '../engine/watermark';
 
 export type ExportFormat = 'jpeg' | 'png';
 export type ExportNaming = 'original' | 'custom' | 'date';
@@ -21,7 +22,26 @@ export interface ExportOptions {
   /** Put the files in a subfolder (inside the ZIP or the picked folder). */
   useSubfolder: boolean;
   subfolder: string;
+  /** A logo laid on every exported photo (M23). */
+  watermark: WatermarkOptions;
 }
+
+export interface WatermarkOptions {
+  enabled: boolean;
+  /** Stored logo (db `logos`), or null before one is added. */
+  logoId: string | null;
+  position: WatermarkPosition;
+  /** Logo width, % of the photo's width. */
+  size: number;
+  /** 0–100. */
+  opacity: number;
+  /** Gap to the edges, % of the photo's shorter side. */
+  inset: number;
+}
+
+export const WATERMARK_RANGES = { size: { min: 2, max: 100 }, opacity: { min: 5, max: 100 }, inset: { min: 0, max: 25 } } as const;
+
+export const DEFAULT_WATERMARK: WatermarkOptions = { enabled: false, logoId: null, position: 'bottom-right', size: 15, opacity: 85, inset: 3 };
 
 export interface ExportPreset {
   id: string;
@@ -40,6 +60,7 @@ const BASE: ExportOptions = {
   destination: 'zip',
   useSubfolder: true,
   subfolder: 'Exports',
+  watermark: DEFAULT_WATERMARK,
 };
 
 export const BUILTIN_EXPORT_PRESETS: readonly ExportPreset[] = [
@@ -82,7 +103,29 @@ export function normalizeExportOptions(raw: Partial<ExportOptions>): ExportOptio
     destination: o.destination === 'downloads' || o.destination === 'folder' ? o.destination : 'zip',
     useSubfolder: typeof o.useSubfolder === 'boolean' ? o.useSubfolder : BASE.useSubfolder,
     subfolder: typeof o.subfolder === 'string' ? safeFolderName(o.subfolder) : BASE.subfolder,
+    watermark: normalizeWatermark(o.watermark),
   };
+}
+
+/** Clamps watermark settings read from storage or the form. */
+export function normalizeWatermark(raw: unknown): WatermarkOptions {
+  const w = typeof raw === 'object' && raw !== null ? (raw as Partial<WatermarkOptions>) : {};
+  const d = DEFAULT_WATERMARK;
+  const num = (v: unknown, r: { min: number; max: number }, fallback: number) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.min(r.max, Math.max(r.min, v))) : fallback;
+  return {
+    enabled: w.enabled === true,
+    logoId: typeof w.logoId === 'string' && w.logoId ? w.logoId : null,
+    position: WATERMARK_POSITIONS.includes(w.position as WatermarkPosition) ? (w.position as WatermarkPosition) : d.position,
+    size: num(w.size, WATERMARK_RANGES.size, d.size),
+    opacity: num(w.opacity, WATERMARK_RANGES.opacity, d.opacity),
+    inset: num(w.inset, WATERMARK_RANGES.inset, d.inset),
+  };
+}
+
+/** True when exports get a logo (switched on and a logo chosen). */
+export function hasWatermark(o: Pick<ExportOptions, 'watermark'>): boolean {
+  return o.watermark.enabled && o.watermark.logoId !== null;
 }
 
 /** Size of the exported image for a rendered output of `width × height`. */
@@ -144,8 +187,8 @@ export function uniqueFileNames(names: readonly string[]): string[] {
   });
 }
 
-/** Location settings are not part of an export preset's look. */
-export const LOCATION_KEYS = ['destination', 'useSubfolder', 'subfolder'] as const;
+/** Settings an export preset leaves alone: where files go (M19) and the logo (M23). */
+export const KEPT_KEYS = ['destination', 'useSubfolder', 'subfolder', 'watermark'] as const;
 
 export const DESTINATION_LABELS: Readonly<Record<ExportDestination, string>> = {
   downloads: 'Downloads, one file each',
@@ -163,14 +206,14 @@ export function safeFolderName(name: string): string {
     .slice(0, 60);
 }
 
-/** `options` with the location settings of `from` (applying a preset keeps where files go). */
-export function withLocation(options: ExportOptions, from: Pick<ExportOptions, (typeof LOCATION_KEYS)[number]>): ExportOptions {
-  return { ...options, destination: from.destination, useSubfolder: from.useSubfolder, subfolder: from.subfolder };
+/** `options` with the kept settings of `from` (applying a preset keeps where files go and the logo). */
+export function withKept(options: ExportOptions, from: Pick<ExportOptions, (typeof KEPT_KEYS)[number]>): ExportOptions {
+  return { ...options, destination: from.destination, useSubfolder: from.useSubfolder, subfolder: from.subfolder, watermark: from.watermark };
 }
 
-/** Same export look, wherever the files go. */
+/** Same export look, wherever the files go and whatever the logo. */
 export function sameLook(a: ExportOptions, b: ExportOptions): boolean {
-  return JSON.stringify(withLocation(a, BASE)) === JSON.stringify(withLocation(b, BASE));
+  return JSON.stringify(withKept(a, BASE)) === JSON.stringify(withKept(b, BASE));
 }
 
 /** The subfolder in use, or '' for none. */

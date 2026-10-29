@@ -25,6 +25,9 @@ service keep the name `lightroom-web`.
 - Commit at the end of each milestone with a message like
   `M2: Basic panel, histogram, before/after`. Commit smaller steps in between
   when it helps. Never commit secrets or `.env` files.
+- The user's standing instruction: after every change, once the checks
+  above pass, open a pull request to `main` and merge it yourself (Render
+  deploys `main`). Restart the work branch from `main` for the next change.
 - No new dependencies beyond the stack without asking first. Explain what it
   is for and why we can't write it ourselves.
 - Never claim a visual result you haven't checked. Verify UI with a
@@ -169,6 +172,14 @@ component library.
   can't do WebGL2, or with `?export=main`). Renderer scratch: blur target
   is RG8; `releaseScratch()` after exports. Manual cross-browser checklist:
   `docs/BROWSER_CHECKLIST.md` (only Chromium is automated).
+- Logo watermark (M23): `ExportOptions.watermark` (logo id, 3×3 position,
+  size % of width, opacity, margin % of the shorter side); like the export
+  location it is a kept setting (`KEPT_KEYS` / `withKept`: presets don't
+  change it). Logos live in DB v6 table `logos` (`state/logoStore.ts`;
+  PNG/JPEG/WebP) and in backups. `engine/watermark.ts` (placement,
+  premultiplied area/bilinear resampling, "over" compositing) runs on the
+  final export pixels in `render/exportRender.ts`, after any resize; no
+  GPU twin. The dialog preview uses the same `watermarkRect`.
 - Interface (M22): every shortcut is listed in `shortcuts/shortcutList.ts`
   (the `?` / top-bar dialog renders it; a unit test reads the handler
   sources and fails if a handled key is missing, so add new shortcuts

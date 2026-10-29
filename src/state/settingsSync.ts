@@ -2,7 +2,7 @@ import { db, getOriginal, type PhotoRecord } from '../db/db';
 import { isEdited, jsonEqual } from '../model/compare';
 import { DEFAULT_COPY_PANELS, pasteSettings, type SettingsClipboard, type SettingsPanel } from '../model/copySettings';
 import type { EditSettings } from '../model/editSettings';
-import type { ExportOptions } from '../model/exportOptions';
+import { DEFAULT_WATERMARK, type ExportOptions } from '../model/exportOptions';
 import { currentSettings, parseStoredHistory, pushHistory } from '../model/history';
 import { createExportClient } from '../workers/exportClient';
 import { THUMBNAIL_LONG_EDGE, THUMBNAIL_QUALITY } from '../workers/thumbnailProtocol';
@@ -130,6 +130,8 @@ const THUMBNAIL_OPTIONS: ExportOptions = {
   destination: 'downloads',
   useSubfolder: false,
   subfolder: '',
+  // Thumbnails show the photo, never the export logo.
+  watermark: DEFAULT_WATERMARK,
 };
 
 let thumbnailQueue: Promise<void> = Promise.resolve();

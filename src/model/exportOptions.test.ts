@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUILTIN_EXPORT_PRESETS, exportFileName, exportSize, normalizeExportOptions, sameLook, subfolderOf, withLocation, zipEntryPath, zipFileName } from './exportOptions';
+import { BUILTIN_EXPORT_PRESETS, DEFAULT_EXPORT_OPTIONS, DEFAULT_WATERMARK, exportFileName, hasWatermark, normalizeWatermark, exportSize, normalizeExportOptions, sameLook, subfolderOf, withKept, zipEntryPath, zipFileName } from './exportOptions';
 import { uniqueFileNames } from './exportOptions';
 
 describe('export presets', () => {
@@ -78,9 +78,28 @@ describe('export locations (M19)', () => {
   it('presets keep the current location; the look ignores it', () => {
     const mine = normalizeExportOptions({ destination: 'folder', subfolder: 'Trip' });
     const preset = BUILTIN_EXPORT_PRESETS[1]?.options ?? normalizeExportOptions({});
-    const applied = withLocation(preset, mine);
+    const applied = withKept(preset, mine);
     expect([applied.destination, applied.subfolder, applied.quality]).toEqual(['folder', 'Trip', preset.quality]);
     expect(sameLook(applied, preset)).toBe(true);
     expect(sameLook(applied, mine)).toBe(false);
+  });
+});
+
+describe('watermark options (M23)', () => {
+  it('clamps stored values and defaults to off', () => {
+    expect(normalizeExportOptions({}).watermark).toEqual(DEFAULT_WATERMARK);
+    expect(DEFAULT_WATERMARK.enabled).toBe(false);
+    const w = normalizeWatermark({ enabled: true, logoId: 'a', position: 'middle', size: 500, opacity: -3, inset: 2.4 });
+    expect(w).toEqual({ enabled: true, logoId: 'a', position: 'bottom-right', size: 100, opacity: 5, inset: 2 });
+    expect(normalizeWatermark('nope')).toEqual(DEFAULT_WATERMARK);
+  });
+
+  it('applies only with a logo, and presets keep it', () => {
+    const on = normalizeExportOptions({ watermark: { ...DEFAULT_WATERMARK, enabled: true, logoId: 'x' } });
+    expect(hasWatermark(on)).toBe(true);
+    expect(hasWatermark(normalizeExportOptions({ watermark: { ...DEFAULT_WATERMARK, enabled: true } }))).toBe(false);
+    const preset = BUILTIN_EXPORT_PRESETS[1]?.options ?? DEFAULT_EXPORT_OPTIONS;
+    expect(withKept(preset, on).watermark).toEqual(on.watermark);
+    expect(sameLook(withKept(preset, on), preset)).toBe(true);
   });
 });
