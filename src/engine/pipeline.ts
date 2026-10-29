@@ -8,6 +8,9 @@ import { applyTreatment } from './treatment';
 import { applyWhiteBalance, whiteBalanceGains } from './whiteBalance';
 import type { EditSettings, Geometry } from '../model/editSettings';
 import { applyGeometryRgba8, type Size } from './geometry';
+import { grainOffset, grainParams, type GrainParams } from './grain';
+import { sharpenOffsets, sharpenParams, type SharpenParams } from './sharpen';
+import { vignetteAmount } from './vignette';
 
 /**
  * Numeric parameters for every implemented stage. Both the CPU reference and
@@ -24,8 +27,14 @@ export interface PipelineParams {
   vibrance: number;
   saturationScale: number;
   bw: boolean;
+  /** Detail: unsharp mask on luminance (engine/sharpen.ts), or null when off. */
+  sharpen: SharpenParams | null;
+  /** Effects: film grain (engine/grain.ts), or null when off. */
+  grain: GrainParams | null;
   /** Applied last, by resampling (engine/geometry.ts). */
   geometry: Geometry;
+  /** Signed post-crop vignette strength (engine/vignette.ts); 0 = off. */
+  vignette: number;
 }
 
 export function pipelineParams(settings: EditSettings): PipelineParams {
@@ -39,7 +48,10 @@ export function pipelineParams(settings: EditSettings): PipelineParams {
     vibrance: vibranceAmount(b.vibrance),
     saturationScale: saturationScale(b.saturation),
     bw: b.treatment === 'bw',
+    sharpen: sharpenParams(settings.detail),
+    grain: grainParams(settings.effects),
     geometry: settings.geometry,
+    vignette: vignetteAmount(settings.effects.vignette),
   };
 }
 
@@ -79,7 +91,35 @@ export function processRgba8(src: Uint8Array | Uint8ClampedArray, p: PipelinePar
   return out;
 }
 
-/** Full CPU reference: develop every pixel, then crop/straighten/rotate/flip. */
-export function renderRgba8(src: Uint8Array | Uint8ClampedArray, size: Size, p: PipelineParams) {
-  return applyGeometryRgba8(processRgba8(src, p), size, p.geometry);
+/** True when the detail stage (sharpening, grain) changes pixels. */
+export function hasDetailStage(p: PipelineParams): boolean {
+  return p.sharpen !== null || p.grain !== null;
+}
+
+/**
+ * CPU reference for the detail stage on a developed RGBA8 image: sharpening
+ * plus grain, both on sRGB-encoded values. `scale` is the rendered size over
+ * the full-resolution size (1 for full resolution and export).
+ */
+export function applyDetailRgba8(data: Uint8Array | Uint8ClampedArray, size: Size, p: PipelineParams, scale = 1): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(data);
+  if (!hasDetailStage(p)) return out;
+  const sharpen = sharpenOffsets(data, size, p.sharpen, scale);
+  for (let y = 0; y < size.height; y++) {
+    for (let x = 0; x < size.width; x++) {
+      const i = y * size.width + x;
+      const offset = (sharpen?.[i] ?? 0) + (p.grain ? grainOffset(x, y, p.grain, scale) : 0);
+      for (let ch = 0; ch < 3; ch++) {
+        const v = (data[i * 4 + ch] ?? 0) / 255 + offset;
+        out[i * 4 + ch] = Math.round(Math.min(1, Math.max(0, v)) * 255);
+      }
+    }
+  }
+  return out;
+}
+
+/** Full CPU reference: develop every pixel, detail, then crop/straighten/rotate/flip and vignette. */
+export function renderRgba8(src: Uint8Array | Uint8ClampedArray, size: Size, p: PipelineParams, scale = 1) {
+  const detailed = applyDetailRgba8(processRgba8(src, p), size, p, scale);
+  return applyGeometryRgba8(detailed, size, p.geometry, p.vignette);
 }

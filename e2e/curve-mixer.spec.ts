@@ -1,17 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
-import { canvasPixels, gotoDevelop, openTestPhoto, slider, smallPhotoPng, waitForFullRender } from './utils/develop';
+import { canvasPixels, gotoDevelop, openPanel, openTestPhoto, panelHeader, slider, smallPhotoPng, waitForFullRender } from './utils/develop';
 import { countDifferentPixels, imageStats, type RgbaPixels } from './utils/png';
 
 const curve = (page: Page) => page.getByTestId('tone-curve');
 const points = (page: Page) => page.getByTestId('curve-point');
-
-/** A panel's header button (its accessible name gains "Edited" once edited). */
-const panelHeader = (page: Page, title: string) => page.getByRole('region', { name: title, exact: true }).getByRole('button').first();
-
-async function openPanel(page: Page, title: string) {
-  const header = panelHeader(page, title);
-  if ((await header.getAttribute('aria-expanded')) !== 'true') await header.click();
-}
 
 /** Mean of a channel, and mean channel spread, over a vertical band of the image (fractions of width). */
 function band(img: RgbaPixels, from: number, to: number) {

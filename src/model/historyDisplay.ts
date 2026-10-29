@@ -11,7 +11,7 @@ export const CROP_ASPECT_LABELS: Readonly<Record<CropAspect, string>> = {
 };
 import type { HistoryEntry } from './history';
 import { HSL_COLORS, type HslColor } from './editSettings';
-import { ANGLE_SLIDER, BASIC_SLIDERS, formatSliderValue, hslSliderDef, type HslProp } from './sliders';
+import { ANGLE_SLIDER, BASIC_SLIDERS, DETAIL_SLIDERS, EFFECTS_SLIDERS, formatSliderValue, hslSliderDef, type HslProp, type SliderDef } from './sliders';
 
 /** History key for a Basic panel control. */
 export type BasicHistoryKey = `basic.${BasicSliderKey | 'treatment'}`;
@@ -28,6 +28,12 @@ function isBasicSliderKey(key: string): key is BasicSliderKey {
   return key in BASIC_SLIDERS;
 }
 
+function groupSliderValue(defs: Readonly<Record<string, SliderDef>>, values: object, field: string): string {
+  const def = defs[field];
+  const value = (values as Record<string, unknown>)[field];
+  return def && typeof value === 'number' ? formatSliderValue(def, value) : '';
+}
+
 /** The value column of a History row, e.g. "+0.35", "−38" or "B&W". Empty for one-shot steps. */
 export function historyEntryValue(entry: HistoryEntry): string {
   if (entry.key === 'geometry.angle') return formatSliderValue(ANGLE_SLIDER, entry.settings.geometry.angle);
@@ -38,6 +44,8 @@ export function historyEntryValue(entry: HistoryEntry): string {
     const prop = hsl[2] as HslProp;
     return formatSliderValue(hslSliderDef(color, prop), entry.settings.hsl[color][prop]);
   }
+  const group = /^(detail|effects)\.(\w+)$/.exec(entry.key ?? '');
+  if (group) return groupSliderValue(group[1] === 'detail' ? DETAIL_SLIDERS : EFFECTS_SLIDERS, group[1] === 'detail' ? entry.settings.detail : entry.settings.effects, group[2] ?? '');
   if (!entry.key?.startsWith('basic.')) return '';
   const field = entry.key.slice('basic.'.length);
   if (field === 'treatment') return entry.settings.basic.treatment === 'bw' ? 'B&W' : 'Color';

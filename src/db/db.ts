@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type { History } from '../model/history';
+import { migrateHistorySharpenDefault, migrateSharpenDefault } from '../model/migrate';
 import type { ExportPreset } from '../model/exportOptions';
 import type { Preset } from '../model/presets';
 
@@ -75,6 +76,17 @@ export class CatalogDb extends Dexie {
     });
     // v2 (M7): user export presets.
     this.version(2).stores({ exportPresets: 'id' });
+    // v3 (M9): the sharpening default changed from 40 to 0 (model/migrate.ts).
+    this.version(3)
+      .stores({})
+      .upgrade(async (tx) => {
+        await tx.table<EditRecord>('edits').toCollection().modify((r) => {
+          r.history = migrateHistorySharpenDefault(r.history);
+        });
+        await tx.table<Preset>('presets').toCollection().modify((p) => {
+          p.settings = migrateSharpenDefault(p.settings);
+        });
+      });
   }
 }
 

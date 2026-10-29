@@ -1,4 +1,5 @@
 import type { Geometry } from '../model/editSettings';
+import { applyVignette, vignetteMask } from './vignette';
 
 /**
  * Geometry stage (last in the pipeline): crop, straighten, rotate and flip.
@@ -114,8 +115,16 @@ export function sampleBilinear(data: Uint8Array | Uint8ClampedArray, W: number, 
   return out;
 }
 
-/** CPU reference for the geometry stage on a developed RGBA8 image. */
-export function applyGeometryRgba8(data: Uint8Array | Uint8ClampedArray, src: Size, g: Geometry): { width: number; height: number; data: Uint8ClampedArray } {
+/**
+ * CPU reference for the final pass on a developed RGBA8 image: geometry,
+ * then the post-crop vignette (signed strength, 0 = off) in output space.
+ */
+export function applyGeometryRgba8(
+  data: Uint8Array | Uint8ClampedArray,
+  src: Size,
+  g: Geometry,
+  vignette = 0,
+): { width: number; height: number; data: Uint8ClampedArray } {
   const out = outputSize(src, g);
   const m = geometryMatrix(src, g, out);
   const result = new Uint8ClampedArray(out.width * out.height * 4);
@@ -123,10 +132,9 @@ export function applyGeometryRgba8(data: Uint8Array | Uint8ClampedArray, src: Si
     for (let x = 0; x < out.width; x++) {
       const [sx, sy] = applyAffine(m, x + 0.5, y + 0.5);
       const px = sampleBilinear(data, src.width, src.height, sx, sy);
+      const mask = vignette === 0 || px[3] === 0 ? 0 : vignetteMask((x + 0.5) / out.width, (y + 0.5) / out.height);
       const i = (y * out.width + x) * 4;
-      result[i] = Math.round(px[0]);
-      result[i + 1] = Math.round(px[1]);
-      result[i + 2] = Math.round(px[2]);
+      for (let ch = 0; ch < 3; ch++) result[i + ch] = Math.round(mask === 0 ? px[ch] ?? 0 : applyVignette((px[ch] ?? 0) / 255, vignette, mask) * 255);
       result[i + 3] = Math.round(px[3]);
     }
   }

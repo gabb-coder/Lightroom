@@ -5,6 +5,8 @@ import {
   defaultEditSettings,
   type BasicSliderKey,
   type CropAspect,
+  type DetailKey,
+  type EffectsKey,
   type HslColor,
   type Point,
   type EditSettings,
@@ -25,7 +27,7 @@ import {
 import { basicHistoryKey, basicHistoryLabel } from '../model/historyDisplay';
 import { applyPresetTo, type Preset } from '../model/presets';
 import type { CurveChannel } from '../model/curveEdit';
-import { hslSliderDef, type HslProp } from '../model/sliders';
+import { DETAIL_SLIDERS, EFFECTS_SLIDERS, hslSliderDef, type HslProp } from '../model/sliders';
 
 /** A decoded photo ready to render. The original file is never modified. */
 export interface LoadedPhoto {
@@ -57,6 +59,8 @@ interface DevelopState {
   /** Sets one channel's curve; `merge` lets a drag of the same channel be one history step. */
   setCurve: (channel: CurveChannel, points: Point[], merge?: boolean) => void;
   setHsl: (color: HslColor, prop: HslProp, value: number) => void;
+  setDetail: (key: DetailKey, value: number) => void;
+  setEffect: (key: EffectsKey, value: number) => void;
   applyPreset: (preset: Preset) => void;
   resetAll: () => void;
   undo: () => void;
@@ -152,6 +156,18 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
       if (s.settings.hsl[color][prop] === value) return s;
       const settings = { ...s.settings, hsl: { ...s.settings.hsl, [color]: { ...s.settings.hsl[color], [prop]: value } } };
       return commit(s.history, { label: hslSliderDef(color, prop).historyLabel ?? 'Color mixer', key: `hsl.${color}.${prop}`, settings });
+    }),
+  setDetail: (key, value) =>
+    set((s) => {
+      if (s.settings.detail[key] === value) return s;
+      const settings = { ...s.settings, detail: { ...s.settings.detail, [key]: value } };
+      return commit(s.history, { label: DETAIL_SLIDERS[key].historyLabel ?? DETAIL_SLIDERS[key].label, key: `detail.${key}`, settings });
+    }),
+  setEffect: (key, value) =>
+    set((s) => {
+      if (s.settings.effects[key] === value) return s;
+      const settings = { ...s.settings, effects: { ...s.settings.effects, [key]: value } };
+      return commit(s.history, { label: EFFECTS_SLIDERS[key].historyLabel ?? EFFECTS_SLIDERS[key].label, key: `effects.${key}`, settings });
     }),
   applyPreset: (preset) =>
     set((s) => commit(s.history, { label: `Preset: ${preset.name}`, key: null, settings: applyPresetTo(s.settings, preset) })),

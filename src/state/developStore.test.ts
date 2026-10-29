@@ -178,3 +178,31 @@ describe('tone curve and color mixer edits', () => {
     expect(store().settings.curve.r).toEqual(lifted);
   });
 });
+
+describe('detail and effects edits', () => {
+  beforeEach(() => store().loadPhoto(fakePhoto('d.jpg')));
+
+  it('records each slider with its design label and value, merging drags of one slider', () => {
+    store().setDetail('sharpAmount', 30);
+    store().setDetail('sharpAmount', 70);
+    store().setDetail('sharpRadius', 1.5);
+    store().setEffect('vignette', -10);
+    store().setEffect('vignette', -22);
+    store().setEffect('grain', 30);
+    store().setEffect('grainSize', 60);
+    expect(labels().slice(1)).toEqual([
+      ['Sharpening', '70'],
+      ['Sharpen radius', '1.5'],
+      ['Vignette', '−22'],
+      ['Grain', '30'],
+      ['Grain size', '60'],
+    ]);
+    store().undo();
+    expect(store().settings.effects.grainSize).toBe(25);
+  });
+
+  it('ignores a set to the current value', () => {
+    store().setEffect('vignette', 0);
+    expect(labels()).toHaveLength(1);
+  });
+});

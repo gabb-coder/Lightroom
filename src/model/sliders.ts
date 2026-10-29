@@ -42,9 +42,9 @@ function unipolar(id: string, label: string, min: number, max: number, step: num
   return { id, label, min, max, step, defaultValue, bipolar: false, format, track: PLAIN_TRACK, historyLabel };
 }
 
-/** Detail, Effects and Geometry sliders (UI arrives in M6/M9; ranges are used to validate presets now). */
+/** Detail, Effects and Geometry sliders; ranges also validate presets and stored settings. */
 export const DETAIL_SLIDERS = {
-  sharpAmount: unipolar('sharpAmount', 'Amount', 0, 150, 1, 40, 'uint', 'Sharpening'),
+  sharpAmount: unipolar('sharpAmount', 'Amount', 0, 150, 1, 0, 'uint', 'Sharpening'),
   sharpRadius: unipolar('sharpRadius', 'Radius', 0.5, 3, 0.1, 1, 'dec', 'Sharpen radius'),
 } as const satisfies Record<string, SliderDef>;
 
@@ -125,6 +125,14 @@ export function isBasicEdited(settings: EditSettings): boolean {
   const { treatment, ...sliders } = settings.basic;
   if (treatment !== 'color') return true;
   return (Object.keys(sliders) as BasicSliderKey[]).some((key) => !isDefaultValue(BASIC_SLIDERS[key], sliders[key]));
+}
+
+/** True when any slider of a group (Detail, Effects) differs from its default. */
+export function isGroupEdited(defs: Readonly<Record<string, SliderDef>>, values: object): boolean {
+  return Object.entries(defs).some(([key, def]) => {
+    const value = (values as Record<string, unknown>)[key];
+    return typeof value === 'number' && !isDefaultValue(def, value);
+  });
 }
 
 /** Color mixer sliders per tab, with the design's gradient tracks. */

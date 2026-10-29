@@ -4,10 +4,10 @@
  * compares it with the CPU reference in src/engine/.
  */
 import { pipelineParams, renderRgba8 } from '../../src/engine/pipeline';
-import { defaultEditSettings, type BasicSettings, type EditSettings, type Geometry } from '../../src/model/editSettings';
+import { defaultEditSettings, type BasicSettings, type Geometry } from '../../src/model/editSettings';
 import type { RgbaImage } from '../../src/render/gl';
 import { Renderer } from '../../src/render/Renderer';
-import type { GpuCheckResult, GpuHarness } from './types';
+import type { GpuCheckResult, GpuExtra, GpuHarness } from './types';
 
 const WIDTH = 64;
 const HEIGHT = 48;
@@ -51,19 +51,22 @@ const source = testImage();
 const renderer = Renderer.create(new OffscreenCanvas(1, 1));
 renderer.setImage({ full: source });
 
-function runGpuCheck(
-  basic: Partial<BasicSettings>,
-  geometry: Partial<Geometry> = {},
-  extra: Partial<Pick<EditSettings, 'curve' | 'hsl'>> = {},
-): GpuCheckResult {
+/** Renders the test image as a half-size proxy of a (blank) 2× full-resolution image. */
+const proxyRenderer = Renderer.create(new OffscreenCanvas(1, 1));
+proxyRenderer.setImage({ full: { width: WIDTH * 2, height: HEIGHT * 2, data: new Uint8Array(WIDTH * HEIGHT * 16) }, proxy: source });
+const PROXY_SCALE = 0.5;
+
+function runGpuCheck(basic: Partial<BasicSettings>, geometry: Partial<Geometry> = {}, extra: GpuExtra = {}): GpuCheckResult {
   const settings = defaultEditSettings();
   settings.basic = { ...settings.basic, ...basic };
   settings.geometry = { ...settings.geometry, ...geometry };
   if (extra.curve) settings.curve = { ...settings.curve, ...extra.curve };
   if (extra.hsl) settings.hsl = { ...settings.hsl, ...extra.hsl };
+  if (extra.detail) settings.detail = { ...settings.detail, ...extra.detail };
+  if (extra.effects) settings.effects = { ...settings.effects, ...extra.effects };
   const params = pipelineParams(settings);
-  const gpuImage = renderer.readPixels(params);
-  const cpuImage = renderRgba8(source.data, source, params);
+  const gpuImage = extra.proxy ? proxyRenderer.readPixels(params, 'proxy') : renderer.readPixels(params);
+  const cpuImage = renderRgba8(source.data, source, params, extra.proxy ? PROXY_SCALE : 1);
   const gpu = gpuImage.data;
   const cpu = cpuImage.data;
   const sameSize = gpuImage.width === cpuImage.width && gpuImage.height === cpuImage.height;

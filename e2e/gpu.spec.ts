@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { HSL_COLORS, type BasicSettings, type EditSettings, type Geometry } from '../src/model/editSettings';
 import { BASIC_SLIDERS } from '../src/model/sliders';
-import type { GpuHarness } from './harness/types';
+import type { GpuExtra, GpuHarness } from './harness/types';
 import { DEV_PORT } from '../playwright.config';
 
 /** Shader output must match the CPU reference within ±2/255 per channel. */
@@ -91,6 +91,44 @@ for (const color of HSL_COLORS) {
     }
   }
 }
+
+/** Detail and effects (M9), alone, combined with color and geometry, and on a proxy. */
+const DETAIL_CASES: Record<string, [Partial<BasicSettings>, Partial<Geometry>, GpuExtra]> = {
+  'sharpen 40 radius 1': [{}, {}, { detail: { sharpAmount: 40, sharpRadius: 1 } }],
+  'sharpen 150 radius 0.5': [{}, {}, { detail: { sharpAmount: 150, sharpRadius: 0.5 } }],
+  'sharpen 150 radius 3': [{}, {}, { detail: { sharpAmount: 150, sharpRadius: 3 } }],
+  'sharpen 100 radius 1.7 + exposure and contrast': [{ exposure: 0.4, contrast: 25 }, {}, { detail: { sharpAmount: 100, sharpRadius: 1.7 } }],
+  'grain 100 size 0': [{}, {}, { effects: { grain: 100, grainSize: 0 } }],
+  'grain 30 size 25': [{}, {}, { effects: { grain: 30, grainSize: 25 } }],
+  'grain 70 size 100': [{}, {}, { effects: { grain: 70, grainSize: 100 } }],
+  'vignette -100': [{}, {}, { effects: { vignette: -100 } }],
+  'vignette +100': [{}, {}, { effects: { vignette: 100 } }],
+  'vignette -40 after a crop': [{}, { cropRect: { x: 0.1, y: 0.2, w: 0.6, h: 0.7 } }, { effects: { vignette: -40 } }],
+  'everything: color, sharpen, grain, vignette, straighten': [
+    { exposure: 0.3, saturation: 20 },
+    { angle: 4.5, cropRect: { x: 0.12, y: 0.12, w: 0.76, h: 0.76 }, rotation: 1 },
+    { detail: { sharpAmount: 80, sharpRadius: 2 }, effects: { grain: 40, grainSize: 50, vignette: -60 } },
+  ],
+  'proxy: sharpen 150 radius 3 at half size': [{}, {}, { detail: { sharpAmount: 150, sharpRadius: 3 }, proxy: true }],
+  'proxy: grain 60 at half size': [{}, {}, { effects: { grain: 60, grainSize: 10 }, proxy: true }],
+};
+
+test.describe('WebGL2 detail and effects passes match the CPU reference', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(`http://localhost:${DEV_PORT}/e2e/harness/gpu.html`);
+    await expect(page.locator('#status')).toHaveText('ready');
+  });
+
+  test('all sharpening, grain and vignette cases', async ({ page }) => {
+    for (const [name, [basic, geometry, extra]] of Object.entries(DETAIL_CASES)) {
+      const result = await page.evaluate(([b, g, e]) => (window as unknown as GpuHarness).runGpuCheck(b, g, e), [basic, geometry, extra] as const);
+      if (process.env.LOG_GPU_DIFF) console.log(`${name}: maxDiff=${result.maxDiff}`);
+      expect(result.sameSize, name).toBe(true);
+      expect(result.maxDiff, `${name}: ${JSON.stringify(result.worst)}`).toBeLessThanOrEqual(TOLERANCE);
+      if (Object.keys(geometry).length === 0) expect(result.maxChangeFromSource, `${name} changes the image`).toBeGreaterThan(TOLERANCE);
+    }
+  });
+});
 
 test.describe('WebGL2 tone curve and color mixer match the CPU reference', () => {
   test.beforeEach(async ({ page }) => {

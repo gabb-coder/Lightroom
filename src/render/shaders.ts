@@ -1,7 +1,10 @@
 import { LUMA_WEIGHTS } from '../engine/color';
 import { CURVE_LUT_SIZE } from '../engine/curve';
+import { GRAIN_SEED } from '../engine/grain';
 import { HSL_CENTER_LIST, HSL_MAX_HUE_SHIFT, HSL_MAX_LUM } from '../engine/hsl';
+import { SHARPEN_WEIGHT_COUNT } from '../engine/sharpen';
 import { TONE_GAMMA } from '../engine/tone';
+import { VIGNETTE_START } from '../engine/vignette';
 
 /**
  * GLSL twins of the CPU reference stages in src/engine/. Each function here
@@ -170,6 +173,58 @@ vec3 applyTreatment(vec3 c, bool bw) {
 }
 `;
 
+/** engine/sharpen.ts: kernel weights for offsets 0..SHARPEN_MAX_TAPS and 16-bit packing */
+const SHARPEN_GLSL = /* glsl */ `
+uniform int u_taps;
+uniform float u_weights[${SHARPEN_WEIGHT_COUNT}];
+vec4 pack16(float v) {
+  float q = floor(clamp(v, 0.0, 1.0) * 65535.0 + 0.5);
+  float hi = floor(q / 256.0);
+  return vec4(hi / 255.0, (q - hi * 256.0) / 255.0, 0.0, 1.0);
+}
+float unpack16(vec4 t) {
+  return (floor(t.r * 255.0 + 0.5) * 256.0 + floor(t.g * 255.0 + 0.5)) / 65535.0;
+}
+`;
+
+/** engine/grain.ts: hash32, latticeValue, valueNoise, grainOffset */
+const GRAIN_GLSL = /* glsl */ `
+uint hash32(uint x) {
+  x ^= x >> 16u;
+  x *= 0x7feb352du;
+  x ^= x >> 15u;
+  x *= 0x846ca68bu;
+  x ^= x >> 16u;
+  return x;
+}
+float latticeValue(int ix, int iy) {
+  uint h = hash32(uint(ix) + hash32(uint(iy) + ${GRAIN_SEED >>> 0}u));
+  return float(h >> 8u) / 16777215.0 * 2.0 - 1.0;
+}
+float smoothT(float t) { return t * t * (3.0 - 2.0 * t); }
+float valueNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = vec2(smoothT(p.x - i.x), smoothT(p.y - i.y));
+  ivec2 n = ivec2(i);
+  float top = latticeValue(n.x, n.y) * (1.0 - f.x) + latticeValue(n.x + 1, n.y) * f.x;
+  float bottom = latticeValue(n.x, n.y + 1) * (1.0 - f.x) + latticeValue(n.x + 1, n.y + 1) * f.x;
+  return top * (1.0 - f.y) + bottom * f.y;
+}
+`;
+
+/** engine/vignette.ts: vignetteMask, applyVignette */
+const VIGNETTE_GLSL = /* glsl */ `
+float vignetteMask(vec2 uv) {
+  float r = length((uv - 0.5) * 2.0) / sqrt(2.0);
+  float t = clamp((r - ${glslFloat(VIGNETTE_START)}) / (1.0 - ${glslFloat(VIGNETTE_START)}), 0.0, 1.0);
+  return t * t * (3.0 - 2.0 * t);
+}
+vec3 applyVignette(vec3 c, float amount, float mask) {
+  if (amount < 0.0) return c * (1.0 + amount * mask);
+  return c + (1.0 - c) * amount * mask;
+}
+`;
+
 export const VERTEX_SHADER = /* glsl */ `#version 300 es
 // Fullscreen triangle from gl_VertexID; no vertex buffers needed.
 void main() {
@@ -232,10 +287,76 @@ void main() {
 `;
 
 /**
- * Geometry pass (engine/geometry.ts): maps each output pixel through an
- * affine matrix to a source position and samples the developed image
- * bilinearly with the same lerp order as sampleBilinear(). Outside the image
- * the result is transparent; edges clamp.
+ * Detail pass 1 of 2 (engine/sharpen.ts blurPlane): horizontal Gaussian blur
+ * of the developed image's luminance, packed as 16-bit fixed point.
+ */
+export const BLUR_FRAGMENT_SHADER = /* glsl */ `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform sampler2D u_image;
+out vec4 outColor;
+${COLOR_GLSL}
+${SHARPEN_GLSL}
+void main() {
+  ivec2 size = textureSize(u_image, 0);
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  float sum = 0.0;
+  for (int i = -u_taps; i <= u_taps; i++) {
+    int x = clamp(p.x + i, 0, size.x - 1);
+    sum += u_weights[abs(i)] * luminance(texelFetch(u_image, ivec2(x, p.y), 0).rgb);
+  }
+  outColor = pack16(sum);
+}
+`;
+
+/**
+ * Detail pass 2 of 2 (engine/pipeline.ts applyDetailRgba8): vertical blur,
+ * unsharp mask on luminance, then grain. Same size as the source; rows stay
+ * top-first.
+ */
+export const DETAIL_FRAGMENT_SHADER = /* glsl */ `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform sampler2D u_image;
+uniform sampler2D u_blur;
+uniform bool u_sharpenOn;
+uniform float u_sharpenAmount;
+uniform bool u_grainOn;
+uniform float u_grainAmount;
+uniform float u_grainCell;
+uniform float u_scale;
+out vec4 outColor;
+${COLOR_GLSL}
+${SHARPEN_GLSL}
+${GRAIN_GLSL}
+void main() {
+  ivec2 size = textureSize(u_image, 0);
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec4 src = texelFetch(u_image, p, 0);
+  float offset = 0.0;
+  if (u_sharpenOn) {
+    float blur = 0.0;
+    for (int j = -u_taps; j <= u_taps; j++) {
+      int y = clamp(p.y + j, 0, size.y - 1);
+      blur += u_weights[abs(j)] * unpack16(texelFetch(u_blur, ivec2(p.x, y), 0));
+    }
+    offset += u_sharpenAmount * (luminance(src.rgb) - blur);
+  }
+  if (u_grainOn) {
+    offset += u_grainAmount * valueNoise((vec2(p) + 0.5) / u_scale / u_grainCell);
+  }
+  outColor = vec4(clamp(src.rgb + offset, 0.0, 1.0), src.a);
+}
+`;
+
+/**
+ * Final pass (engine/geometry.ts applyGeometryRgba8): maps each output pixel
+ * through an affine matrix to a source position and samples the developed
+ * image bilinearly with the same lerp order as sampleBilinear(), then applies
+ * the post-crop vignette. Outside the image the result is transparent; edges
+ * clamp.
  */
 export const GEOMETRY_FRAGMENT_SHADER = /* glsl */ `#version 300 es
 precision highp float;
@@ -246,9 +367,10 @@ uniform bool u_flipY;
 uniform ivec2 u_outSize;
 uniform vec3 u_rowX;
 uniform vec3 u_rowY;
+uniform float u_vignette;
 
 out vec4 outColor;
-
+${VIGNETTE_GLSL}
 void main() {
   ivec2 o = ivec2(gl_FragCoord.xy);
   if (u_flipY) o.y = u_outSize.y - 1 - o.y;
@@ -268,6 +390,10 @@ void main() {
   vec4 c10 = texelFetch(u_image, ivec2(hi.x, lo.y), 0);
   vec4 c01 = texelFetch(u_image, ivec2(lo.x, hi.y), 0);
   vec4 c11 = texelFetch(u_image, ivec2(hi.x, hi.y), 0);
-  outColor = mix(mix(c00, c10, f.x), mix(c01, c11, f.x), f.y);
+  vec4 c = mix(mix(c00, c10, f.x), mix(c01, c11, f.x), f.y);
+  if (u_vignette != 0.0 && c.a > 0.0) {
+    c.rgb = applyVignette(c.rgb, u_vignette, vignetteMask((vec2(o) + 0.5) / vec2(u_outSize)));
+  }
+  outColor = c;
 }
 `;

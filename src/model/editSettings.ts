@@ -54,6 +54,13 @@ export interface BasicSettings {
 
 export type BasicSliderKey = Exclude<keyof BasicSettings, 'treatment'>;
 
+// Type aliases (not interfaces) so they stay assignable to Record<string, number>.
+export type DetailSettings = { sharpAmount: number; sharpRadius: number };
+export type EffectsSettings = { vignette: number; grain: number; grainSize: number };
+
+export type DetailKey = keyof DetailSettings;
+export type EffectsKey = keyof EffectsSettings;
+
 export const HSL_COLORS = ['red', 'orange', 'yellow', 'green', 'aqua', 'blue', 'purple', 'magenta'] as const;
 export type HslColor = (typeof HSL_COLORS)[number];
 
@@ -68,8 +75,8 @@ export interface EditSettings {
   basic: BasicSettings;
   curve: { rgb: Point[]; r: Point[]; g: Point[]; b: Point[] };
   hsl: Record<HslColor, HslAdjust>;
-  detail: { sharpAmount: number; sharpRadius: number };
-  effects: { vignette: number; grain: number; grainSize: number };
+  detail: DetailSettings;
+  effects: EffectsSettings;
   geometry: Geometry;
 }
 
@@ -80,7 +87,11 @@ function identityCurve(): Point[] {
   ];
 }
 
-/** Defaults from design/Develop.dc.html. */
+/**
+ * Defaults from design/Develop.dc.html, except sharpening: the design shows
+ * Amount 40 (Lightroom's raw default); we default to 0 like Lightroom does
+ * for JPEGs, so an untouched photo renders exactly as its original.
+ */
 export function defaultEditSettings(): EditSettings {
   const hsl = {} as Record<HslColor, HslAdjust>;
   for (const color of HSL_COLORS) hsl[color] = { hue: 0, sat: 0, lum: 0 };
@@ -101,7 +112,7 @@ export function defaultEditSettings(): EditSettings {
     },
     curve: { rgb: identityCurve(), r: identityCurve(), g: identityCurve(), b: identityCurve() },
     hsl,
-    detail: { sharpAmount: 40, sharpRadius: 1 },
+    detail: { sharpAmount: 0, sharpRadius: 1 },
     effects: { vignette: 0, grain: 0, grainSize: 25 },
     geometry: { cropRect: { x: 0, y: 0, w: 1, h: 1 }, angle: 0, rotation: 0, flipH: false, flipV: false, aspect: 'original' },
   };

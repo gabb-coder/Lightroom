@@ -40,3 +40,20 @@ export async function canvasPixels(page: Page): Promise<RgbaPixels> {
 export function slider(page: Page, label: string) {
   return page.getByLabel(label, { exact: true });
 }
+
+/** A panel's header button (its accessible name gains "Edited" once edited). */
+export const panelHeader = (page: Page, title: string) => page.getByRole('region', { name: title, exact: true }).getByRole('button').first();
+
+export async function openPanel(page: Page, title: string) {
+  const header = panelHeader(page, title);
+  if ((await header.getAttribute('aria-expanded')) !== 'true') await header.click();
+}
+
+/** Types an exact slider value into its value field (click the value, type, Enter). */
+export async function typeSliderValue(page: Page, id: string, value: string) {
+  await page.getByTestId(`value-${id}`).click();
+  // The field opens focused with its text selected, so typing replaces it.
+  await page.keyboard.type(value);
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId(`value-${id}`)).toBeVisible();
+}

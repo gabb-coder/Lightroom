@@ -1,8 +1,9 @@
 import { CURVE_LUT_SIZE } from '../engine/curve';
 import { geometryMatrix, isIdentityGeometry, outputSize } from '../engine/geometry';
-import type { PipelineParams } from '../engine/pipeline';
+import { hasDetailStage, type PipelineParams } from '../engine/pipeline';
+import { sharpenKernel } from '../engine/sharpen';
 import { createProgram, createTexture, type RgbaImage, type TextureSource } from './gl';
-import { DEVELOP_FRAGMENT_SHADER, GEOMETRY_FRAGMENT_SHADER, VERTEX_SHADER } from './shaders';
+import { BLUR_FRAGMENT_SHADER, DETAIL_FRAGMENT_SHADER, DEVELOP_FRAGMENT_SHADER, GEOMETRY_FRAGMENT_SHADER, VERTEX_SHADER } from './shaders';
 
 const DEVELOP_UNIFORMS = [
   'source',
@@ -24,7 +25,9 @@ const DEVELOP_UNIFORMS = [
   'hslSat',
   'hslLum',
 ] as const;
-const GEOMETRY_UNIFORMS = ['image', 'flipY', 'outSize', 'rowX', 'rowY'] as const;
+const BLUR_UNIFORMS = ['image', 'taps', 'weights'] as const;
+const DETAIL_UNIFORMS = ['image', 'blur', 'taps', 'weights', 'sharpenOn', 'sharpenAmount', 'grainOn', 'grainAmount', 'grainCell', 'scale'] as const;
+const GEOMETRY_UNIFORMS = ['image', 'flipY', 'outSize', 'rowX', 'rowY', 'vignette'] as const;
 
 const ZERO8 = new Float32Array(8);
 
@@ -38,6 +41,11 @@ interface SizedTexture {
   width: number;
   height: number;
 }
+
+type RenderTarget = SizedTexture & { framebuffer: WebGLFramebuffer };
+
+/** Reused source-size RGBA8 targets: developed color, 16-bit blur, after detail. */
+type IntermediateKind = 'developed' | 'blur' | 'detailed';
 
 interface Target {
   /** Null = the canvas. */
@@ -57,19 +65,25 @@ function locate<K extends string>(gl: WebGL2RenderingContext, program: WebGLProg
 }
 
 /**
- * Runs the develop pipeline on the GPU in up to two passes: (1) per-pixel
- * color into an intermediate RGBA8 texture at source size, (2) geometry
- * resampling into the output. With identity geometry pass 1 renders straight
- * to the output. Holds a full-resolution texture, a downscaled proxy for
- * interactive drags and a small copy for the histogram.
+ * Runs the develop pipeline on the GPU in up to four passes, all but the
+ * last into RGBA8 textures at source size: (1) per-pixel color, (2, 3) detail
+ * (horizontal luminance blur, then vertical blur + unsharp mask + grain),
+ * (4) geometry resampling + vignette into the output. Passes 2–3 run only
+ * when sharpening or grain is on; with nothing after color, pass 1 renders
+ * straight to the output. Holds a full-resolution texture, a downscaled proxy
+ * for interactive drags and a small copy for the histogram.
  */
 export class Renderer {
   private readonly developProgram: WebGLProgram;
+  private readonly blurProgram: WebGLProgram;
+  private readonly detailProgram: WebGLProgram;
   private readonly geometryProgram: WebGLProgram;
   private readonly developUniforms: Uniforms<(typeof DEVELOP_UNIFORMS)[number]>;
+  private readonly blurUniforms: Uniforms<(typeof BLUR_UNIFORMS)[number]>;
+  private readonly detailUniforms: Uniforms<(typeof DETAIL_UNIFORMS)[number]>;
   private readonly geometryUniforms: Uniforms<(typeof GEOMETRY_UNIFORMS)[number]>;
   private textures: Partial<Record<SourceKind, SizedTexture>> = {};
-  private intermediate: (SizedTexture & { framebuffer: WebGLFramebuffer }) | null = null;
+  private intermediates: Partial<Record<IntermediateKind, RenderTarget>> = {};
   /** RGBA32F tone-curve table (CURVE_LUT_SIZE × 1), uploaded when curves are set. */
   private readonly curveTexture: WebGLTexture;
 
@@ -78,8 +92,12 @@ export class Renderer {
     private readonly gl: WebGL2RenderingContext,
   ) {
     this.developProgram = createProgram(gl, VERTEX_SHADER, DEVELOP_FRAGMENT_SHADER);
+    this.blurProgram = createProgram(gl, VERTEX_SHADER, BLUR_FRAGMENT_SHADER);
+    this.detailProgram = createProgram(gl, VERTEX_SHADER, DETAIL_FRAGMENT_SHADER);
     this.geometryProgram = createProgram(gl, VERTEX_SHADER, GEOMETRY_FRAGMENT_SHADER);
     this.developUniforms = locate(gl, this.developProgram, DEVELOP_UNIFORMS);
+    this.blurUniforms = locate(gl, this.blurProgram, BLUR_UNIFORMS);
+    this.detailUniforms = locate(gl, this.detailProgram, DETAIL_UNIFORMS);
     this.geometryUniforms = locate(gl, this.geometryProgram, GEOMETRY_UNIFORMS);
     this.curveTexture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.curveTexture);
@@ -143,27 +161,74 @@ export class Renderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
     gl.readPixels(0, 0, out.width, out.height, gl.RGBA, gl.UNSIGNED_BYTE, data);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.deleteFramebuffer(target.framebuffer);
-    gl.deleteTexture(target.texture);
+    this.deleteTarget(target);
     return { width: out.width, height: out.height, data };
   }
 
   dispose(): void {
     this.clearImage();
-    this.releaseIntermediate();
+    this.releaseIntermediates();
     this.gl.deleteTexture(this.curveTexture);
-    this.gl.deleteProgram(this.developProgram);
-    this.gl.deleteProgram(this.geometryProgram);
+    for (const program of [this.developProgram, this.blurProgram, this.detailProgram, this.geometryProgram]) this.gl.deleteProgram(program);
   }
 
   private render(source: SizedTexture, params: PipelineParams, target: Target): void {
-    if (isIdentityGeometry(params.geometry)) {
+    const detail = hasDetailStage(params);
+    if (!detail && params.vignette === 0 && isIdentityGeometry(params.geometry)) {
       this.developPass(source, params, target);
       return;
     }
-    const intermediate = this.intermediateFor(source.width, source.height);
-    this.developPass(source, params, { framebuffer: intermediate.framebuffer, width: source.width, height: source.height, flipY: false });
-    this.geometryPass(intermediate, params, target);
+    const developed = this.intermediateFor('developed', source);
+    this.developPass(source, params, this.offscreen(developed));
+    let image: SizedTexture = developed;
+    if (detail) {
+      const scale = source.width / (this.textures.full?.width ?? source.width);
+      image = this.detailPasses(developed, params, scale);
+    }
+    this.geometryPass(image, params, target);
+  }
+
+  /** Sharpening (blur passes) and grain at source size; returns the result texture. */
+  private detailPasses(developed: RenderTarget, params: PipelineParams, scale: number): RenderTarget {
+    const { gl } = this;
+    const kernel = sharpenKernel(params.sharpen?.radius ?? 0, scale);
+    const blur = params.sharpen ? this.intermediateFor('blur', developed) : null;
+    if (blur) {
+      const u = this.blurUniforms;
+      this.bindTarget(this.offscreen(blur));
+      gl.useProgram(this.blurProgram);
+      this.bindTexture(0, developed.texture, u.image);
+      gl.uniform1i(u.taps, kernel.taps);
+      gl.uniform1fv(u.weights, kernel.weights);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    const detailed = this.intermediateFor('detailed', developed);
+    const u = this.detailUniforms;
+    this.bindTarget(this.offscreen(detailed));
+    gl.useProgram(this.detailProgram);
+    this.bindTexture(0, developed.texture, u.image);
+    // Sampler must point at a valid unit even when sharpening is off.
+    this.bindTexture(1, (blur ?? developed).texture, u.blur);
+    gl.uniform1i(u.taps, kernel.taps);
+    gl.uniform1fv(u.weights, kernel.weights);
+    gl.uniform1i(u.sharpenOn, params.sharpen ? 1 : 0);
+    gl.uniform1f(u.sharpenAmount, params.sharpen?.amount ?? 0);
+    gl.uniform1i(u.grainOn, params.grain ? 1 : 0);
+    gl.uniform1f(u.grainAmount, params.grain?.amount ?? 0);
+    gl.uniform1f(u.grainCell, params.grain?.cell ?? 1);
+    gl.uniform1f(u.scale, scale);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    return detailed;
+  }
+
+  private bindTexture(unit: number, texture: WebGLTexture, location: WebGLUniformLocation | null): void {
+    this.gl.activeTexture(this.gl.TEXTURE0 + unit);
+    this.gl.bindTexture(this.gl.TEXTURE_2D, texture);
+    this.gl.uniform1i(location, unit);
+  }
+
+  private offscreen(t: RenderTarget): Target {
+    return { framebuffer: t.framebuffer, width: t.width, height: t.height, flipY: false };
   }
 
   private developPass(source: SizedTexture, params: PipelineParams, target: Target): void {
@@ -210,6 +275,7 @@ export class Renderer {
     gl.uniform2i(u.outSize, target.width, target.height);
     gl.uniform3f(u.rowX, m[0], m[1], m[2]);
     gl.uniform3f(u.rowY, m[3], m[4], m[5]);
+    gl.uniform1f(u.vignette, params.vignette);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
@@ -218,7 +284,7 @@ export class Renderer {
     this.gl.viewport(0, 0, target.width, target.height);
   }
 
-  private createTarget(width: number, height: number): SizedTexture & { framebuffer: WebGLFramebuffer } {
+  private createTarget(width: number, height: number): RenderTarget {
     const { gl } = this;
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -230,20 +296,24 @@ export class Renderer {
     return { texture, framebuffer, width, height };
   }
 
-  /** Reused RGBA8 target for pass 1, recreated when the source size changes. */
-  private intermediateFor(width: number, height: number) {
-    const current = this.intermediate;
-    if (current && current.width === width && current.height === height) return current;
-    this.releaseIntermediate();
-    this.intermediate = this.createTarget(width, height);
-    return this.intermediate;
+  /** Reused RGBA8 target at source size, recreated when the size changes. */
+  private intermediateFor(kind: IntermediateKind, size: { width: number; height: number }): RenderTarget {
+    const current = this.intermediates[kind];
+    if (current && current.width === size.width && current.height === size.height) return current;
+    if (current) this.deleteTarget(current);
+    const created = this.createTarget(size.width, size.height);
+    this.intermediates[kind] = created;
+    return created;
   }
 
-  private releaseIntermediate(): void {
-    if (!this.intermediate) return;
-    this.gl.deleteFramebuffer(this.intermediate.framebuffer);
-    this.gl.deleteTexture(this.intermediate.texture);
-    this.intermediate = null;
+  private deleteTarget(t: RenderTarget): void {
+    this.gl.deleteFramebuffer(t.framebuffer);
+    this.gl.deleteTexture(t.texture);
+  }
+
+  private releaseIntermediates(): void {
+    for (const t of Object.values(this.intermediates)) this.deleteTarget(t);
+    this.intermediates = {};
   }
 
   private pickSource(kind: SourceKind): SizedTexture {

@@ -13,6 +13,15 @@ export interface GpuCheckResult {
   sameSize: boolean;
 }
 
+/** Settings beyond Basic and Geometry; `proxy` renders at half of full resolution. */
+export interface GpuExtra {
+  curve?: EditSettings['curve'];
+  hsl?: Partial<EditSettings['hsl']>;
+  detail?: Partial<EditSettings['detail']>;
+  effects?: Partial<EditSettings['effects']>;
+  proxy?: boolean;
+}
+
 export interface GpuHarness {
-  runGpuCheck: (basic: Partial<BasicSettings>, geometry?: Partial<Geometry>, extra?: Partial<Pick<EditSettings, 'curve' | 'hsl'>>) => GpuCheckResult;
+  runGpuCheck: (basic: Partial<BasicSettings>, geometry?: Partial<Geometry>, extra?: GpuExtra) => GpuCheckResult;
 }

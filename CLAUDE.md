@@ -97,6 +97,15 @@ component library.
   range has zero effect at/after its neighbours' centers; scaled by
   saturation). Both stages are skipped when at defaults (pixel-exact).
   Curve editing rules: `model/curveEdit.ts`.
+- Detail / effects (M9): `engine/sharpen.ts` (unsharp mask on luminance,
+  separable Gaussian, sigma = radius × render scale; GPU stores the
+  horizontal blur as 16-bit in RGBA8), `engine/grain.ts` (seeded value noise
+  in full-resolution pixel coordinates, integer hash identical in GLSL) and
+  `engine/vignette.ts` (post-crop: applied in output space in the geometry
+  pass, so it follows the crop). GPU passes: develop → [blur → detail] →
+  geometry + vignette; with nothing after color, develop renders straight to
+  the output (pixel-exact fast path). Sharpening defaults to 0 (design shows
+  40); catalog v3 migrates the old stored default (`model/migrate.ts`).
 - Export (M7): `workers/export.worker.ts` runs the same `Renderer` on an
   OffscreenCanvas at full resolution (readPixels), resizes with the browser
   scaler only when asked, encodes, and copies EXIF per policy
