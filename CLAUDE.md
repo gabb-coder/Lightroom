@@ -25,6 +25,9 @@ service keep the name `lightroom-web`.
 - Commit at the end of each milestone with a message like
   `M2: Basic panel, histogram, before/after`. Commit smaller steps in between
   when it helps. Never commit secrets or `.env` files.
+- The user's standing instruction: after every change, once the checks
+  above pass, open a pull request to `main` and merge it yourself (Render
+  deploys `main`). Restart the work branch from `main` for the next change.
 - No new dependencies beyond the stack without asking first. Explain what it
   is for and why we can't write it ourselves.
 - Never claim a visual result you haven't checked. Verify UI with a
