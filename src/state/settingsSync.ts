@@ -150,6 +150,18 @@ async function renderThumbnail(id: string): Promise<void> {
   if (photo) await db.photos.update(id, { thumbVersion: photo.thumbVersion + 1 });
 }
 
+/**
+ * The photo with its current edits (live ones if it is open), rendered at
+ * `longEdge` px for a large on-screen preview. Never carries the watermark.
+ */
+export async function renderEditedPreview(id: string, longEdge: number): Promise<Blob | null> {
+  const [settings, original] = await Promise.all([settingsOf(id), getOriginal(id)]);
+  if (!original) return null;
+  const job = thumbnailQueue.then(() => thumbnailClient.run(original.blob, settings, { ...THUMBNAIL_OPTIONS, quality: 90, longEdge }));
+  thumbnailQueue = job.then(() => undefined, () => undefined);
+  return (await job).blob;
+}
+
 function queueThumbnails(ids: readonly string[]): void {
   for (const id of ids) thumbnailQueue = thumbnailQueue.then(() => renderThumbnail(id)).catch(() => undefined);
 }

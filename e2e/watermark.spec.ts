@@ -96,6 +96,50 @@ test.describe('Logo watermark (M23)', () => {
     expect(changed).toBeGreaterThan(1000); // the logo is really there
   });
 
+  test('clicking the preview enlarges it with a sharper render; Esc or a click closes only the enlarged view', async ({ page }) => {
+    test.slow();
+    const logo = makeLogo();
+    await gotoDevelop(page);
+    await openTestPhoto(page, smallPhotoPng); // 600 × 360
+    await page.getByRole('tab', { name: 'Export' }).click();
+    await addLogo(page, logo);
+    await dialog(page).getByRole('slider', { name: 'Size', exact: true }).fill('25');
+    const small = await page.getByTestId('watermark-preview').locator('img').first().boundingBox();
+    if (!small) throw new Error('no preview');
+
+    await page.getByRole('button', { name: 'Enlarge the watermark preview' }).click();
+    const zoom = page.getByTestId('watermark-zoom');
+    await expect(zoom).toBeVisible();
+    await expect(zoom).toHaveAttribute('data-sharp', 'true', { timeout: 30_000 });
+    await expect(zoom.getByRole('button', { name: 'Close preview' })).toBeFocused();
+    // The sharp render is the photo itself (600 × 360 is below the screen-size cap), shown much larger.
+    const photo = zoom.locator('img').first();
+    await expect.poll(() => photo.evaluate((img: HTMLImageElement) => [img.naturalWidth, img.naturalHeight])).toEqual([600, 360]);
+    const big = await photo.boundingBox();
+    const mark = await page.getByTestId('watermark-zoom-logo').boundingBox();
+    if (!big || !mark) throw new Error('no enlarged preview');
+    expect(big.width).toBeGreaterThan(small.width * 2);
+    // Same placement as the export.
+    const expected = watermarkRect({ width: 600, height: 360 }, logo, { position: 'bottom-right', size: 25, inset: 3 });
+    expect(Math.abs((mark.x - big.x) / big.width - expected.x / 600)).toBeLessThan(0.01);
+    expect(Math.abs((mark.y - big.y) / big.height - expected.y / 360)).toBeLessThan(0.01);
+    expect(Math.abs(mark.width / big.width - expected.width / 600)).toBeLessThan(0.01);
+    await page.screenshot({ path: 'test-results/screenshots/m25-watermark-zoom.png' });
+
+    // Esc closes the enlarged view, not the Export dialog.
+    await page.keyboard.press('Escape');
+    await expect(zoom).toHaveCount(0);
+    await expect(dialog(page)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Enlarge the watermark preview' })).toBeFocused();
+
+    // Reopening is instant (the render is kept); a click anywhere closes it.
+    await page.getByRole('button', { name: 'Enlarge the watermark preview' }).click();
+    await expect(zoom).toHaveAttribute('data-sharp', 'true');
+    await page.mouse.click(10, 10);
+    await expect(zoom).toHaveCount(0);
+    await expect(dialog(page)).toBeVisible();
+  });
+
   test('logos are kept in the catalog, can be removed, survive a reload and come back from a backup', async ({ page, browser }) => {
     await gotoLibrary(page);
     await importViaButton(page, testFiles(1));

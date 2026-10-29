@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import controls from '../../components/controls.module.css';
 import { useThumbnailUrl } from '../../components/useThumbnailUrl';
 import type { LogoRecord, PhotoRecord } from '../../db/db';
@@ -7,6 +8,7 @@ import { MAX_WATERMARK_TEXT, WATERMARK_RANGES, type WatermarkKind, type Watermar
 import { renderTextWatermark } from '../../render/textWatermark';
 import { useExportStore } from '../../state/exportStore';
 import { useLibraryStore } from '../../state/libraryStore';
+import { renderEditedPreview } from '../../state/settingsSync';
 import { LOGO_ACCEPT, useLogoStore } from '../../state/logoStore';
 import dialog from './ExportDialog.module.css';
 import styles from './WatermarkFieldset.module.css';
@@ -107,34 +109,133 @@ function PositionPicker({ value, disabled, onChange }: { value: WatermarkPositio
   );
 }
 
-/**
- * The selected photo's thumbnail with the watermark where the export will
- * put it, using the same placement math (engine/watermark.ts). Display only.
- */
-function Preview({ photo, mark, w }: { photo: PhotoRecord; mark: WatermarkImage; w: WatermarkOptions }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const thumb = useThumbnailUrl(photo, ref);
-  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+/** Where the watermark sits on an image of `size`, as fractions of it (same math as the export). */
+function useMarkFractions(size: { width: number; height: number } | null, mark: WatermarkImage, w: WatermarkOptions) {
   // Work in a large virtual image so whole-pixel rounding doesn't show at preview size.
-  const rect = useMemo(() => {
+  return useMemo(() => {
     if (!size) return null;
     const scale = 4000 / Math.max(size.width, size.height);
     const image = { width: Math.round(size.width * scale), height: Math.round(size.height * scale) };
     const r = watermarkRect(image, mark, w);
     return { left: r.x / image.width, top: r.y / image.height, width: r.width / image.width, height: r.height / image.height };
   }, [size, mark, w]);
+}
+
+/** A photo with the watermark laid over it where the export will put it. Display only. */
+function MarkedImage({ src, alt, mark, w, className, testId }: { src: string; alt: string; mark: WatermarkImage; w: WatermarkOptions; className: string | undefined; testId: string }) {
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  const rect = useMarkFractions(size, mark, w);
   const pct = (v: number) => `${(v * 100).toFixed(3)}%`;
   const logoStyle: CSSProperties | undefined = rect
     ? { left: pct(rect.left), top: pct(rect.top), width: pct(rect.width), height: pct(rect.height), opacity: w.opacity / 100 }
     : undefined;
+  const frameStyle = size ? ({ aspectRatio: `${size.width} / ${size.height}`, '--aspect': size.width / size.height } as CSSProperties) : undefined;
+  return (
+    <div className={className} style={frameStyle}>
+      <img src={src} alt={alt} onLoad={(e) => setSize({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} />
+      {rect && <img className={styles.previewLogo} src={mark.url} alt="" style={logoStyle} data-testid={testId} />}
+    </div>
+  );
+}
+
+/** Long edge of the enlarged preview's render: about the screen's size in device pixels. */
+function zoomLongEdge(): number {
+  return Math.min(2048, Math.ceil(Math.max(window.innerWidth, window.innerHeight) * (window.devicePixelRatio || 1)));
+}
+
+/** The last sharp render, kept for reopening; replaced (and its URL revoked) when the photo or its edits change. */
+let sharpRender: { key: string; url: Promise<string | null> } | null = null;
+
+function sharpUrl(photoId: string, key: string, longEdge: number): Promise<string | null> {
+  if (sharpRender?.key !== key) {
+    const old = sharpRender;
+    const url = renderEditedPreview(photoId, longEdge)
+      .then((blob) => (blob ? URL.createObjectURL(blob) : null))
+      .catch(() => null);
+    sharpRender = { key, url };
+    void old?.url.then((u) => u && URL.revokeObjectURL(u));
+  }
+  return sharpRender.url;
+}
+
+/** The photo rendered with its edits at about screen size, or null while that runs (the thumbnail is too small to enlarge). */
+function useSharpImage(photo: PhotoRecord): string | null {
+  const [longEdge] = useState(zoomLongEdge);
+  const key = `${photo.id}:${photo.thumbVersion}:${longEdge}`;
+  const [loaded, setLoaded] = useState<{ key: string; url: string } | null>(null);
+  useEffect(() => {
+    let current = true;
+    void sharpUrl(photo.id, key, longEdge).then((url) => current && url && setLoaded({ key, url }));
+    return () => {
+      current = false;
+    };
+  }, [photo.id, key, longEdge]);
+  return loaded?.key === key ? loaded.url : null;
+}
+
+/** The preview filling the window: click anywhere or press Esc to close. */
+function PreviewZoom({ photo, thumb, mark, w, onClose }: { photo: PhotoRecord; thumb: string; mark: WatermarkImage; w: WatermarkOptions; onClose: () => void }) {
+  const sharp = useSharpImage(photo);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => closeRef.current?.focus(), []);
+  return createPortal(
+    <div className={styles.zoomScrim} onClick={onClose}>
+      <div
+        className={styles.zoom}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Watermark preview"
+        data-testid="watermark-zoom"
+        data-sharp={sharp ? 'true' : 'false'}
+        onKeyDown={(e) => {
+          // Keep the Export dialog open, and focus on the one button here.
+          e.stopPropagation();
+          if (e.key === 'Escape' || e.key === 'Tab') e.preventDefault();
+          if (e.key === 'Escape') onClose();
+        }}
+      >
+        <MarkedImage src={sharp ?? thumb} alt={`${photo.fileName} with the watermark, enlarged`} mark={mark} w={w} className={styles.zoomFrame} testId="watermark-zoom-logo" />
+        <div className={styles.zoomBar}>
+          <span>{sharp ? 'Click anywhere or press Esc to close.' : 'Rendering a sharper preview…'}</span>
+          <button ref={closeRef} type="button" className={controls.iconButton} aria-label="Close preview" onClick={onClose}>
+            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M4 4l8 8M12 4l-8 8" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/**
+ * The selected photo's thumbnail with the watermark where the export will
+ * put it, using the same placement math (engine/watermark.ts). Display only.
+ * Clicking it shows it enlarged.
+ */
+function Preview({ photo, mark, w }: { photo: PhotoRecord; mark: WatermarkImage; w: WatermarkOptions }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const thumb = useThumbnailUrl(photo, ref);
+  const [zoomed, setZoomed] = useState(false);
+  const close = () => {
+    setZoomed(false);
+    buttonRef.current?.focus();
+  };
   return (
     <div ref={ref} className={styles.preview} data-testid="watermark-preview">
       {thumb && (
-        <div className={styles.previewFrame} style={size ? { aspectRatio: `${size.width} / ${size.height}` } : undefined}>
-          <img src={thumb} alt={`Preview of ${photo.fileName} with the watermark`} onLoad={(e) => setSize({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} />
-          {rect && <img className={styles.previewLogo} src={mark.url} alt="" style={logoStyle} data-testid="watermark-preview-logo" />}
-        </div>
+        <button ref={buttonRef} type="button" className={styles.previewButton} aria-label="Enlarge the watermark preview" title="Click to enlarge" onClick={() => setZoomed(true)}>
+          <MarkedImage src={thumb} alt={`Preview of ${photo.fileName} with the watermark`} mark={mark} w={w} className={styles.previewFrame} testId="watermark-preview-logo" />
+          <span className={styles.enlargeIcon} aria-hidden="true">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9.5 2.5h4v4M13.5 2.5L9 7M6.5 13.5h-4v-4M2.5 13.5L7 9" />
+            </svg>
+          </span>
+        </button>
       )}
+      {zoomed && thumb && <PreviewZoom photo={photo} thumb={thumb} mark={mark} w={w} onClose={close} />}
     </div>
   );
 }

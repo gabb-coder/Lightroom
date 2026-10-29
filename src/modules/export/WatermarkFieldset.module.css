@@ -85,6 +85,79 @@
   pointer-events: none;
 }
 
+/* The small preview is a button that enlarges it. */
+.previewButton {
+  position: relative;
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: none;
+  cursor: zoom-in;
+}
+
+.previewButton:hover,
+.previewButton:focus-visible {
+  border-color: var(--color-accent);
+}
+
+.enlargeIcon {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  padding: 3px;
+  border-radius: 3px;
+  color: var(--color-text-strong);
+  background: var(--color-scrim);
+  pointer-events: none;
+}
+
+/* Enlarged preview, over everything (portal on <body>). */
+.zoomScrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.85);
+  cursor: zoom-out;
+}
+
+.zoom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  outline: none;
+}
+
+.zoomFrame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--color-app-bg);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+
+/* As large as fits the window, keeping the photo's aspect (--aspect = width / height). */
+.zoomFrame > img:first-child {
+  display: block;
+  width: min(calc(100vw - 32px), calc((100vh - 80px) * var(--aspect, 1.5)));
+  height: auto;
+}
+
+.zoomBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-muted);
+}
+
 .kinds {
   width: fit-content;
 }
