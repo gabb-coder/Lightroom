@@ -1,4 +1,6 @@
 import { LUMA_WEIGHTS } from '../engine/color';
+import { CURVE_LUT_SIZE } from '../engine/curve';
+import { HSL_CENTER_LIST, HSL_MAX_HUE_SHIFT, HSL_MAX_LUM } from '../engine/hsl';
 import { TONE_GAMMA } from '../engine/tone';
 
 /**
@@ -73,6 +75,82 @@ vec3 applyTone(vec3 c, Tone t) {
 }
 `;
 
+/** engine/curve.ts: applyCurve (two-entry blend of the combined table, like sampleLut) */
+const CURVE_GLSL = /* glsl */ `
+const int CURVE_LUT_SIZE = ${CURVE_LUT_SIZE};
+float sampleCurve(int channel, float v) {
+  float t = clamp(v, 0.0, 1.0) * float(CURVE_LUT_SIZE - 1);
+  float i0f = floor(t);
+  int i0 = int(i0f);
+  int i1 = min(i0 + 1, CURVE_LUT_SIZE - 1);
+  float f = t - i0f;
+  vec4 a = texelFetch(u_curve, ivec2(i0, 0), 0);
+  vec4 b = texelFetch(u_curve, ivec2(i1, 0), 0);
+  return a[channel] * (1.0 - f) + b[channel] * f;
+}
+vec3 applyCurve(vec3 c) {
+  if (!u_curveOn) return c;
+  vec3 e = linearToSrgb(clamp(c, 0.0, 1.0));
+  vec3 o = vec3(sampleCurve(0, e.r), sampleCurve(1, e.g), sampleCurve(2, e.b));
+  return srgbToLinear(clamp(o, 0.0, 1.0));
+}
+`;
+
+/** engine/hsl.ts: hueWeights, rgbToHsv, hsvToRgb, applyHsl */
+const HSL_GLSL = /* glsl */ `
+const float HSL_CENTERS[8] = float[8](${HSL_CENTER_LIST.map(glslFloat).join(', ')});
+vec3 rgbToHsv(vec3 c) {
+  float mx = max(c.r, max(c.g, c.b));
+  float mn = min(c.r, min(c.g, c.b));
+  float d = mx - mn;
+  float h = 0.0;
+  if (d > 0.0) {
+    if (mx == c.r) h = 60.0 * mod((c.g - c.b) / d, 6.0);
+    else if (mx == c.g) h = 60.0 * ((c.b - c.r) / d + 2.0);
+    else h = 60.0 * ((c.r - c.g) / d + 4.0);
+  }
+  if (h < 0.0) h += 360.0;
+  return vec3(h, mx > 0.0 ? d / mx : 0.0, mx);
+}
+vec3 hsvToRgb(float h, float s, float v) {
+  float hh = mod(mod(h, 360.0) + 360.0, 360.0) / 60.0;
+  float c = v * s;
+  float x = c * (1.0 - abs(mod(hh, 2.0) - 1.0));
+  float m = v - c;
+  int sector = min(5, int(floor(hh)));
+  vec3 rgb;
+  if (sector == 0) rgb = vec3(c, x, 0.0);
+  else if (sector == 1) rgb = vec3(x, c, 0.0);
+  else if (sector == 2) rgb = vec3(0.0, c, x);
+  else if (sector == 3) rgb = vec3(0.0, x, c);
+  else if (sector == 4) rgb = vec3(x, 0.0, c);
+  else rgb = vec3(c, 0.0, x);
+  return rgb + m;
+}
+vec3 applyHsl(vec3 c) {
+  if (!u_hslOn) return c;
+  vec3 hsv = rgbToHsv(linearToSrgb(clamp(c, 0.0, 1.0)));
+  float h = hsv.x;
+  float dh = 0.0, ds = 0.0, dl = 0.0;
+  for (int k = 0; k < 8; k++) {
+    float c0 = HSL_CENTERS[k];
+    float c1 = k == 7 ? 360.0 : HSL_CENTERS[k + 1];
+    if (h >= c0 && h < c1) {
+      int k1 = (k + 1) % 8;
+      float a = 0.5 + 0.5 * cos(3.141592653589793 * (h - c0) / (c1 - c0));
+      dh = a * u_hslHue[k] + (1.0 - a) * u_hslHue[k1];
+      ds = a * u_hslSat[k] + (1.0 - a) * u_hslSat[k1];
+      dl = a * u_hslLum[k] + (1.0 - a) * u_hslLum[k1];
+      break;
+    }
+  }
+  float h2 = h + dh * ${glslFloat(HSL_MAX_HUE_SHIFT)} * hsv.y;
+  float s2 = clamp(hsv.y * (1.0 + ds), 0.0, 1.0);
+  float v2 = clamp(hsv.z * (1.0 + dl * ${glslFloat(HSL_MAX_LUM)} * hsv.y), 0.0, 1.0);
+  return srgbToLinear(hsvToRgb(h2, s2, v2));
+}
+`;
+
 /** engine/saturation.ts and engine/treatment.ts */
 const COLOR_ADJUST_GLSL = /* glsl */ `
 vec3 applySaturation(vec3 c, float scale) {
@@ -120,11 +198,19 @@ uniform float u_blacks;
 uniform float u_vibrance;
 uniform float u_saturationScale;
 uniform bool u_bw;
+uniform bool u_curveOn;
+uniform sampler2D u_curve;
+uniform bool u_hslOn;
+uniform float u_hslHue[8];
+uniform float u_hslSat[8];
+uniform float u_hslLum[8];
 
 out vec4 outColor;
 ${COLOR_GLSL}
 ${GAIN_GLSL}
 ${TONE_GLSL}
+${CURVE_GLSL}
+${HSL_GLSL}
 ${COLOR_ADJUST_GLSL}
 void main() {
   ivec2 size = textureSize(u_source, 0);
@@ -136,6 +222,8 @@ void main() {
   c = applyWhiteBalance(c, u_whiteBalance);
   c = applyExposure(c, u_exposureGain);
   c = applyTone(c, Tone(u_contrast, u_highlights, u_shadows, u_whites, u_blacks));
+  c = applyCurve(c);
+  c = applyHsl(c);
   c = applyVibrance(c, u_vibrance);
   c = applySaturation(c, u_saturationScale);
   c = applyTreatment(c, u_bw);

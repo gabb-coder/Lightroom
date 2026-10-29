@@ -4,7 +4,7 @@
  * compares it with the CPU reference in src/engine/.
  */
 import { pipelineParams, renderRgba8 } from '../../src/engine/pipeline';
-import { defaultEditSettings, type BasicSettings, type Geometry } from '../../src/model/editSettings';
+import { defaultEditSettings, type BasicSettings, type EditSettings, type Geometry } from '../../src/model/editSettings';
 import type { RgbaImage } from '../../src/render/gl';
 import { Renderer } from '../../src/render/Renderer';
 import type { GpuCheckResult, GpuHarness } from './types';
@@ -51,10 +51,16 @@ const source = testImage();
 const renderer = Renderer.create(new OffscreenCanvas(1, 1));
 renderer.setImage({ full: source });
 
-function runGpuCheck(basic: Partial<BasicSettings>, geometry: Partial<Geometry> = {}): GpuCheckResult {
+function runGpuCheck(
+  basic: Partial<BasicSettings>,
+  geometry: Partial<Geometry> = {},
+  extra: Partial<Pick<EditSettings, 'curve' | 'hsl'>> = {},
+): GpuCheckResult {
   const settings = defaultEditSettings();
   settings.basic = { ...settings.basic, ...basic };
   settings.geometry = { ...settings.geometry, ...geometry };
+  if (extra.curve) settings.curve = { ...settings.curve, ...extra.curve };
+  if (extra.hsl) settings.hsl = { ...settings.hsl, ...extra.hsl };
   const params = pipelineParams(settings);
   const gpuImage = renderer.readPixels(params);
   const cpuImage = renderRgba8(source.data, source, params);

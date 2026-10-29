@@ -3,6 +3,10 @@ import { useState } from 'react';
 import { isIdentityGeometry } from '../../engine/geometry';
 import { BasicPanel } from './BasicPanel';
 import { GeometryPanel } from './GeometryPanel';
+import { ToneCurvePanel } from './ToneCurvePanel';
+import { ColorMixerPanel } from './ColorMixerPanel';
+import { isIdentityCurveSet } from '../../engine/curve';
+import { hslParams } from '../../engine/hsl';
 import { Histogram } from './Histogram';
 import { isBasicEdited } from '../../model/sliders';
 import { useDevelopStore } from '../../state/developStore';
@@ -20,9 +24,25 @@ const SECTIONS = [
   { title: 'Crop and geometry', open: false },
 ] as const;
 
+type EditedFlags = { basicEdited: boolean; curveEdited: boolean; mixerEdited: boolean };
+
+const EDITED_FLAGS: Partial<Record<string, (f: EditedFlags) => boolean>> = {
+  Basic: (f) => f.basicEdited,
+  'Tone curve': (f) => f.curveEdited,
+  'Color mixer': (f) => f.mixerEdited,
+};
+
+const PANEL_BODIES: Partial<Record<string, () => React.ReactNode>> = {
+  Basic: () => <BasicPanel />,
+  'Tone curve': () => <ToneCurvePanel />,
+  'Color mixer': () => <ColorMixerPanel />,
+};
+
 export function DevelopRightPanel() {
   const basicEdited = useDevelopStore((s) => isBasicEdited(s.settings));
   const geometryEdited = useDevelopStore((s) => !isIdentityGeometry(s.settings.geometry) || s.settings.geometry.aspect !== 'original');
+  const curveEdited = useDevelopStore((s) => !isIdentityCurveSet(s.settings.curve));
+  const mixerEdited = useDevelopStore((s) => hslParams(s.settings.hsl) !== null);
   const cropping = useDevelopStore((s) => s.cropping);
   const setCropping = useDevelopStore((s) => s.setCropping);
   const [geometryPanelOpen, setGeometryPanelOpen] = useState(false);
@@ -43,8 +63,8 @@ export function DevelopRightPanel() {
             <GeometryPanel />
           </PanelSection>
         ) : (
-          <PanelSection key={title} title={title} defaultOpen={open} edited={title === 'Basic' && basicEdited}>
-            {title === 'Basic' ? <BasicPanel /> : null}
+          <PanelSection key={title} title={title} defaultOpen={open} edited={EDITED_FLAGS[title]?.({ basicEdited, curveEdited, mixerEdited }) ?? false}>
+            {PANEL_BODIES[title]?.() ?? null}
           </PanelSection>
         ),
       )}

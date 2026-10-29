@@ -1,4 +1,4 @@
-import type { BasicSettings, Geometry } from '../../src/model/editSettings';
+import type { BasicSettings, EditSettings, Geometry } from '../../src/model/editSettings';
 
 export interface GpuCheckResult {
   width: number;
@@ -14,5 +14,5 @@ export interface GpuCheckResult {
 }
 
 export interface GpuHarness {
-  runGpuCheck: (basic: Partial<BasicSettings>, geometry?: Partial<Geometry>) => GpuCheckResult;
+  runGpuCheck: (basic: Partial<BasicSettings>, geometry?: Partial<Geometry>, extra?: Partial<Pick<EditSettings, 'curve' | 'hsl'>>) => GpuCheckResult;
 }

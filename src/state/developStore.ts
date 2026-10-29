@@ -5,6 +5,8 @@ import {
   defaultEditSettings,
   type BasicSliderKey,
   type CropAspect,
+  type HslColor,
+  type Point,
   type EditSettings,
   type Geometry,
   type Rect,
@@ -22,6 +24,8 @@ import {
 } from '../model/history';
 import { basicHistoryKey, basicHistoryLabel } from '../model/historyDisplay';
 import { applyPresetTo, type Preset } from '../model/presets';
+import type { CurveChannel } from '../model/curveEdit';
+import { hslSliderDef, type HslProp } from '../model/sliders';
 
 /** A decoded photo ready to render. The original file is never modified. */
 export interface LoadedPhoto {
@@ -50,6 +54,9 @@ interface DevelopState {
   loadPhoto: (photo: LoadedPhoto, history?: History) => void;
   setBasic: (key: BasicSliderKey, value: number) => void;
   setTreatment: (treatment: Treatment) => void;
+  /** Sets one channel's curve; `merge` lets a drag of the same channel be one history step. */
+  setCurve: (channel: CurveChannel, points: Point[], merge?: boolean) => void;
+  setHsl: (color: HslColor, prop: HslProp, value: number) => void;
   applyPreset: (preset: Preset) => void;
   resetAll: () => void;
   undo: () => void;
@@ -134,6 +141,17 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
       if (s.settings.basic.treatment === treatment) return s;
       const settings = { ...s.settings, basic: { ...s.settings.basic, treatment } };
       return commit(s.history, { label: basicHistoryLabel('treatment'), key: basicHistoryKey('treatment'), settings });
+    }),
+  setCurve: (channel, points, merge = true) =>
+    set((s) => {
+      const settings = { ...s.settings, curve: { ...s.settings.curve, [channel]: points } };
+      return commit(s.history, { label: 'Tone curve', key: merge ? `curve.${channel}` : null, settings });
+    }),
+  setHsl: (color, prop, value) =>
+    set((s) => {
+      if (s.settings.hsl[color][prop] === value) return s;
+      const settings = { ...s.settings, hsl: { ...s.settings.hsl, [color]: { ...s.settings.hsl[color], [prop]: value } } };
+      return commit(s.history, { label: hslSliderDef(color, prop).historyLabel ?? 'Color mixer', key: `hsl.${color}.${prop}`, settings });
     }),
   applyPreset: (preset) =>
     set((s) => commit(s.history, { label: `Preset: ${preset.name}`, key: null, settings: applyPresetTo(s.settings, preset) })),

@@ -148,3 +148,33 @@ describe('geometry edits', () => {
     expect(store().cropping).toBe(false);
   });
 });
+
+describe('tone curve and color mixer edits', () => {
+  beforeEach(() => store().loadPhoto(fakePhoto('c.jpg')));
+
+  it('records color mixer changes with design labels, merging drags of one slider', () => {
+    store().setHsl('red', 'sat', -20);
+    store().setHsl('red', 'sat', -45);
+    store().setHsl('blue', 'hue', 30);
+    expect(labels().slice(1)).toEqual([
+      ['Red saturation', '−45'],
+      ['Blue hue', '+30'],
+    ]);
+  });
+
+  it('a curve drag is one step per channel; removing a point is its own step; undo restores points', () => {
+    const lifted = [
+      { x: 0, y: 0 },
+      { x: 0.5, y: 0.6 },
+      { x: 1, y: 1 },
+    ];
+    store().setCurve('rgb', [{ x: 0, y: 0 }, { x: 0.5, y: 0.5 }, { x: 1, y: 1 }]);
+    store().setCurve('rgb', lifted);
+    store().setCurve('r', lifted);
+    store().setCurve('rgb', [{ x: 0, y: 0 }, { x: 1, y: 1 }], false);
+    expect(labels().slice(1).map(([l]) => l)).toEqual(['Tone curve', 'Tone curve', 'Tone curve']);
+    store().undo();
+    expect(store().settings.curve.rgb).toEqual(lifted);
+    expect(store().settings.curve.r).toEqual(lifted);
+  });
+});

@@ -10,7 +10,8 @@ export const CROP_ASPECT_LABELS: Readonly<Record<CropAspect, string>> = {
   custom: 'Custom',
 };
 import type { HistoryEntry } from './history';
-import { ANGLE_SLIDER, BASIC_SLIDERS, formatSliderValue } from './sliders';
+import { HSL_COLORS, type HslColor } from './editSettings';
+import { ANGLE_SLIDER, BASIC_SLIDERS, formatSliderValue, hslSliderDef, type HslProp } from './sliders';
 
 /** History key for a Basic panel control. */
 export type BasicHistoryKey = `basic.${BasicSliderKey | 'treatment'}`;
@@ -31,6 +32,12 @@ function isBasicSliderKey(key: string): key is BasicSliderKey {
 export function historyEntryValue(entry: HistoryEntry): string {
   if (entry.key === 'geometry.angle') return formatSliderValue(ANGLE_SLIDER, entry.settings.geometry.angle);
   if (entry.key === 'geometry.aspect') return CROP_ASPECT_LABELS[entry.settings.geometry.aspect];
+  const hsl = /^hsl\.(\w+)\.(hue|sat|lum)$/.exec(entry.key ?? '');
+  if (hsl && HSL_COLORS.includes(hsl[1] as HslColor)) {
+    const color = hsl[1] as HslColor;
+    const prop = hsl[2] as HslProp;
+    return formatSliderValue(hslSliderDef(color, prop), entry.settings.hsl[color][prop]);
+  }
   if (!entry.key?.startsWith('basic.')) return '';
   const field = entry.key.slice('basic.'.length);
   if (field === 'treatment') return entry.settings.basic.treatment === 'bw' ? 'B&W' : 'Color';

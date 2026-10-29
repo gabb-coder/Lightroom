@@ -1,4 +1,4 @@
-import type { BasicSliderKey, EditSettings } from './editSettings';
+import { HSL_COLORS, type BasicSliderKey, type EditSettings, type HslColor } from './editSettings';
 
 export type SliderFormat = 'ev' | 'int' | 'uint' | 'dec' | 'deg';
 
@@ -125,4 +125,38 @@ export function isBasicEdited(settings: EditSettings): boolean {
   const { treatment, ...sliders } = settings.basic;
   if (treatment !== 'color') return true;
   return (Object.keys(sliders) as BasicSliderKey[]).some((key) => !isDefaultValue(BASIC_SLIDERS[key], sliders[key]));
+}
+
+/** Color mixer sliders per tab, with the design's gradient tracks. */
+export type HslProp = 'hue' | 'sat' | 'lum';
+
+export const HSL_SWATCHES: Readonly<Record<HslColor, { label: string; color: string }>> = {
+  red: { label: 'Red', color: '#e0524d' },
+  orange: { label: 'Orange', color: '#e88a3c' },
+  yellow: { label: 'Yellow', color: '#e3c84a' },
+  green: { label: 'Green', color: '#5bb35b' },
+  aqua: { label: 'Aqua', color: '#48b8b0' },
+  blue: { label: 'Blue', color: '#4a7fe0' },
+  purple: { label: 'Purple', color: '#8a5ce0' },
+  magenta: { label: 'Magenta', color: '#d050b0' },
+};
+
+const HSL_PROP_NAMES: Readonly<Record<HslProp, string>> = { hue: 'hue', sat: 'saturation', lum: 'luminance' };
+
+export function hslSliderDef(color: HslColor, prop: HslProp): SliderDef {
+  const i = HSL_COLORS.indexOf(color);
+  const n = HSL_COLORS.length;
+  const sw = HSL_SWATCHES[color];
+  const prev = HSL_SWATCHES[HSL_COLORS[(i + n - 1) % n] ?? color].color;
+  const next = HSL_SWATCHES[HSL_COLORS[(i + 1) % n] ?? color].color;
+  const track =
+    prop === 'hue'
+      ? `linear-gradient(90deg, ${prev}, ${sw.color}, ${next})`
+      : prop === 'sat'
+        ? `linear-gradient(90deg, #7a7a7a, ${sw.color})`
+        : `linear-gradient(90deg, #202020, ${sw.color}, #eeeeee)`;
+  return {
+    ...bipolar(`${prop}-${color}`, sw.label, HSL_RANGE.min, HSL_RANGE.max, 1, 'int', track),
+    historyLabel: `${sw.label} ${HSL_PROP_NAMES[prop]}`,
+  };
 }

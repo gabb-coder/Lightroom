@@ -1,0 +1,9 @@
+/* Two classes: wins over the shared segmented/segment styles. */
+.tabs.tabs {
+  margin: 2px 0 8px;
+}
+
+.tabs .tab {
+  flex: 1 1 0;
+  font-size: var(--font-size-control);
+}

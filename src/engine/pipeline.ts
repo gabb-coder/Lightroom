@@ -1,5 +1,7 @@
 import { clamp01, linearToSrgb, mapRgb, srgbToLinear, type Rgb } from './color';
+import { applyCurve, buildCurveLut, isIdentityCurveSet } from './curve';
 import { applyExposure, exposureGain } from './exposure';
+import { applyHsl, hslParams, type HslParams } from './hsl';
 import { applySaturation, applyVibrance, saturationScale, vibranceAmount } from './saturation';
 import { applyTone, toneParams, type ToneParams } from './tone';
 import { applyTreatment } from './treatment';
@@ -15,6 +17,10 @@ export interface PipelineParams {
   whiteBalance: Rgb;
   exposureGain: number;
   tone: ToneParams;
+  /** Combined tone-curve lookup table, or null when every curve is identity. */
+  curveLut: Float32Array | null;
+  /** Color mixer amounts, or null when all are zero. */
+  hsl: HslParams | null;
   vibrance: number;
   saturationScale: number;
   bw: boolean;
@@ -28,6 +34,8 @@ export function pipelineParams(settings: EditSettings): PipelineParams {
     whiteBalance: whiteBalanceGains(b.temp, b.tint),
     exposureGain: exposureGain(b.exposure),
     tone: toneParams(b),
+    curveLut: isIdentityCurveSet(settings.curve) ? null : buildCurveLut(settings.curve),
+    hsl: hslParams(settings.hsl),
     vibrance: vibranceAmount(b.vibrance),
     saturationScale: saturationScale(b.saturation),
     bw: b.treatment === 'bw',
@@ -40,6 +48,8 @@ export function processLinear(c: Rgb, p: PipelineParams): Rgb {
   let out = applyWhiteBalance(c, p.whiteBalance);
   out = applyExposure(out, p.exposureGain);
   out = applyTone(out, p.tone);
+  out = applyCurve(out, p.curveLut);
+  out = applyHsl(out, p.hsl);
   out = applyVibrance(out, p.vibrance);
   out = applySaturation(out, p.saturationScale);
   out = applyTreatment(out, p.bw);

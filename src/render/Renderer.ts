@@ -1,3 +1,4 @@
+import { CURVE_LUT_SIZE } from '../engine/curve';
 import { geometryMatrix, isIdentityGeometry, outputSize } from '../engine/geometry';
 import type { PipelineParams } from '../engine/pipeline';
 import { createProgram, createTexture, type RgbaImage, type TextureSource } from './gl';
@@ -16,8 +17,16 @@ const DEVELOP_UNIFORMS = [
   'vibrance',
   'saturationScale',
   'bw',
+  'curveOn',
+  'curve',
+  'hslOn',
+  'hslHue',
+  'hslSat',
+  'hslLum',
 ] as const;
 const GEOMETRY_UNIFORMS = ['image', 'flipY', 'outSize', 'rowX', 'rowY'] as const;
+
+const ZERO8 = new Float32Array(8);
 
 type Uniforms<K extends string> = Record<K, WebGLUniformLocation | null>;
 
@@ -61,6 +70,8 @@ export class Renderer {
   private readonly geometryUniforms: Uniforms<(typeof GEOMETRY_UNIFORMS)[number]>;
   private textures: Partial<Record<SourceKind, SizedTexture>> = {};
   private intermediate: (SizedTexture & { framebuffer: WebGLFramebuffer }) | null = null;
+  /** RGBA32F tone-curve table (CURVE_LUT_SIZE × 1), uploaded when curves are set. */
+  private readonly curveTexture: WebGLTexture;
 
   private constructor(
     private readonly canvas: RenderCanvas,
@@ -70,6 +81,11 @@ export class Renderer {
     this.geometryProgram = createProgram(gl, VERTEX_SHADER, GEOMETRY_FRAGMENT_SHADER);
     this.developUniforms = locate(gl, this.developProgram, DEVELOP_UNIFORMS);
     this.geometryUniforms = locate(gl, this.geometryProgram, GEOMETRY_UNIFORMS);
+    this.curveTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.curveTexture);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, CURVE_LUT_SIZE, 1);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
   }
 
   /** Throws if WebGL2 is unavailable. */
@@ -135,6 +151,7 @@ export class Renderer {
   dispose(): void {
     this.clearImage();
     this.releaseIntermediate();
+    this.gl.deleteTexture(this.curveTexture);
     this.gl.deleteProgram(this.developProgram);
     this.gl.deleteProgram(this.geometryProgram);
   }
@@ -168,6 +185,15 @@ export class Renderer {
     gl.uniform1f(u.vibrance, params.vibrance);
     gl.uniform1f(u.saturationScale, params.saturationScale);
     gl.uniform1i(u.bw, params.bw ? 1 : 0);
+    gl.uniform1i(u.curveOn, params.curveLut ? 1 : 0);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.curveTexture);
+    if (params.curveLut) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, CURVE_LUT_SIZE, 1, gl.RGBA, gl.FLOAT, params.curveLut);
+    gl.uniform1i(u.curve, 1);
+    gl.uniform1i(u.hslOn, params.hsl ? 1 : 0);
+    gl.uniform1fv(u.hslHue, params.hsl?.hue ?? ZERO8);
+    gl.uniform1fv(u.hslSat, params.hsl?.sat ?? ZERO8);
+    gl.uniform1fv(u.hslLum, params.hsl?.lum ?? ZERO8);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

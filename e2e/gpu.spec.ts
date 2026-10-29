@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { BasicSettings, Geometry } from '../src/model/editSettings';
+import { HSL_COLORS, type BasicSettings, type EditSettings, type Geometry } from '../src/model/editSettings';
 import { BASIC_SLIDERS } from '../src/model/sliders';
 import type { GpuHarness } from './harness/types';
 import { DEV_PORT } from '../playwright.config';
@@ -42,6 +42,72 @@ const GEOMETRY_CASES: Record<string, [Partial<BasicSettings>, Partial<Geometry>]
     { rotation: 1, flipH: true, angle: -3.5, cropRect: { x: 0.1, y: 0.12, w: 0.75, h: 0.7 } },
   ],
 };
+
+type Extra = Partial<Pick<EditSettings, 'curve' | 'hsl'>>;
+const S_CURVE = [
+  { x: 0, y: 0 },
+  { x: 0.25, y: 0.18 },
+  { x: 0.75, y: 0.85 },
+  { x: 1, y: 1 },
+];
+const EXTRA_CASES: Record<string, [Partial<BasicSettings>, Extra]> = {
+  'curve: RGB S-curve': [{}, { curve: { rgb: S_CURVE, r: S_CURVE.slice(0, 2).concat([{ x: 1, y: 1 }]), g: [{ x: 0, y: 0 }, { x: 1, y: 1 }], b: [{ x: 0, y: 0 }, { x: 1, y: 1 }] } }],
+  'curve: per channel': [
+    {},
+    {
+      curve: {
+        rgb: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+        r: [{ x: 0, y: 0.1 }, { x: 0.5, y: 0.65 }, { x: 1, y: 1 }],
+        g: [{ x: 0, y: 0 }, { x: 1, y: 0.85 }],
+        b: [{ x: 0, y: 0.2 }, { x: 0.4, y: 0.3 }, { x: 0.6, y: 0.8 }, { x: 1, y: 0.9 }],
+      },
+    },
+  ],
+  'curve: non-monotone (inverted midtones)': [{}, { curve: { rgb: [{ x: 0, y: 0 }, { x: 0.5, y: 0.9 }, { x: 0.7, y: 0.2 }, { x: 1, y: 1 }], r: [{ x: 0, y: 0 }, { x: 1, y: 1 }], g: [{ x: 0, y: 0 }, { x: 1, y: 1 }], b: [{ x: 0, y: 0 }, { x: 1, y: 1 }] } }],
+  'curve + tone + B&W': [{ contrast: 30, treatment: 'bw' }, { curve: { rgb: S_CURVE, r: [{ x: 0, y: 0 }, { x: 1, y: 1 }], g: [{ x: 0, y: 0 }, { x: 1, y: 1 }], b: [{ x: 0, y: 0 }, { x: 1, y: 1 }] } }],
+  'HSL: everything at once': [
+    { vibrance: 30 },
+    {
+      hsl: {
+        red: { hue: 40, sat: -60, lum: 20 },
+        orange: { hue: -100, sat: 100, lum: -100 },
+        yellow: { hue: 100, sat: -100, lum: 100 },
+        green: { hue: -30, sat: 50, lum: -50 },
+        aqua: { hue: 70, sat: 30, lum: 10 },
+        blue: { hue: -100, sat: -40, lum: 60 },
+        purple: { hue: 100, sat: 100, lum: -20 },
+        magenta: { hue: -60, sat: -100, lum: 100 },
+      },
+    },
+  ],
+};
+const zeroHsl = () => Object.fromEntries(HSL_COLORS.map((c) => [c, { hue: 0, sat: 0, lum: 0 }])) as EditSettings['hsl'];
+for (const color of HSL_COLORS) {
+  for (const prop of ['hue', 'sat', 'lum'] as const) {
+    for (const value of [-100, 100]) {
+      const hsl = zeroHsl();
+      hsl[color] = { ...hsl[color], [prop]: value };
+      EXTRA_CASES[`HSL: ${color} ${prop} ${value}`] = [{}, { hsl }];
+    }
+  }
+}
+
+test.describe('WebGL2 tone curve and color mixer match the CPU reference', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(`http://localhost:${DEV_PORT}/e2e/harness/gpu.html`);
+    await expect(page.locator('#status')).toHaveText('ready');
+  });
+
+  test('all curve and color mixer cases', async ({ page }) => {
+    // One page, many cases: 48 single-range HSL cases + curves.
+    for (const [name, [basic, extra]] of Object.entries(EXTRA_CASES)) {
+      const result = await page.evaluate(([b, e]) => (window as unknown as GpuHarness).runGpuCheck(b, {}, e), [basic, extra] as const);
+      if (process.env.LOG_GPU_DIFF) console.log(`${name}: maxDiff=${result.maxDiff}`);
+      expect(result.maxDiff, `${name}: ${JSON.stringify(result.worst)}`).toBeLessThanOrEqual(TOLERANCE);
+      expect(result.maxChangeFromSource, `${name} changes the image`).toBeGreaterThan(TOLERANCE);
+    }
+  });
+});
 
 test.describe('WebGL2 geometry pass matches the CPU reference', () => {
   test.beforeEach(async ({ page }) => {

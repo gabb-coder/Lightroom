@@ -90,6 +90,13 @@ component library.
   geometry is a 1-pass fast path and must stay pixel-exact. Crop editing
   math (fit to straighten, aspect presets, handles, rotate/flip) is in
   `model/crop.ts`; crop rect is normalized to the oriented image.
+- Tone curve / color mixer (M8): `engine/curve.ts` (monotone cubic spline,
+  RGB curve composed with each channel into one 1024-entry RGBA32F table,
+  sampled identically on CPU and GPU, applied on sRGB-encoded values) and
+  `engine/hsl.ts` (8 hue centers, cos² cross-fade between neighbours so a
+  range has zero effect at/after its neighbours' centers; scaled by
+  saturation). Both stages are skipped when at defaults (pixel-exact).
+  Curve editing rules: `model/curveEdit.ts`.
 - Export (M7): `workers/export.worker.ts` runs the same `Renderer` on an
   OffscreenCanvas at full resolution (readPixels), resizes with the browser
   scaler only when asked, encodes, and copies EXIF per policy
