@@ -4,13 +4,20 @@
   align-self: stretch;
   min-width: 0;
   min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  /* Panned in code (drag, wheel, Navigator): no scrollbars to change the stage size. */
+  overflow: hidden;
+}
+
+.scroller {
+  /* Absolute, so the photo's size never grows the stage itself. */
+  position: absolute;
+  left: 0;
+  top: 0;
 }
 
 .frame {
   position: absolute;
+  touch-action: none;
   background: #000000;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
 }

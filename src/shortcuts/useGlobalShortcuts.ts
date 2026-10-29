@@ -11,6 +11,7 @@ import { matchOrganizeShortcut } from './organizeShortcuts';
 import { openCopyDialog, pasteSettings, useCopyPasteStore } from '../state/copyPasteStore';
 import { settingsSourceId } from '../state/settingsSync';
 import { createVirtualCopy } from '../state/virtualCopyActions';
+import { useViewStore } from '../state/viewStore';
 
 const MODULE_KEYS: Readonly<Record<string, AppModule>> = {
   g: 'library',
@@ -99,6 +100,12 @@ export function useGlobalShortcuts(): void {
       if (event.key === 'Escape' && develop.maskTool) {
         event.preventDefault();
         develop.setMaskTool(null);
+        return;
+      }
+      // Z: zoom 1:1 and back (design/Kit.dc.html).
+      if (event.key.toLowerCase() === 'z' && !event.shiftKey && developHasPhoto() && !develop.cropping) {
+        event.preventDefault();
+        useViewStore.getState().toggleZoom();
         return;
       }
       if (event.key.toLowerCase() === 'r' && developHasPhoto()) {

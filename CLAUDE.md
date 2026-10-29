@@ -152,6 +152,12 @@ component library.
   `model/maskEdit.ts`; overlay `MaskOverlay.tsx` shows while the Masks panel
   is open (`masksOpen`); M / Shift+M pick a tool. Presets and the default
   copy panels leave masks alone (they belong to one picture).
+- Zoom and Navigator (M16): `model/zoom.ts` (Fit / Fill / 1:1 = one photo
+  px per device px, visible rect, scroll-for-center), `state/viewStore.ts`
+  (zoom, visible rect, pan requests). `PhotoCanvas` pans in code
+  (`overflow: hidden`, drag/wheel), click toggles 1:1 at the point, Z
+  toggles; the crop tool always shows Fit. Navigator draws the renderer's
+  small preview (display only). Improvement plan: `docs/V3_PLAN.md`.
 - Export (M7): `workers/export.worker.ts` runs the same `Renderer` on an
   OffscreenCanvas at full resolution (readPixels), resizes with the browser
   scaler only when asked, encodes, and copies EXIF per policy
