@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyWatermark, compositeLogo, resampleWeights, resizeLogo, watermarkRect, WATERMARK_POSITIONS } from './watermark';
+import { applyWatermark, compositeLogo, resampleWeights, resizeLogo, textShadowColor, watermarkRect, WATERMARK_POSITIONS } from './watermark';
 
 const IMAGE = { width: 1000, height: 600 };
 const LOGO = { width: 200, height: 100 };
@@ -82,5 +82,14 @@ describe('compositing', () => {
         expect(image.data[(y * 100 + x) * 4]).toBe(inside ? 255 : 10);
       }
     }
+  });
+});
+
+describe('text watermark shadow', () => {
+  it('is dark behind light text and light behind dark text', () => {
+    expect(textShadowColor('#ffffff')).toBe('rgba(0, 0, 0, 0.55)');
+    expect(textShadowColor('#ffd400')).toBe('rgba(0, 0, 0, 0.55)');
+    expect(textShadowColor('#000000')).toBe('rgba(255, 255, 255, 0.55)');
+    expect(textShadowColor('#1e3a8a')).toBe('rgba(255, 255, 255, 0.55)');
   });
 });

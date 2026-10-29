@@ -52,7 +52,7 @@ export const useLogoStore = create<LogoState>()((set, get) => ({
     set({ error: null });
     await get().load();
     const { options, setOptions } = useExportStore.getState();
-    setOptions({ watermark: { ...options.watermark, enabled: true, logoId: record.id } });
+    setOptions({ watermark: { ...options.watermark, enabled: true, kind: 'logo', logoId: record.id } });
     return record.id;
   },
   remove: async (id) => {

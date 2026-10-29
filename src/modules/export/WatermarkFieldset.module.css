@@ -84,3 +84,20 @@
   position: absolute;
   pointer-events: none;
 }
+
+.kinds {
+  width: fit-content;
+}
+
+.color {
+  width: 44px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--color-border-control);
+  border-radius: 4px;
+  background: var(--color-app-bg);
+}
+
+.color:disabled {
+  opacity: 0.5;
+}

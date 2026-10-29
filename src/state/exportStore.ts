@@ -18,6 +18,7 @@ import {
 } from '../model/exportOptions';
 import { exportFolder, pickFolder, supportsFolderExport, writeFile, type DirectoryHandle } from '../io/folderAccess';
 import { createZip } from '../io/zip';
+import { renderTextWatermark } from '../render/textWatermark';
 import { cancelExport, ExportCancelled, exportInWorker } from '../workers/exportClient';
 import { STAGE_PROGRESS } from '../workers/exportProtocol';
 import { useAppStore } from './appStore';
@@ -129,10 +130,14 @@ async function renderOne(photoId: string, options: ExportOptions, onProgress: (f
   return (await exportInWorker(original.blob, settings, options, (stage) => onProgress(STAGE_PROGRESS[stage]), logo)).blob;
 }
 
-/** The watermark logo file for these options, or null (no watermark, or the logo is gone). */
+/**
+ * The watermark image for these options: the stored logo, or the text drawn
+ * once for the whole batch (M24). Null for no watermark (or a logo that's gone).
+ */
 async function logoFor(options: ExportOptions): Promise<Blob | null> {
-  if (!hasWatermark(options) || !options.watermark.logoId) return null;
-  return (await db.logos.get(options.watermark.logoId))?.blob ?? null;
+  if (!hasWatermark(options)) return null;
+  if (options.watermark.kind === 'text') return (await renderTextWatermark(options.watermark))?.blob ?? null;
+  return options.watermark.logoId ? ((await db.logos.get(options.watermark.logoId))?.blob ?? null) : null;
 }
 
 /** Where a batch's files go, and what the done message says. */

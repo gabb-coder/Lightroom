@@ -180,6 +180,10 @@ component library.
   premultiplied area/bilinear resampling, "over" compositing) runs on the
   final export pixels in `render/exportRender.ts`, after any resize; no
   GPU twin. The dialog preview uses the same `watermarkRect`.
+  Text watermarks (M24, `watermark.kind: 'text'`, text/color/shadow):
+  `render/textWatermark.ts` draws the line once in Inter on a transparent
+  PNG (main thread, fonts loaded), which then goes through the exact logo
+  path (export worker, preview).
 - Interface (M22): every shortcut is listed in `shortcuts/shortcutList.ts`
   (the `?` / top-bar dialog renders it; a unit test reads the handler
   sources and fails if a handled key is missing, so add new shortcuts

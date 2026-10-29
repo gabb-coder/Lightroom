@@ -42,7 +42,7 @@ test.describe('Logo watermark (M23)', () => {
     await page.getByRole('tab', { name: 'Export' }).click();
     await dialog(page).getByRole('button', { name: 'PNG, lossless' }).click();
 
-    const enabled = dialog(page).getByLabel('Add a logo');
+    const enabled = dialog(page).getByLabel('Add a watermark');
     await expect(enabled).not.toBeChecked();
     await addLogo(page, logo);
     await expect(enabled).toBeChecked(); // adding a logo switches it on
@@ -103,7 +103,7 @@ test.describe('Logo watermark (M23)', () => {
     await addLogo(page, makeLogo());
     await dialog(page).getByRole('button', { name: 'Full size JPEG' }).click();
     // A preset is a look: the logo stays on.
-    await expect(dialog(page).getByLabel('Add a logo')).toBeChecked();
+    await expect(dialog(page).getByLabel('Add a watermark')).toBeChecked();
 
     // A file that can't be a logo gets a clear message.
     await page.getByTestId('logo-input').setInputFiles({ name: 'logo.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg/>') });
@@ -111,7 +111,7 @@ test.describe('Logo watermark (M23)', () => {
 
     await page.reload();
     await page.getByRole('tab', { name: 'Export' }).click();
-    await expect(dialog(page).getByLabel('Add a logo')).toBeChecked();
+    await expect(dialog(page).getByLabel('Add a watermark')).toBeChecked();
     await expect(dialog(page).getByLabel('Logo', { exact: true }).locator('option:checked')).toHaveText('studio-logo.png');
     await page.keyboard.press('Escape');
 
@@ -132,5 +132,60 @@ test.describe('Logo watermark (M23)', () => {
     await dialog(page).getByRole('button', { name: 'Remove logo studio-logo.png' }).click();
     await expect(dialog(page).getByLabel('Logo', { exact: true })).toHaveText('No logo yet');
     expect(await storeCount(page, 'logos')).toBe(0);
+  });
+
+  test('a text watermark: typed text, color and shadow, placed like a logo; kept after a reload', async ({ page }) => {
+    test.slow();
+    await gotoDevelop(page);
+    await openTestPhoto(page, smallPhotoPng); // 600 × 360
+    await page.getByRole('tab', { name: 'Export' }).click();
+    await dialog(page).getByRole('button', { name: 'PNG, lossless' }).click();
+    await dialog(page).getByLabel('Add a watermark').check();
+    await dialog(page).getByRole('group', { name: 'Watermark type' }).getByRole('button', { name: 'Text' }).click();
+    await expect(dialog(page).getByText('Type the text to put on your photos')).toBeVisible();
+    await expect(dialog(page).getByRole('button', { name: 'Export 1 photo' })).toBeEnabled();
+    await dialog(page).getByLabel('Text', { exact: true }).fill('© Darkroom Studio');
+    await dialog(page).getByLabel('Color', { exact: true }).fill('#ffd400');
+    await dialog(page).getByRole('slider', { name: 'Size', exact: true }).fill('40');
+    await dialog(page).getByRole('slider', { name: 'Opacity', exact: true }).fill('100');
+    await dialog(page).getByRole('slider', { name: 'Margin', exact: true }).fill('4');
+    await expect(page.getByTestId('watermark-preview-logo')).toBeVisible();
+    await page.getByTestId('watermark-preview').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: 'test-results/screenshots/m24-text-watermark-dialog.png' });
+
+    const download = page.waitForEvent('download');
+    await dialog(page).getByRole('button', { name: 'Export 1 photo' }).click();
+    const file = await readFile(await (await download).path());
+    await writeFile('test-results/screenshots/m24-text-exported.png', file);
+    const exported = decodePng(file);
+
+    // Compare with the photo without a watermark: only the bottom-right text box changes.
+    const source = makeTestPhoto(600, 360);
+    const plain = renderRgba8(source.data, source, pipelineParams(defaultEditSettings()));
+    const inset = Math.round(360 * 0.04);
+    let box = { x0: 600, y0: 360, x1: -1, y1: -1 };
+    let yellow = 0;
+    for (let y = 0; y < 360; y++) {
+      for (let x = 0; x < 600; x++) {
+        const i = (y * 600 + x) * 4;
+        const d = Math.max(...[0, 1, 2].map((c) => Math.abs((exported.data[i + c] ?? 0) - (plain.data[i + c] ?? 0))));
+        if (d > 2) box = { x0: Math.min(box.x0, x), y0: Math.min(box.y0, y), x1: Math.max(box.x1, x), y1: Math.max(box.y1, y) };
+        // Pure text color (#ffd400) where the letters are solid.
+        if (Math.abs((exported.data[i] ?? 0) - 255) <= 2 && Math.abs((exported.data[i + 1] ?? 0) - 212) <= 2 && (exported.data[i + 2] ?? 0) <= 2) yellow++;
+      }
+    }
+    console.log('text watermark changed box', box, 'solid yellow pixels', yellow);
+    // Inside the margins, at the bottom right, and about 40% of the width wide.
+    expect(box.x1).toBeLessThan(600 - inset);
+    expect(box.y1).toBeLessThan(360 - inset);
+    expect(box.x0).toBeGreaterThan(600 - inset - 0.4 * 600 - 1);
+    expect(box.x1 - box.x0).toBeGreaterThan(0.4 * 600 * 0.8);
+    expect(box.y0).toBeGreaterThan(180); // lower half
+    expect(yellow).toBeGreaterThan(300);
+
+    await page.reload();
+    await page.getByRole('tab', { name: 'Export' }).click();
+    await expect(dialog(page).getByLabel('Text', { exact: true })).toHaveValue('© Darkroom Studio');
+    await expect(dialog(page).getByRole('group', { name: 'Watermark type' }).getByRole('button', { name: 'Text' })).toHaveAttribute('aria-pressed', 'true');
   });
 });
