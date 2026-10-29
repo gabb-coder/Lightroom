@@ -3,6 +3,8 @@
 export type ExportFormat = 'jpeg' | 'png';
 export type ExportNaming = 'original' | 'custom' | 'date';
 export type MetadataPolicy = 'copyright' | 'allExceptLocation' | 'all' | 'none';
+/** Where files go (M19): browser downloads one by one, one ZIP download, or a folder the user picks. */
+export type ExportDestination = 'downloads' | 'zip' | 'folder';
 
 export interface ExportOptions {
   format: ExportFormat;
@@ -15,6 +17,10 @@ export interface ExportOptions {
   /** Base name for "Custom name with sequence". */
   customName: string;
   metadata: MetadataPolicy;
+  destination: ExportDestination;
+  /** Put the files in a subfolder (inside the ZIP or the picked folder). */
+  useSubfolder: boolean;
+  subfolder: string;
 }
 
 export interface ExportPreset {
@@ -31,6 +37,9 @@ const BASE: ExportOptions = {
   naming: 'original',
   customName: 'Export',
   metadata: 'copyright',
+  destination: 'zip',
+  useSubfolder: true,
+  subfolder: 'Exports',
 };
 
 export const BUILTIN_EXPORT_PRESETS: readonly ExportPreset[] = [
@@ -70,6 +79,9 @@ export function normalizeExportOptions(raw: Partial<ExportOptions>): ExportOptio
     naming: o.naming === 'custom' || o.naming === 'date' ? o.naming : 'original',
     customName: typeof o.customName === 'string' ? o.customName : BASE.customName,
     metadata: (['copyright', 'allExceptLocation', 'all', 'none'] as const).includes(o.metadata) ? o.metadata : BASE.metadata,
+    destination: o.destination === 'downloads' || o.destination === 'folder' ? o.destination : 'zip',
+    useSubfolder: typeof o.useSubfolder === 'boolean' ? o.useSubfolder : BASE.useSubfolder,
+    subfolder: typeof o.subfolder === 'string' ? safeFolderName(o.subfolder) : BASE.subfolder,
   };
 }
 
@@ -130,4 +142,50 @@ export function uniqueFileNames(names: readonly string[]): string[] {
     used.add(candidate.toLowerCase());
     return candidate;
   });
+}
+
+/** Location settings are not part of an export preset's look. */
+export const LOCATION_KEYS = ['destination', 'useSubfolder', 'subfolder'] as const;
+
+export const DESTINATION_LABELS: Readonly<Record<ExportDestination, string>> = {
+  downloads: 'Downloads, one file each',
+  zip: 'Downloads, as one ZIP',
+  folder: 'A folder you choose…',
+};
+
+/**
+ * A folder name as typed: no path separators or control characters, at most
+ * 60 characters. Spaces stay (the field is edited live); `subfolderOf` trims.
+ */
+export function safeFolderName(name: string): string {
+  return Array.from(name, (ch) => (ch.charCodeAt(0) < 32 || '\\/:*?"<>|'.includes(ch) ? '_' : ch))
+    .join('')
+    .slice(0, 60);
+}
+
+/** `options` with the location settings of `from` (applying a preset keeps where files go). */
+export function withLocation(options: ExportOptions, from: Pick<ExportOptions, (typeof LOCATION_KEYS)[number]>): ExportOptions {
+  return { ...options, destination: from.destination, useSubfolder: from.useSubfolder, subfolder: from.subfolder };
+}
+
+/** Same export look, wherever the files go. */
+export function sameLook(a: ExportOptions, b: ExportOptions): boolean {
+  return JSON.stringify(withLocation(a, BASE)) === JSON.stringify(withLocation(b, BASE));
+}
+
+/** The subfolder in use, or '' for none. */
+export function subfolderOf(o: Pick<ExportOptions, 'useSubfolder' | 'subfolder'>): string {
+  const name = o.useSubfolder ? o.subfolder.trim() : '';
+  return /^\.+$/.test(name) ? '' : name; // "." and ".." aren't folders of their own
+}
+
+/** Name of the ZIP download for a batch. */
+export function zipFileName(o: Pick<ExportOptions, 'useSubfolder' | 'subfolder'>): string {
+  return `${subfolderOf(o) || 'Darkroom export'}.zip`;
+}
+
+/** Path of a file inside the ZIP. */
+export function zipEntryPath(o: Pick<ExportOptions, 'useSubfolder' | 'subfolder'>, fileName: string): string {
+  const folder = subfolderOf(o);
+  return folder ? `${folder}/${fileName}` : fileName;
 }

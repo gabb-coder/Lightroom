@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Download, type Page } from '@playwright/test';
 import { pipelineParams, renderRgba8 } from '../src/engine/pipeline';
+import { readEntryBytes, readZip } from '../src/io/zip';
 import { defaultEditSettings } from '../src/model/editSettings';
 import { openPanel, typeSliderValue, waitForFullRender } from './utils/develop';
 import { storedEditsByName } from './utils/idb';
@@ -184,7 +185,7 @@ test.describe('Sync settings', () => {
 });
 
 test.describe('Batch export', () => {
-  test('exports every selected photo with its own edits; files match the CPU reference', async ({ page }) => {
+  test('exports every selected photo with its own edits as one ZIP; files match the CPU reference', async ({ page }) => {
     test.slow();
     const files = testFiles(3);
     await gotoLibrary(page);
@@ -207,15 +208,17 @@ test.describe('Batch export', () => {
     page.on('download', (d) => downloads.push(d));
     await dialog(page).getByRole('button', { name: 'Export 3 photos' }).click();
     await expect(page.getByTestId('export-toast')).toHaveAttribute('data-status', 'done', { timeout: 60_000 });
-    await expect(page.getByTestId('export-toast')).toContainText('3 photos');
-    await page.screenshot({ path: 'test-results/screenshots/m10-batch-export-done.png' });
-    expect(downloads.map((d) => d.suggestedFilename())).toEqual(['IMG_0418.png', 'IMG_0419.png', 'IMG_0420.png']);
+    await expect(page.getByTestId('export-toast')).toContainText('3 photos. Saved to Exports.zip');
+    await page.screenshot({ path: 'test-results/screenshots/m19-batch-export-zip-done.png' });
+    // One ZIP (the default), with the photos inside its "Exports" folder.
+    expect(downloads.map((d) => d.suggestedFilename())).toEqual(['Exports.zip']);
+    const zip = await readZip(new Blob([await readFile(await (downloads[0] as Download).path())]));
+    expect(zip.map((e) => e.name)).toEqual(['Exports/IMG_0418.png', 'Exports/IMG_0419.png', 'Exports/IMG_0420.png']);
 
     const stored = await saved(page);
-    for (const [i, download] of downloads.entries()) {
+    for (const [i, entry] of zip.entries()) {
       const name = NAMES[i] ?? '';
-      const path = await download.path();
-      const exported = decodePng(await readFile(path));
+      const exported = decodePng(Buffer.from(await readEntryBytes(entry)));
       const source = decodePng(files[i]?.buffer ?? Buffer.alloc(0));
       const settings = stored[name]?.settings ?? defaultEditSettings();
       const reference = renderRgba8(source.data, source, pipelineParams(settings));
@@ -229,8 +232,10 @@ test.describe('Batch export', () => {
     expect(stored[NAMES[1] ?? '']?.settings?.basic.treatment).toBe('bw');
     expect(stored[NAMES[2] ?? '']?.labels ?? []).toEqual([]);
 
-    // Custom names get a sequence number per photo.
+    // One file each, with custom names numbered per photo.
     await page.getByRole('tab', { name: 'Export' }).click();
+    await page.getByLabel('Export to').selectOption('downloads');
+    await expect(page.getByLabel('Put in subfolder')).toBeDisabled();
     await page.getByLabel('Rename to').selectOption('custom');
     await page.getByLabel('Custom name').fill('Trip');
     downloads.length = 0;
@@ -246,6 +251,7 @@ test.describe('Batch export', () => {
     await selectAllFocusing(page, 0, 5);
     await page.getByRole('tab', { name: 'Export' }).click();
     await dialog(page).getByRole('button', { name: 'Full size JPEG' }).click();
+    await page.getByLabel('Export to').selectOption('downloads');
     const downloads: Download[] = [];
     page.on('download', (d) => downloads.push(d));
     await dialog(page).getByRole('button', { name: 'Export 6 photos' }).click();

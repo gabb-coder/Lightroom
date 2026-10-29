@@ -1,4 +1,4 @@
-import { BeforeAfterIcon, CropIcon, PickIcon, RejectIcon, StarIcon } from '../../components/icons';
+import { BeforeAfterIcon, CropIcon, PickIcon, RejectIcon, SplitViewIcon, StarIcon } from '../../components/icons';
 import controls from '../../components/controls.module.css';
 import { useFileDrop } from '../../components/useFileDrop';
 import { isIdentityGeometry, outputSize } from '../../engine/geometry';
@@ -7,6 +7,7 @@ import { setColorLabel, setFlag, setRating } from '../../state/organizeActions';
 import { openImportPicker } from '../../state/importActions';
 import { useLibraryStore } from '../../state/libraryStore';
 import { useDevelopStore, type LoadedPhoto } from '../../state/developStore';
+import { useViewStore } from '../../state/viewStore';
 import { PhotoCanvas } from './PhotoCanvas';
 import layout from '../layout.module.css';
 import styles from './DevelopCenter.module.css';
@@ -85,6 +86,8 @@ function Toolbar() {
   const toggleBefore = useDevelopStore((s) => s.toggleBefore);
   const cropping = useDevelopStore((s) => s.cropping);
   const setCropping = useDevelopStore((s) => s.setCropping);
+  const split = useViewStore((s) => s.split);
+  const setSplit = useViewStore((s) => s.setSplit);
   return (
     <div className={styles.toolbar} role="toolbar" aria-label="Photo tools" data-testid="toolbar">
       <button
@@ -97,6 +100,17 @@ function Toolbar() {
       >
         <BeforeAfterIcon />
         Before / After
+      </button>
+      <button
+        type="button"
+        className={`${controls.button} ${styles.toolButton}`}
+        aria-pressed={split}
+        disabled={!hasPhoto}
+        title="Split Before / After (Y); drag the line to compare"
+        onClick={() => setSplit(!split)}
+      >
+        <SplitViewIcon />
+        Split
       </button>
       <button
         type="button"
@@ -152,7 +166,7 @@ function EmptyStage() {
       ) : libraryEmpty ? (
         <>
           <p className={styles.emptyTitle}>No photos yet</p>
-          <p className={styles.emptyHint}>Drop JPEG or PNG files here, or import them from your computer.</p>
+          <p className={styles.emptyHint}>Drop photos here (JPEG, PNG, WebP, AVIF), or import them from your computer.</p>
           <button type="button" className={`${controls.button} ${styles.openButton}`} onClick={openImportPicker}>
             Import photos…
           </button>

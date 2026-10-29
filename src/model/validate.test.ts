@@ -49,7 +49,7 @@ describe('masks (M15)', () => {
       masks: [
         { id: 'a', kind: 'linear', x0: 0.1, y0: 0.1, x1: 0.1, y1: 0.1, adjust: { exposure: 9, saturation: -40, bogus: 1 } },
         { id: 'a', kind: 'radial', cx: 0.5, cy: 0.5, rx: 0, ry: 5, feather: 300, invert: 'yes', adjust: {} },
-        { kind: 'brush' },
+        { kind: 'lasso' },
         'nope',
         ...Array.from({ length: 10 }, (_, i) => ({ id: `r${i}`, kind: 'radial' })),
       ],
@@ -65,5 +65,39 @@ describe('masks (M15)', () => {
 
   it('defaults to no masks for older settings', () => {
     expect(parseEditSettings({}).masks).toEqual([]);
+  });
+});
+
+describe('brush masks (M21)', () => {
+  it('keeps valid strokes, clamps values and drops broken ones', () => {
+    const s = parseEditSettings({
+      masks: [
+        {
+          id: 'b',
+          kind: 'brush',
+          aspect: 1.5,
+          strokes: [
+            { erase: true, radius: 0.04, feather: 30, points: [0.1, 0.2, 0.3] }, // odd count: last value dropped
+            { radius: 9, feather: -5, points: [5, -5] },
+            { radius: 0.04, points: [] },
+            'junk',
+          ],
+          adjust: { exposure: 1 },
+        },
+      ],
+    });
+    expect(s.masks).toEqual([
+      {
+        id: 'b',
+        kind: 'brush',
+        aspect: 1.5,
+        strokes: [
+          { erase: true, radius: 0.04, feather: 30, points: [0.1, 0.2] },
+          { erase: false, radius: 0.5, feather: 0, points: [2, -1] },
+        ],
+        adjust: { exposure: 1, contrast: 0, highlights: 0, shadows: 0, temp: 0, tint: 0, saturation: 0 },
+      },
+    ]);
+    expect(parseEditSettings({ masks: [{ kind: 'brush', aspect: 'wide', strokes: 'none' }] }).masks[0]).toMatchObject({ kind: 'brush', aspect: 1.5, strokes: [] });
   });
 });

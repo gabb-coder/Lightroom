@@ -94,3 +94,16 @@
   padding: 0 12px;
   font-size: var(--font-size-control);
 }
+
+/* Touch screens (M22): finger-sized buttons. */
+@media (pointer: coarse) {
+  .button,
+  .primary {
+    min-height: 36px;
+  }
+
+  .iconButton {
+    width: 40px;
+    height: 40px;
+  }
+}

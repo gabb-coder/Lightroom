@@ -1,5 +1,6 @@
 import { ImportIcon } from '../../components/icons';
 import { PhotoThumb } from '../../components/PhotoThumb';
+import { CollapsibleSection } from '../../components/SectionTitle';
 import controls from '../../components/controls.module.css';
 import { useFileDrop } from '../../components/useFileDrop';
 import { formatBytes, formatDateTime, formatExposure, formatFocalLength } from '../../model/format';
@@ -13,6 +14,7 @@ import { LibraryFilterBar } from './LibraryFilterBar';
 import { CatalogPanel } from './CatalogPanel';
 import { CollectionsPanel } from './CollectionsPanel';
 import { createVirtualCopy, removeVirtualCopy } from '../../state/virtualCopyActions';
+import { useDeleteDialogStore } from '../../state/deleteDialogStore';
 import { KeywordsPanel } from './KeywordsPanel';
 import { openCopyDialog, openSyncDialog, pasteSettings, useCopyPasteStore } from '../../state/copyPasteStore';
 import layout from '../layout.module.css';
@@ -27,7 +29,7 @@ function DropZone() {
         <ImportIcon size={28} />
       </span>
       <span className={styles.dropTitle}>Drop photos here to import</span>
-      <span className={styles.dropHint}>JPEG and PNG. Originals stay untouched.</span>
+      <span className={styles.dropHint}>JPEG, PNG, WebP and AVIF (HEIC in Safari). Originals stay untouched.</span>
       <button type="button" className={`${controls.primary} ${styles.dropButton}`} onClick={openImportPicker}>
         Choose files
       </button>
@@ -125,14 +127,24 @@ function VirtualCopyButtons() {
   );
 }
 
+/** "Remove from catalog…" for the selection (also the Delete key). */
+function RemoveButton() {
+  const ids = useLibraryStore((s) => s.selection.ids);
+  const open = useDeleteDialogStore((s) => s.open);
+  return (
+    <button type="button" className={`${controls.button} ${styles.removeButton}`} disabled={ids.length === 0} onClick={() => open(ids)}>
+      Remove {ids.length > 1 ? `${ids.length} photos` : 'photo'} from catalog…
+    </button>
+  );
+}
+
 /** Copy, paste and sync Develop settings across the selection (Lightroom's Library "Sync Settings"). */
 function DevelopSettingsPanel() {
   const hasPhoto = useLibraryStore((s) => s.selectedId !== null);
   const selected = useLibraryStore((s) => s.selection.ids.length);
   const clipboard = useCopyPasteStore((s) => s.clipboard);
   return (
-    <section className={styles.developSettings} aria-label="Develop settings">
-      <div className={styles.metaTitle}>Develop settings</div>
+    <CollapsibleSection id="library.develop-settings" title="Develop settings" className={styles.developSettings} titleClassName={styles.metaTitle}>
       <div className={styles.settingsButtons}>
         <button type="button" className={controls.button} disabled={!hasPhoto} onClick={openCopyDialog}>
           Copy settings…
@@ -151,7 +163,8 @@ function DevelopSettingsPanel() {
         Sync settings…
       </button>
       <VirtualCopyButtons />
-    </section>
+      <RemoveButton />
+    </CollapsibleSection>
   );
 }
 
@@ -195,11 +208,13 @@ function DetailsPanel() {
           Edit in Develop
         </button>
       </section>
-      <section className={styles.metadata} aria-label="Metadata">
-        <div className={styles.metaTitle}>
-          Metadata
-          {selectedCount > 1 && <span className={`num ${styles.metaCount}`}>{selectedCount} selected</span>}
-        </div>
+      <CollapsibleSection
+        id="library.metadata"
+        title="Metadata"
+        className={styles.metadata}
+        titleClassName={styles.metaTitle}
+        extra={selectedCount > 1 && <span className={`num ${styles.metaCount}`}>{selectedCount} selected</span>}
+      >
         {photo ? (
           <>
             <dl className={styles.metaList}>
@@ -215,7 +230,7 @@ function DetailsPanel() {
         ) : (
           <p className={styles.metaEmpty}>No photo selected</p>
         )}
-      </section>
+      </CollapsibleSection>
       <KeywordsPanel />
       <CollectionsPanel />
       <DevelopSettingsPanel />

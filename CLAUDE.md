@@ -152,6 +152,62 @@ component library.
   `model/maskEdit.ts`; overlay `MaskOverlay.tsx` shows while the Masks panel
   is open (`masksOpen`); M / Shift+M pick a tool. Presets and the default
   copy panels leave masks alone (they belong to one picture).
+- Zoom and Navigator (M16): `model/zoom.ts` (Fit / Fill / 1:1 = one photo
+  px per device px, visible rect, scroll-for-center), `state/viewStore.ts`
+  (zoom, visible rect, pan requests). `PhotoCanvas` pans in code
+  (`overflow: hidden`, drag/wheel), click toggles 1:1 at the point, Z
+  toggles; the crop tool always shows Fit. Navigator draws the renderer's
+  small preview (display only). Improvement plan: `docs/V3_PLAN.md`.
+- Catalog safety (M17): `io/zip.ts` (store-only ZIP writer/reader with
+  ZIP64, CRC-checked), `model/backup.ts` (manifest format + validation;
+  untrusted on restore), `state/catalogActions.ts` (backup, restore merges
+  by id and never overwrites, `deletePhotos` removes every trace; a master
+  takes its virtual copies). Delete key / "Remove from catalog…" asks first.
+- Compatibility (M18): `src/compat.ts` (support check → `SupportBanner`);
+  `render/exportRender.ts` is shared by the export worker and the
+  main-thread fallback (`render/mainThreadExport.ts`, used when the worker
+  can't do WebGL2, or with `?export=main`). Renderer scratch: blur target
+  is RG8; `releaseScratch()` after exports. Manual cross-browser checklist:
+  `docs/BROWSER_CHECKLIST.md` (only Chromium is automated).
+- Interface (M22): every shortcut is listed in `shortcuts/shortcutList.ts`
+  (the `?` / top-bar dialog renders it; a unit test reads the handler
+  sources and fails if a handled key is missing, so add new shortcuts
+  there). Library panel sections use `CollapsibleSection` (open state in
+  `state/sectionStore.ts`, remembered in uiPrefs). Phones: below 900px the
+  columns stack (the Library grid keeps a min height), `pointer: coarse`
+  enlarges sliders/buttons/headers, the photo lets vertical swipes scroll
+  the page when nothing needs the gesture; e2e checks 390px for overflow.
+- Mask tools (M21): `BrushMask` (strokes normalized to the photo + its
+  `aspect`). `engine/brush.ts` rasterizes strokes on the CPU into an 8-bit
+  map (long edge 1024) that the GPU gets as an R8 texture-array layer and
+  samples with the same manual bilinear (`sampleBrush`); a per-mask cache
+  redraws only the stroke being painted. `BrushRaster` serializes to a key
+  so params stay cheap to compare. Shared GLSL `shapeWeight` (linear,
+  radial, brush) serves the develop pass and the mask overlay (selected
+  mask tinted in the display pass, O / "Show overlay"). Each stroke is one
+  history step (Alt erases, K picks the brush); radial masks rotate with a
+  handle (Shift: 15°) or the Angle slider.
+- Editing aids (M20): `engine/display.ts` is a display-only pass (clipping
+  overlay on pure white/black, split Before/After by column) run by the
+  Renderer's display pass on RGBA8 textures, so GPU = CPU exactly; it is
+  skipped when off (normal path unchanged) and never reaches exports or the
+  histogram. Toggles live in `viewStore` (J, Y, histogram triangles). The
+  Renderer caches the After/Before images so moving the divider only re-runs
+  the display pass (the controller reuses the params object when unchanged).
+  WB eyedropper (W, `developStore.wbPicking`) and Auto tone (Ctrl/Cmd+U) in
+  `state/editingAids.ts`: they read the original's pixels (canvas 2D, for
+  measuring only) and apply ONE history step; math in
+  `engine/whiteBalance.ts` (`neutralizingWhiteBalance`) and
+  `engine/autoTone.ts` (per-channel tables equal to the pipeline's stages).
+- Formats (M19): import accepts JPEG/PNG/WebP/AVIF/HEIC (`io/loadPhoto.ts`
+  `importTypeOf`, also by extension when the type is empty; HEIC only
+  where the browser decodes it, otherwise its own message). Export
+  destination (`ExportOptions.destination`: downloads / zip / folder, plus
+  subfolder) is a location setting: presets keep it (`withLocation`) and
+  changing it keeps the preset highlighted. `exportStore.runExport` picks
+  the folder first (needs the click's gesture), then delivers per
+  destination; a single photo never gets a ZIP. `io/folderAccess.ts` never
+  overwrites (`name-2.ext`). e2e mocks `showDirectoryPicker`.
 - Export (M7): `workers/export.worker.ts` runs the same `Renderer` on an
   OffscreenCanvas at full resolution (readPixels), resizes with the browser
   scaler only when asked, encodes, and copies EXIF per policy

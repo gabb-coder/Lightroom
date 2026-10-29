@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { ACCEPTED_TYPES } from '../io/loadPhoto';
+import { ACCEPT_ATTRIBUTE } from '../io/loadPhoto';
 import { importAndSelect, registerImportInput } from '../state/importActions';
 
 /** The app's one hidden file input; Import buttons open it via openImportPicker(). */
@@ -14,7 +14,7 @@ export function ImportInput() {
       ref={ref}
       type="file"
       multiple
-      accept={ACCEPTED_TYPES.join(',')}
+      accept={ACCEPT_ATTRIBUTE}
       className="visually-hidden"
       tabIndex={-1}
       aria-hidden="true"

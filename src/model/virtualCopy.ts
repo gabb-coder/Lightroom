@@ -31,3 +31,9 @@ export function nextCopyNumber(photos: readonly Pick<PhotoRecord, 'masterId' | '
 export function copyImportIndex(masterIndex: number, copyNumber: number): number {
   return masterIndex + Math.min(copyNumber, 999) / 1000;
 }
+
+/** The photos a delete removes: the given ones plus every virtual copy of a deleted master. */
+export function deletionSet(photos: readonly Pick<PhotoRecord, 'id' | 'masterId'>[], ids: readonly string[]): string[] {
+  const chosen = new Set(ids);
+  return photos.filter((p) => chosen.has(p.id) || (p.masterId !== undefined && chosen.has(p.masterId))).map((p) => p.id);
+}

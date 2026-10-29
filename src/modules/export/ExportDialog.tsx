@@ -2,16 +2,19 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import controls from '../../components/controls.module.css';
 import {
   BUILTIN_EXPORT_PRESETS,
+  DESTINATION_LABELS,
   exportFileName,
   LONG_EDGE_RANGE,
   METADATA_LABELS,
   NAMING_LABELS,
   QUALITY_RANGE,
+  type ExportDestination,
   type ExportNaming,
   type ExportPreset,
   type MetadataPolicy,
 } from '../../model/exportOptions';
 import { closeExportDialog, runExport, useExportStore } from '../../state/exportStore';
+import { supportsFolderExport } from '../../io/folderAccess';
 import { useLibraryStore } from '../../state/libraryStore';
 import styles from './ExportDialog.module.css';
 
@@ -76,6 +79,68 @@ function Fieldset({ legend, children }: { legend: string; children: React.ReactN
   );
 }
 
+const DESTINATIONS: readonly ExportDestination[] = supportsFolderExport() ? ['downloads', 'zip', 'folder'] : ['downloads', 'zip'];
+
+function locationHint(destination: ExportDestination, folderName: string | null): string {
+  if (destination === 'downloads') return 'Your browser decides where downloads are saved.';
+  if (destination === 'zip') return 'Several photos download as one ZIP; a single photo downloads as is.';
+  return folderName ? `Saving into “${folderName}”. Existing files are never replaced.` : 'You’ll be asked for a folder when you export.';
+}
+
+function Location() {
+  const options = useExportStore((s) => s.options);
+  const setOptions = useExportStore((s) => s.setOptions);
+  const folder = useExportStore((s) => s.folder);
+  const chooseFolder = useExportStore((s) => s.chooseFolder);
+  const destination = DESTINATIONS.includes(options.destination) ? options.destination : 'zip';
+  // Downloads can't go into subfolders; a ZIP or a chosen folder can.
+  const canSubfolder = destination !== 'downloads';
+  const choose = () => {
+    void chooseFolder().then((picked) => picked && setOptions({ destination: 'folder' }));
+  };
+
+  return (
+    <Fieldset legend="Location">
+      <label htmlFor="ex-dest" className={styles.label}>
+        Export to
+      </label>
+      <div className={styles.dest}>
+        <select id="ex-dest" className={styles.select} value={destination} onChange={(e) => setOptions({ destination: e.target.value as ExportDestination })}>
+          {DESTINATIONS.map((d) => (
+            <option key={d} value={d}>
+              {DESTINATION_LABELS[d]}
+            </option>
+          ))}
+        </select>
+        {DESTINATIONS.includes('folder') && (
+          <button type="button" className={controls.button} onClick={choose}>
+            Choose…
+          </button>
+        )}
+      </div>
+      <span />
+      <span className={styles.hint} data-testid="export-destination">
+        {locationHint(destination, folder?.name ?? null)}
+      </span>
+      <span />
+      <label className={styles.check}>
+        <input type="checkbox" checked={options.useSubfolder && canSubfolder} disabled={!canSubfolder} onChange={(e) => setOptions({ useSubfolder: e.target.checked })} />
+        Put in subfolder
+      </label>
+      <label htmlFor="ex-sub" className={styles.label}>
+        Subfolder name
+      </label>
+      <input
+        id="ex-sub"
+        className={styles.input}
+        value={options.subfolder}
+        disabled={!canSubfolder || !options.useSubfolder}
+        onChange={(e) => setOptions({ subfolder: e.target.value })}
+      />
+    </Fieldset>
+  );
+}
+
 function Settings() {
   const options = useExportStore((s) => s.options);
   const setOptions = useExportStore((s) => s.setOptions);
@@ -85,14 +150,7 @@ function Settings() {
 
   return (
     <div className={styles.settings}>
-      <Fieldset legend="Location">
-        <span className={styles.label}>Export to</span>
-        <span className={styles.value} data-testid="export-destination">
-          Browser downloads
-        </span>
-        <span />
-        <span className={styles.hint}>Your browser decides where downloads are saved.</span>
-      </Fieldset>
+      <Location />
 
       <Fieldset legend="File naming">
         <label htmlFor="ex-name" className={styles.label}>

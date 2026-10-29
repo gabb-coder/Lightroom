@@ -13,6 +13,8 @@ export interface UiPrefs {
   thumbSize?: number;
   /** Panels last ticked in the Copy / Sync settings dialog. */
   copyPanels?: string[];
+  /** Library panel sections the user collapsed (M22). */
+  closedSections?: string[];
 }
 
 export function readUiPrefs(): UiPrefs {

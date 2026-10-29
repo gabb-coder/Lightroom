@@ -1,5 +1,6 @@
 import { defaultEditSettings, type EditSettings } from './editSettings';
 import { parseEditSettings } from './validate';
+import { migrateSharpenDefault } from './migrate';
 
 /**
  * A preset is a complete look: everything except geometry and masks, so
@@ -71,7 +72,8 @@ export const SAMPLE_PRESETS: readonly Preset[] = [
 
 /** File format marker and version for exported presets. */
 const PRESET_FORMAT = 'photo-editor-preset';
-const PRESET_FORMAT_VERSION = 1;
+/** 2 since M18 (the sharpening default changed in M9; version 1 files get the same fix as the catalog). */
+const PRESET_FORMAT_VERSION = 2;
 
 export class PresetParseError extends Error {
   constructor(message: string) {
@@ -95,8 +97,9 @@ export function parsePreset(json: string): Preset {
   if (typeof raw !== 'object' || raw === null) throw new PresetParseError('Not a preset');
   const r = raw as Record<string, unknown>;
   if (r.format !== PRESET_FORMAT) throw new PresetParseError('Not a preset');
-  if (r.version !== PRESET_FORMAT_VERSION) throw new PresetParseError(`Unsupported preset version ${String(r.version)}`);
+  if (r.version !== 1 && r.version !== PRESET_FORMAT_VERSION) throw new PresetParseError(`Unsupported preset version ${String(r.version)}`);
   if (typeof r.id !== 'string' || typeof r.name !== 'string' || r.name.trim() === '') throw new PresetParseError('Preset needs an id and a name');
   const group: PresetGroup = r.group === 'builtin' ? 'builtin' : 'user';
-  return { id: r.id, name: r.name.trim(), group, settings: presetSettingsOf(parseEditSettings(r.settings)) };
+  const settings = r.version === 1 ? migrateSharpenDefault(r.settings) : r.settings;
+  return { id: r.id, name: r.name.trim(), group, settings: presetSettingsOf(parseEditSettings(settings)) };
 }

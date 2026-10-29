@@ -144,3 +144,39 @@
 .range:disabled::-moz-range-thumb {
   background: var(--color-disabled);
 }
+
+/* Touch screens (M22): taller rows and a bigger thumb, easy to hit with a finger. */
+@media (pointer: coarse) {
+  .row {
+    height: 36px;
+  }
+
+  .trackWrap,
+  .range,
+  .range::-webkit-slider-runnable-track {
+    height: 28px;
+  }
+
+  .track {
+    top: 13px;
+  }
+
+  .tick {
+    top: 10px;
+  }
+
+  .range::-webkit-slider-thumb {
+    width: 20px;
+    height: 20px;
+    margin-top: 4px;
+  }
+
+  .range::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+  }
+
+  .value {
+    height: 28px;
+  }
+}

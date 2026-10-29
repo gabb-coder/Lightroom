@@ -3,29 +3,10 @@ import { openCopyDialog, pasteSettings, useCopyPasteStore } from '../../state/co
 import { useDevelopStore } from '../../state/developStore';
 import layout from '../layout.module.css';
 import { HistoryPanel } from './HistoryPanel';
+import { Navigator } from './Navigator';
 import { PresetsPanel } from './PresetsPanel';
 import { SnapshotsPanel } from './SnapshotsPanel';
 import styles from './DevelopLeftPanel.module.css';
-
-const ZOOMS = ['Fit', 'Fill', '1:1'] as const;
-
-function Navigator() {
-  return (
-    <section className={styles.navigator} aria-label="Navigator">
-      <div className={styles.navHeader}>
-        <span className={styles.title}>Navigator</span>
-        <div className={controls.segmented} role="group" aria-label="Zoom">
-          {ZOOMS.map((zoom) => (
-            <button key={zoom} type="button" className={controls.segment} aria-pressed={zoom === 'Fit'} disabled>
-              {zoom}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className={styles.navPreview} data-testid="navigator-preview" />
-    </section>
-  );
-}
 
 function CopyPaste() {
   const hasPhoto = useDevelopStore((s) => s.photo !== null);

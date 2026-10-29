@@ -59,3 +59,20 @@
   font-weight: 600;
   box-shadow: inset 0 -2px 0 var(--color-accent);
 }
+
+/* Phones (M22): the logo without its name, tighter tabs, no shortcuts button (no keyboard). */
+@media (max-width: 560px) {
+  .topBar {
+    gap: 8px;
+    padding: 0 8px 0 12px;
+  }
+
+  .wordmark,
+  .keyboardButton {
+    display: none;
+  }
+
+  .tab {
+    padding: 0 10px;
+  }
+}

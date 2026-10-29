@@ -226,28 +226,53 @@ vec3 applyVignette(vec3 c, float amount, float mask) {
 }
 `;
 
-/** engine/masks.ts: maskWeight, adjustForMask, applyMasks (up to MAX_MASKS, in order) */
-const MASKS_GLSL = /* glsl */ `
+/**
+ * engine/masks.ts maskWeight for one shape (kind 0 linear, 1 radial, 2 brush).
+ * Brush weight maps live in the R8 texture array u_brush (engine/brush.ts
+ * sampleBrush): b = (raster width, raster height, layer, 0). Needs u_brush.
+ */
+const SHAPE_WEIGHT_GLSL = /* glsl */ `
 float maskSmooth(float a, float b, float x) {
   float t = clamp((x - a) / (b - a), 0.0, 1.0);
   return t * t * (3.0 - 2.0 * t);
 }
-float maskWeight(int i, vec2 p, vec2 size) {
-  vec4 a = u_maskA[i];
-  if (u_maskKind[i] == 0) {
+float brushWeight(vec4 b, vec2 p, vec2 size) {
+  vec2 q = p / size * b.xy - 0.5;
+  vec2 f0 = floor(q);
+  vec2 f = q - f0;
+  ivec2 hiCell = ivec2(b.xy) - 1;
+  ivec2 lo = clamp(ivec2(f0), ivec2(0), hiCell);
+  ivec2 hi = clamp(ivec2(f0) + 1, ivec2(0), hiCell);
+  int l = int(b.z);
+  float c00 = texelFetch(u_brush, ivec3(lo.x, lo.y, l), 0).r;
+  float c10 = texelFetch(u_brush, ivec3(hi.x, lo.y, l), 0).r;
+  float c01 = texelFetch(u_brush, ivec3(lo.x, hi.y, l), 0).r;
+  float c11 = texelFetch(u_brush, ivec3(hi.x, hi.y, l), 0).r;
+  return mix(mix(c00, c10, f.x), mix(c01, c11, f.x), f.y);
+}
+float shapeWeight(int kind, vec4 a, vec4 b, vec2 p, vec2 size) {
+  if (kind == 2) return brushWeight(b, p, size);
+  if (kind == 0) {
     vec2 d = (a.zw - a.xy) * size;
     float len2 = dot(d, d);
     if (len2 == 0.0) return 0.0;
     float t = dot(p - a.xy * size, d) / len2;
     return 1.0 - maskSmooth(0.0, 1.0, t);
   }
-  vec4 b = u_maskB[i];
   vec2 o = p - a.xy * size;
   float u = (o.x * b.x + o.y * b.y) / (a.z * size.x);
   float v = (-o.x * b.y + o.y * b.x) / (a.w * size.y);
   float r = sqrt(u * u + v * v);
   float w = 1.0 - maskSmooth(1.0 - max(b.z, 1e-4), 1.0, r);
   return b.w > 0.5 ? 1.0 - w : w;
+}
+`;
+
+/** engine/masks.ts: maskWeight, adjustForMask, applyMasks (up to MAX_MASKS, in order) */
+const MASKS_GLSL = /* glsl */ `
+${SHAPE_WEIGHT_GLSL}
+float maskWeight(int i, vec2 p, vec2 size) {
+  return shapeWeight(u_maskKind[i], u_maskA[i], u_maskB[i], p, size);
 }
 vec3 adjustForMask(vec3 c, int i) {
   vec3 out3 = c * u_maskWB[i] * u_maskGain[i];
@@ -320,6 +345,7 @@ uniform bool u_hslOn;
 uniform float u_hslHue[8];
 uniform float u_hslSat[8];
 uniform float u_hslLum[8];
+uniform highp sampler2DArray u_brush;
 uniform int u_maskCount;
 uniform int u_maskKind[${MAX_MASKS}];
 uniform vec4 u_maskA[${MAX_MASKS}];
@@ -472,6 +498,58 @@ void main() {
   vec4 c = mix(mix(c00, c10, f.x), mix(c01, c11, f.x), f.y);
   if (u_vignette != 0.0 && c.a > 0.0) {
     c.rgb = applyVignette(c.rgb, u_vignette, vignetteMask((vec2(o) + 0.5) / vec2(u_outSize)));
+  }
+  outColor = c;
+}
+`;
+
+/**
+ * Display pass (M20; engine/display.ts): Before or After per column for the
+ * split view, then the clipping overlay, then the mask overlay (M21). Both inputs are RGBA8 textures, so
+ * the overlay sees exactly the bytes the CPU reference does.
+ */
+export const DISPLAY_FRAGMENT_SHADER = /* glsl */ `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform sampler2D u_after;
+uniform sampler2D u_before;
+uniform bool u_flipY;
+/** Split position in output pixels (columns whose center is left of it show Before); negative = no split. */
+uniform float u_splitX;
+uniform bool u_shadows;
+uniform bool u_highlights;
+uniform vec3 u_shadowColor;
+uniform vec3 u_highlightColor;
+/** Mask overlay (M21): the selected mask's weight as a tint. Output px → source px via rowX/rowY. */
+uniform highp sampler2DArray u_brush;
+uniform bool u_overlayOn;
+uniform int u_overlayKind;
+uniform vec4 u_overlayA;
+uniform vec4 u_overlayB;
+uniform vec3 u_rowX;
+uniform vec3 u_rowY;
+uniform vec2 u_srcSize;
+uniform vec3 u_overlayColor;
+uniform float u_overlayOpacity;
+
+out vec4 outColor;
+${SHAPE_WEIGHT_GLSL}
+
+void main() {
+  ivec2 o = ivec2(gl_FragCoord.xy);
+  ivec2 size = textureSize(u_after, 0);
+  if (u_flipY) o.y = size.y - 1 - o.y;
+  bool before = float(o.x) + 0.5 < u_splitX;
+  vec4 c = before ? texelFetch(u_before, o, 0) : texelFetch(u_after, o, 0);
+  ivec3 b = ivec3(round(c.rgb * 255.0));
+  if (c.a > 0.0 && u_highlights && all(equal(b, ivec3(255)))) c.rgb = u_highlightColor;
+  else if (c.a > 0.0 && u_shadows && all(equal(b, ivec3(0)))) c.rgb = u_shadowColor;
+  if (u_overlayOn && c.a > 0.0) {
+    vec3 p = vec3(vec2(o) + 0.5, 1.0);
+    vec2 src = vec2(dot(u_rowX, p), dot(u_rowY, p));
+    float w = shapeWeight(u_overlayKind, u_overlayA, u_overlayB, src, u_srcSize);
+    c.rgb = mix(c.rgb, u_overlayColor, u_overlayOpacity * w);
   }
   outColor = c;
 }

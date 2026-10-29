@@ -63,3 +63,13 @@
   stroke: var(--color-accent);
   stroke-width: 3;
 }
+
+/* Brush (M21): the circle cursor shows the brush instead. */
+.paintArea {
+  cursor: none;
+}
+
+.rotateHandle {
+  fill: var(--color-accent);
+  cursor: alias;
+}

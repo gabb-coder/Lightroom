@@ -86,3 +86,12 @@
   margin: 0;
   accent-color: var(--color-accent);
 }
+
+.brushOptions {
+  margin: 0 0 8px;
+}
+
+.paintMode {
+  width: fit-content;
+  margin: 4px 0 0 auto;
+}

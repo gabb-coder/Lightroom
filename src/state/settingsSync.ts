@@ -126,6 +126,10 @@ const THUMBNAIL_OPTIONS: ExportOptions = {
   naming: 'original',
   customName: '',
   metadata: 'none',
+  // Location doesn't apply: the blob is stored, not saved anywhere.
+  destination: 'downloads',
+  useSubfolder: false,
+  subfolder: '',
 };
 
 let thumbnailQueue: Promise<void> = Promise.resolve();

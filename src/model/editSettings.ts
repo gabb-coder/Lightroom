@@ -105,10 +105,37 @@ export type RadialMask = {
   adjust: MaskAdjust;
 };
 
-export type Mask = LinearMask | RadialMask;
+/** One brush stroke (M21): a path of dabs that paints the mask or erases it. */
+export type BrushStroke = {
+  erase: boolean;
+  /** Brush radius as a fraction of the photo's long edge. */
+  radius: number;
+  /** 0–100: how much of the radius is a soft edge. */
+  feather: number;
+  /** Path normalized to the photo: x0, y0, x1, y1, … (at least one point). */
+  points: number[];
+};
+
+/**
+ * A painted mask (M21). Strokes are normalized to the uploaded photo like
+ * the gradients; `aspect` (width / height of that photo) keeps round dabs
+ * round and sets the shape of the weight map they are rasterized into.
+ */
+export type BrushMask = {
+  id: string;
+  kind: 'brush';
+  aspect: number;
+  strokes: BrushStroke[];
+  adjust: MaskAdjust;
+};
+
+export type Mask = LinearMask | RadialMask | BrushMask;
 export type MaskKind = Mask['kind'];
 
 export const MAX_MASKS = 8;
+/** Limits that keep a stored brush mask a sensible size. */
+export const MAX_BRUSH_STROKES = 500;
+export const MAX_STROKE_POINTS = 4000;
 
 export function defaultMaskAdjust(): MaskAdjust {
   return { exposure: 0, contrast: 0, highlights: 0, shadows: 0, temp: 0, tint: 0, saturation: 0 };
@@ -132,7 +159,7 @@ export interface EditSettings {
   curve: { rgb: Point[]; r: Point[]; g: Point[]; b: Point[] };
   hsl: Record<HslColor, HslAdjust>;
   colorGrading: ColorGradingSettings;
-  /** Linear and radial gradient masks (M15), applied in order. */
+  /** Linear and radial gradient masks (M15) and brush masks (M21), applied in order. */
   masks: Mask[];
   detail: DetailSettings;
   effects: EffectsSettings;

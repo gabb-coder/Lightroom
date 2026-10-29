@@ -11,6 +11,10 @@ import { matchOrganizeShortcut } from './organizeShortcuts';
 import { openCopyDialog, pasteSettings, useCopyPasteStore } from '../state/copyPasteStore';
 import { settingsSourceId } from '../state/settingsSync';
 import { createVirtualCopy } from '../state/virtualCopyActions';
+import { useViewStore } from '../state/viewStore';
+import { useDeleteDialogStore } from '../state/deleteDialogStore';
+import { runAutoTone } from '../state/editingAids';
+import { useShortcutsHelpStore } from '../state/shortcutsHelpStore';
 
 const MODULE_KEYS: Readonly<Record<string, AppModule>> = {
   g: 'library',
@@ -35,8 +39,8 @@ export function useGlobalShortcuts(): void {
     const onKeyDown = (event: KeyboardEvent): void => {
       // Text fields keep their own shortcuts (including native Ctrl/Cmd+Z).
       if (isTextEntryTarget(event.target as TargetLike | null)) return;
-      // A modal dialog (Copy / Sync settings) owns the keyboard.
-      if (useCopyPasteStore.getState().dialog) return;
+      // A modal dialog (Copy / Sync settings, Remove photos) owns the keyboard.
+      if (useCopyPasteStore.getState().dialog || useDeleteDialogStore.getState().ids || useShortcutsHelpStore.getState().open) return;
       const command = mac ? event.metaKey : event.ctrlKey;
       // Ctrl/Cmd+': make a virtual copy of the focused photo and switch to it (as in Lightroom).
       if (command && !event.shiftKey && event.key === "'" && useAppStore.getState().module !== 'export') {
@@ -62,6 +66,12 @@ export function useGlobalShortcuts(): void {
         useAppStore.getState().setModule('export');
         return;
       }
+      // Ctrl/Cmd+U: Auto tone (as in Lightroom).
+      if (command && !event.shiftKey && event.key.toLowerCase() === 'u' && developHasPhoto()) {
+        event.preventDefault();
+        runAutoTone();
+        return;
+      }
       const historyAction = matchHistoryShortcut(event, mac);
       if (historyAction) {
         if (!developHasPhoto()) return;
@@ -70,6 +80,12 @@ export function useGlobalShortcuts(): void {
         return;
       }
       if (event.ctrlKey || event.metaKey || event.altKey) return;
+      // ?: the keyboard shortcuts dialog.
+      if (event.key === '?') {
+        event.preventDefault();
+        useShortcutsHelpStore.getState().setOpen(true);
+        return;
+      }
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         if (isArrowKeyTarget(event.target as TargetLike | null)) return;
         const library = useLibraryStore.getState();
@@ -88,6 +104,14 @@ export function useGlobalShortcuts(): void {
         void (organize.kind === 'rating' ? setRating(targets, organize.value) : setFlag(targets, organize.value));
         return;
       }
+      // Delete / Backspace: remove the selected photos (asks first).
+      if ((event.key === 'Delete' || event.key === 'Backspace') && useAppStore.getState().module !== 'export') {
+        const targets = organizeTargets();
+        if (targets.length === 0) return;
+        event.preventDefault();
+        useDeleteDialogStore.getState().open(targets);
+        return;
+      }
       const develop = useDevelopStore.getState();
       // M / Shift+M: linear / radial gradient (as in Lightroom); press again to cancel.
       if (event.key.toLowerCase() === 'm' && developHasPhoto()) {
@@ -96,9 +120,50 @@ export function useGlobalShortcuts(): void {
         develop.setMaskTool(develop.maskTool === kind ? null : kind);
         return;
       }
+      // W: white balance eyedropper; J: clipping warnings; Y: split Before/After (as in Lightroom).
+      if (event.key.toLowerCase() === 'w' && !event.shiftKey && developHasPhoto()) {
+        event.preventDefault();
+        develop.setWbPicking(!develop.wbPicking);
+        return;
+      }
+      if (event.key.toLowerCase() === 'j' && !event.shiftKey && developHasPhoto()) {
+        event.preventDefault();
+        useViewStore.getState().toggleClipping();
+        return;
+      }
+      if (event.key.toLowerCase() === 'y' && !event.shiftKey && developHasPhoto()) {
+        event.preventDefault();
+        const view = useViewStore.getState();
+        view.setSplit(!view.split);
+        return;
+      }
+      if (event.key === 'Escape' && develop.wbPicking) {
+        event.preventDefault();
+        develop.setWbPicking(false);
+        return;
+      }
+      // K: brush (as in Lightroom); O: show the selected mask as an overlay.
+      if (event.key.toLowerCase() === 'k' && !event.shiftKey && developHasPhoto()) {
+        event.preventDefault();
+        develop.setMaskTool(develop.maskTool === 'brush' ? null : 'brush');
+        return;
+      }
+      if (event.key.toLowerCase() === 'o' && !event.shiftKey && developHasPhoto()) {
+        event.preventDefault();
+        const view = useViewStore.getState();
+        view.setShowMaskOverlay(!view.showMaskOverlay);
+        if (!develop.masksOpen) develop.setMasksOpen(true);
+        return;
+      }
       if (event.key === 'Escape' && develop.maskTool) {
         event.preventDefault();
         develop.setMaskTool(null);
+        return;
+      }
+      // Z: zoom 1:1 and back (design/Kit.dc.html).
+      if (event.key.toLowerCase() === 'z' && !event.shiftKey && developHasPhoto() && !develop.cropping) {
+        event.preventDefault();
+        useViewStore.getState().toggleZoom();
         return;
       }
       if (event.key.toLowerCase() === 'r' && developHasPhoto()) {

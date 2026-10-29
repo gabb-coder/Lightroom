@@ -4,11 +4,19 @@ import { downloadBlob } from '../io/download';
 import {
   BUILTIN_EXPORT_PRESETS,
   exportFileName,
+  LOCATION_KEYS,
   normalizeExportOptions,
+  sameLook,
+  subfolderOf,
   type ExportOptions,
   type ExportPreset,
   uniqueFileNames,
+  withLocation,
+  zipEntryPath,
+  zipFileName,
 } from '../model/exportOptions';
+import { exportFolder, pickFolder, supportsFolderExport, writeFile, type DirectoryHandle } from '../io/folderAccess';
+import { createZip } from '../io/zip';
 import { cancelExport, ExportCancelled, exportInWorker } from '../workers/exportClient';
 import { STAGE_PROGRESS } from '../workers/exportProtocol';
 import { useAppStore } from './appStore';
@@ -35,6 +43,9 @@ interface ExportState {
   presetId: string | null;
   userPresets: readonly ExportPreset[];
   job: ExportJob | null;
+  /** Folder picked for "A folder you choose" (this session only). */
+  folder: DirectoryHandle | null;
+  chooseFolder: () => Promise<boolean>;
   setOptions: (patch: Partial<ExportOptions>) => void;
   applyPreset: (preset: ExportPreset) => void;
   savePreset: (name: string) => void;
@@ -46,17 +57,27 @@ const initialOptions = normalizeExportOptions((readUiPrefs().exportOptions ?? {}
 
 export const useExportStore = create<ExportState>()((set, get) => ({
   options: initialOptions,
-  presetId: BUILTIN_EXPORT_PRESETS.find((p) => JSON.stringify(p.options) === JSON.stringify(initialOptions))?.id ?? null,
+  presetId: BUILTIN_EXPORT_PRESETS.find((p) => sameLook(p.options, initialOptions))?.id ?? null,
   userPresets: [],
   job: null,
+  folder: null,
+  chooseFolder: async () => {
+    const folder = await pickFolder();
+    if (folder) set({ folder });
+    return folder !== null;
+  },
   setOptions: (patch) => {
     const options = normalizeExportOptions({ ...get().options, ...patch });
     writeUiPrefs({ exportOptions: { ...options } });
-    set({ options, presetId: null });
+    // Changing only where files go keeps the highlighted preset.
+    const locationOnly = Object.keys(patch).every((k) => (LOCATION_KEYS as readonly string[]).includes(k));
+    set((s) => ({ options, presetId: locationOnly ? s.presetId : null }));
   },
   applyPreset: (preset) => {
-    writeUiPrefs({ exportOptions: { ...preset.options } });
-    set({ options: preset.options, presetId: preset.id });
+    // A preset is a look; where files go stays as chosen.
+    const options = withLocation(normalizeExportOptions(preset.options), get().options);
+    writeUiPrefs({ exportOptions: { ...options } });
+    set({ options, presetId: preset.id });
   },
   savePreset: (name) => {
     const preset: ExportPreset = { id: crypto.randomUUID(), name: name.trim(), options: get().options };
@@ -99,13 +120,42 @@ export function exportTargets(): string[] {
   return [...ordered, ...library.selection.ids.filter((id) => !ordered.includes(id))];
 }
 
-/** Renders one photo in the worker and downloads it. */
-async function exportOne(photoId: string, fileName: string, onProgress: (fraction: number) => void): Promise<void> {
+/** Renders one photo in the worker (or on the page, see exportClient). */
+async function renderOne(photoId: string, options: ExportOptions, onProgress: (fraction: number) => void): Promise<Blob> {
   const original = await getOriginal(photoId);
   if (!original) throw new Error('This photo is no longer in the catalog.');
   const settings = await settingsOf(photoId);
-  const result = await exportInWorker(original.blob, settings, useExportStore.getState().options, (stage) => onProgress(STAGE_PROGRESS[stage]));
-  downloadBlob(result.blob, fileName);
+  return (await exportInWorker(original.blob, settings, options, (stage) => onProgress(STAGE_PROGRESS[stage]))).blob;
+}
+
+/** Where a batch's files go, and what the done message says. */
+interface Delivery {
+  deliver: (fileName: string, blob: Blob) => Promise<void>;
+  /** After the last photo (e.g. download the ZIP). */
+  finish: () => Promise<void>;
+  /** "Saved to Exports.zip", or null to show the file name / count. */
+  label: string | null;
+}
+
+async function delivery(options: ExportOptions, total: number, folder: DirectoryHandle | null): Promise<Delivery> {
+  if (options.destination === 'folder' && folder) {
+    const dir = await exportFolder(folder, subfolderOf(options));
+    const where = subfolderOf(options) ? `${folder.name}/${subfolderOf(options)}` : folder.name;
+    return { deliver: async (name, blob) => void (await writeFile(dir, name, blob)), finish: async () => undefined, label: `Saved to ${where}` };
+  }
+  if (options.destination === 'zip' && total > 1) {
+    const files: { name: string; data: Blob }[] = [];
+    const zipName = zipFileName(options);
+    return {
+      deliver: async (name, blob) => void files.push({ name: zipEntryPath(options, name), data: blob }),
+      finish: async () => {
+        if (files.length) downloadBlob(await createZip(files), zipName);
+      },
+      label: `Saved to ${zipName}`,
+    };
+  }
+  // One file each in the browser's downloads (a single photo never needs a ZIP).
+  return { deliver: async (name, blob) => downloadBlob(blob, name), finish: async () => undefined, label: null };
 }
 
 /**
@@ -119,14 +169,19 @@ let cancelRequested = false;
 export async function runExport(): Promise<void> {
   const ids = exportTargets();
   if (ids.length === 0 || useExportStore.getState().job?.status === 'running') return;
+  // The folder picker needs the click's user gesture, so it comes first.
+  const state = useExportStore.getState();
+  if (state.options.destination === 'folder' && !supportsFolderExport()) state.setOptions({ destination: 'zip' });
+  else if (state.options.destination === 'folder' && !state.folder && !(await state.chooseFolder())) return; // cancelled: stay in the dialog
   cancelRequested = false;
-  const { options, setJob } = useExportStore.getState();
+  const { options, setJob, folder } = useExportStore.getState();
   if (hideTimer) clearTimeout(hideTimer);
   closeExportDialog();
   await flushEdits();
   const records = await Promise.all(ids.map((id) => db.photos.get(id)));
   const names = uniqueFileNames(records.map((r, i) => (r ? exportFileName(options, r, i + 1) : '')));
   const total = ids.length;
+  const out = await delivery(options, total, folder);
   const failed: string[] = [];
   let lastError = '';
   for (let index = 0; index < total; index++) {
@@ -138,15 +193,17 @@ export async function runExport(): Promise<void> {
     try {
       const id = ids[index];
       if (!id || !records[index]) throw new Error('This photo is no longer in the catalog.');
-      await exportOne(id, fileName, progress);
+      await out.deliver(fileName, await renderOne(id, options, progress));
     } catch (error) {
       if (error instanceof ExportCancelled) return finish({ status: 'cancelled', fileName, index, total, progress: index / total });
       failed.push(records[index]?.fileName ?? fileName);
       lastError = error instanceof Error ? error.message : String(error);
     }
   }
+  await out.finish();
   const last = names[total - 1] ?? '';
-  if (failed.length === 0) return finish({ status: 'done', fileName: total > 1 ? `${total} photos` : last, index: total - 1, total, progress: 1 });
+  const summary = out.label ? `${total > 1 ? `${total} photos. ` : ''}${out.label}` : total > 1 ? `${total} photos` : last;
+  if (failed.length === 0) return finish({ status: 'done', fileName: summary, index: total - 1, total, progress: 1 });
   const message =
     total === 1 ? lastError : `${total - failed.length} of ${total} exported. Could not export ${failed.join(', ')}: ${lastError}`;
   finish({ status: 'error', fileName: last, index: total - 1, total, progress: 1, message });

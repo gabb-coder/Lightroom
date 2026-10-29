@@ -29,11 +29,13 @@ export async function openTestPhoto(page: Page, png: Buffer = photoPng) {
 
 /**
  * Decoded screenshot of the canvas after pending renders have run. Overlays
- * (the "Before" badge, mask guides) are hidden so only rendered pixels are compared.
+ * (the "Before" badge, mask guides, the split divider) are hidden so only rendered pixels are compared.
  */
 export async function canvasPixels(page: Page): Promise<RgbaPixels> {
   await settle(page);
-  const png = await page.getByTestId('photo-canvas').screenshot({ style: '[data-testid="before-badge"], [data-testid="mask-overlay"] { visibility: hidden; }' });
+  const png = await page
+    .getByTestId('photo-canvas')
+    .screenshot({ style: '[data-testid="before-badge"], [data-testid="mask-overlay"], [data-testid^="split-"] { visibility: hidden; }' });
   return decodePng(png);
 }
 

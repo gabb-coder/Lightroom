@@ -1,10 +1,13 @@
 import { CURVE_LUT_SIZE } from '../engine/curve';
 import { geometryMatrix, isIdentityGeometry, outputSize } from '../engine/geometry';
+import { BRUSH_RASTER_EDGE, type BrushRaster } from '../engine/brush';
+import { HIGHLIGHT_CLIP_RGB, isPlainDisplay, MASK_OVERLAY_OPACITY, MASK_OVERLAY_RGB, SHADOW_CLIP_RGB, type DisplayOptions } from '../engine/display';
+import type { MaskShape } from '../engine/masks';
 import { hasDetailStage, type PipelineParams } from '../engine/pipeline';
 import { sharpenKernel } from '../engine/sharpen';
 import { MAX_MASKS } from '../model/editSettings';
 import { createProgram, createTexture, type RgbaImage, type TextureSource } from './gl';
-import { BLUR_FRAGMENT_SHADER, DETAIL_FRAGMENT_SHADER, DEVELOP_FRAGMENT_SHADER, GEOMETRY_FRAGMENT_SHADER, VERTEX_SHADER } from './shaders';
+import { BLUR_FRAGMENT_SHADER, DETAIL_FRAGMENT_SHADER, DEVELOP_FRAGMENT_SHADER, DISPLAY_FRAGMENT_SHADER, GEOMETRY_FRAGMENT_SHADER, VERTEX_SHADER } from './shaders';
 
 const DEVELOP_UNIFORMS = [
   'source',
@@ -25,6 +28,7 @@ const DEVELOP_UNIFORMS = [
   'hslHue',
   'hslSat',
   'hslLum',
+  'brush',
   'maskCount',
   'maskKind',
   'maskA',
@@ -43,6 +47,42 @@ const DEVELOP_UNIFORMS = [
 const BLUR_UNIFORMS = ['image', 'taps', 'weights'] as const;
 const DETAIL_UNIFORMS = ['image', 'blur', 'taps', 'weights', 'sharpenOn', 'sharpenAmount', 'grainOn', 'grainAmount', 'grainCell', 'scale'] as const;
 const GEOMETRY_UNIFORMS = ['image', 'flipY', 'outSize', 'rowX', 'rowY', 'vignette'] as const;
+const DISPLAY_UNIFORMS = [
+  'after',
+  'before',
+  'flipY',
+  'splitX',
+  'shadows',
+  'highlights',
+  'shadowColor',
+  'highlightColor',
+  'brush',
+  'overlayOn',
+  'overlayKind',
+  'overlayA',
+  'overlayB',
+  'rowX',
+  'rowY',
+  'srcSize',
+  'overlayColor',
+  'overlayOpacity',
+] as const;
+
+/** Texture unit of the brush weight maps (units 0–1 hold the image and the curve table). */
+const BRUSH_UNIT = 2;
+/** Brush layers: one per mask slot, plus one for the mask overlay. */
+const BRUSH_LAYERS = MAX_MASKS + 1;
+const OVERLAY_LAYER = MAX_MASKS;
+const SHAPE_KIND: Readonly<Record<MaskShape['kind'], number>> = { linear: 0, radial: 1, brush: 2 };
+
+/**
+ * Display-only extras for the screen (never exports or the histogram):
+ * clipping overlay and split view. `before` renders the left of the split.
+ */
+export interface DisplayRequest {
+  options: DisplayOptions;
+  before: PipelineParams | null;
+}
 
 const ZERO8 = new Float32Array(8);
 
@@ -57,10 +97,16 @@ interface SizedTexture {
   height: number;
 }
 
-type RenderTarget = SizedTexture & { framebuffer: WebGLFramebuffer };
+type RenderTarget = SizedTexture & { framebuffer: WebGLFramebuffer; bytesPerPixel: number };
 
-/** Reused source-size RGBA8 targets: developed color, 16-bit blur, after detail. */
-type IntermediateKind = 'developed' | 'blur' | 'detailed';
+/** Texture format per scratch target: the blur only needs two bytes (16-bit fixed point). */
+const SCRATCH_FORMAT: Readonly<Record<IntermediateKind, 'rgba8' | 'rg8'>> = { developed: 'rgba8', blur: 'rg8', detailed: 'rgba8', shownAfter: 'rgba8', shownBefore: 'rgba8' };
+
+/**
+ * Reused scratch targets: developed color, 16-bit blur, after detail (source
+ * size), and the finished After / Before images for the display pass (output size).
+ */
+type IntermediateKind = 'developed' | 'blur' | 'detailed' | 'shownAfter' | 'shownBefore';
 
 interface Target {
   /** Null = the canvas. */
@@ -93,12 +139,27 @@ export class Renderer {
   private readonly blurProgram: WebGLProgram;
   private readonly detailProgram: WebGLProgram;
   private readonly geometryProgram: WebGLProgram;
+  private readonly displayProgram: WebGLProgram;
   private readonly developUniforms: Uniforms<(typeof DEVELOP_UNIFORMS)[number]>;
   private readonly blurUniforms: Uniforms<(typeof BLUR_UNIFORMS)[number]>;
   private readonly detailUniforms: Uniforms<(typeof DETAIL_UNIFORMS)[number]>;
   private readonly geometryUniforms: Uniforms<(typeof GEOMETRY_UNIFORMS)[number]>;
+  private readonly displayUniforms: Uniforms<(typeof DISPLAY_UNIFORMS)[number]>;
   private textures: Partial<Record<SourceKind, SizedTexture>> = {};
   private intermediates: Partial<Record<IntermediateKind, RenderTarget>> = {};
+  /**
+   * What the shownAfter / shownBefore targets hold, so moving the split or
+   * toggling clipping only re-runs the display pass. Compared by reference.
+   */
+  private shownCache: { source: SizedTexture; after: PipelineParams; before: PipelineParams | null } | null = null;
+  /**
+   * Brush weight maps (M21): an R8 texture array, BRUSH_RASTER_EDGE square
+   * per layer, made when the first brush mask shows up. Until then a 1×1
+   * array keeps the sampler valid. `brushKeys` says which raster each layer holds.
+   */
+  private brushTexture: WebGLTexture | null = null;
+  private readonly emptyBrush: WebGLTexture;
+  private brushKeys: (string | null)[] = new Array<string | null>(BRUSH_LAYERS).fill(null);
   /** RGBA32F tone-curve table (CURVE_LUT_SIZE × 1), uploaded when curves are set. */
   private readonly curveTexture: WebGLTexture;
 
@@ -110,10 +171,15 @@ export class Renderer {
     this.blurProgram = createProgram(gl, VERTEX_SHADER, BLUR_FRAGMENT_SHADER);
     this.detailProgram = createProgram(gl, VERTEX_SHADER, DETAIL_FRAGMENT_SHADER);
     this.geometryProgram = createProgram(gl, VERTEX_SHADER, GEOMETRY_FRAGMENT_SHADER);
+    this.displayProgram = createProgram(gl, VERTEX_SHADER, DISPLAY_FRAGMENT_SHADER);
     this.developUniforms = locate(gl, this.developProgram, DEVELOP_UNIFORMS);
     this.blurUniforms = locate(gl, this.blurProgram, BLUR_UNIFORMS);
     this.detailUniforms = locate(gl, this.detailProgram, DETAIL_UNIFORMS);
     this.geometryUniforms = locate(gl, this.geometryProgram, GEOMETRY_UNIFORMS);
+    this.displayUniforms = locate(gl, this.displayProgram, DISPLAY_UNIFORMS);
+    this.emptyBrush = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.emptyBrush);
+    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.R8, 1, 1, 1);
     this.curveTexture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.curveTexture);
     gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, CURVE_LUT_SIZE, 1);
@@ -153,25 +219,26 @@ export class Renderer {
   clearImage(): void {
     for (const t of Object.values(this.textures)) this.gl.deleteTexture(t.texture);
     this.textures = {};
+    this.shownCache = null;
   }
 
   /** Draws to the canvas, resizing it to the output. Returns the output size. */
-  draw(params: PipelineParams, kind: SourceKind): { width: number; height: number } {
+  draw(params: PipelineParams, kind: SourceKind, display: DisplayRequest | null = null): { width: number; height: number } {
     const source = this.pickSource(kind);
     const out = outputSize(source, params.geometry);
     if (this.canvas.width !== out.width) this.canvas.width = out.width;
     if (this.canvas.height !== out.height) this.canvas.height = out.height;
-    this.render(source, params, { framebuffer: null, ...out, flipY: true });
+    this.renderShown(source, params, { framebuffer: null, ...out, flipY: true }, display);
     return out;
   }
 
   /** Renders into an offscreen RGBA8 framebuffer and reads it back, rows top-first. */
-  readPixels(params: PipelineParams, kind: SourceKind = 'full'): RgbaImage {
+  readPixels(params: PipelineParams, kind: SourceKind = 'full', display: DisplayRequest | null = null): RgbaImage {
     const { gl } = this;
     const source = this.pickSource(kind);
     const out = outputSize(source, params.geometry);
     const target = this.createTarget(out.width, out.height);
-    this.render(source, params, { framebuffer: target.framebuffer, ...out, flipY: false });
+    this.renderShown(source, params, { framebuffer: target.framebuffer, ...out, flipY: false }, display);
     const data = new Uint8Array(out.width * out.height * 4);
     gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
     gl.readPixels(0, 0, out.width, out.height, gl.RGBA, gl.UNSIGNED_BYTE, data);
@@ -184,7 +251,67 @@ export class Renderer {
     this.clearImage();
     this.releaseIntermediates();
     this.gl.deleteTexture(this.curveTexture);
-    for (const program of [this.developProgram, this.blurProgram, this.detailProgram, this.geometryProgram]) this.gl.deleteProgram(program);
+    this.gl.deleteTexture(this.emptyBrush);
+    if (this.brushTexture) this.gl.deleteTexture(this.brushTexture);
+    for (const program of [this.developProgram, this.blurProgram, this.detailProgram, this.geometryProgram, this.displayProgram]) this.gl.deleteProgram(program);
+  }
+
+  /**
+   * The edited image, plus the display extras when asked: After (and Before
+   * for a split) are rendered into RGBA8 textures first, then the display
+   * pass composes them into the target. Without extras this is `render`.
+   */
+  private renderShown(source: SizedTexture, params: PipelineParams, target: Target, display: DisplayRequest | null): void {
+    if (!display || isPlainDisplay(display.options)) {
+      this.render(source, params, target);
+      return;
+    }
+    const split = display.options.split !== null && display.before ? display.options.split : null;
+    const wantBefore = split !== null ? display.before : null;
+    const cache = this.shownCache;
+    const cachedAfter = this.intermediates.shownAfter;
+    const fresh = cache !== null && cachedAfter?.width === target.width && cachedAfter.height === target.height && cache.source === source && cache.after === params;
+    const after = this.intermediateFor('shownAfter', target);
+    if (!fresh) this.render(source, params, this.offscreen(after));
+    let before: RenderTarget = after;
+    if (wantBefore) {
+      before = this.intermediateFor('shownBefore', target);
+      // Before must have the same output size (same geometry) to line up.
+      if (!fresh || cache.before !== wantBefore) this.render(source, { ...wantBefore, geometry: params.geometry }, this.offscreen(before));
+    }
+    this.shownCache = { source, after: params, before: wantBefore ?? (fresh ? cache.before : null) };
+    this.displayPass(after, before, split === null ? -1 : split * target.width, display.options, target, geometryMatrix(source, params.geometry, target), source);
+  }
+
+  private displayPass(after: RenderTarget, before: RenderTarget, splitX: number, o: DisplayOptions, target: Target, toSource: readonly number[], source: SizedTexture): void {
+    const { gl } = this;
+    const u = this.displayUniforms;
+    // Upload before binding the target: the brush upload binds its own texture unit.
+    const overlay = o.overlay;
+    const overlayB = overlay?.kind === 'brush' && overlay.raster ? this.brushLayer(OVERLAY_LAYER, overlay.raster) : overlay?.b;
+    this.bindTarget(target);
+    gl.useProgram(this.displayProgram);
+    this.bindBrushes(u.brush);
+    gl.uniform1i(u.overlayOn, overlay ? 1 : 0);
+    if (overlay && overlayB) {
+      gl.uniform1i(u.overlayKind, SHAPE_KIND[overlay.kind]);
+      gl.uniform4f(u.overlayA, ...overlay.a);
+      gl.uniform4f(u.overlayB, overlayB[0], overlayB[1], overlayB[2], overlayB[3]);
+      gl.uniform3f(u.rowX, toSource[0] ?? 0, toSource[1] ?? 0, toSource[2] ?? 0);
+      gl.uniform3f(u.rowY, toSource[3] ?? 0, toSource[4] ?? 0, toSource[5] ?? 0);
+      gl.uniform2f(u.srcSize, source.width, source.height);
+      gl.uniform3f(u.overlayColor, MASK_OVERLAY_RGB[0] / 255, MASK_OVERLAY_RGB[1] / 255, MASK_OVERLAY_RGB[2] / 255);
+      gl.uniform1f(u.overlayOpacity, MASK_OVERLAY_OPACITY);
+    }
+    this.bindTexture(0, after.texture, u.after);
+    this.bindTexture(1, before.texture, u.before);
+    gl.uniform1i(u.flipY, target.flipY ? 1 : 0);
+    gl.uniform1f(u.splitX, splitX);
+    gl.uniform1i(u.shadows, o.shadows ? 1 : 0);
+    gl.uniform1i(u.highlights, o.highlights ? 1 : 0);
+    gl.uniform3f(u.shadowColor, SHADOW_CLIP_RGB[0] / 255, SHADOW_CLIP_RGB[1] / 255, SHADOW_CLIP_RGB[2] / 255);
+    gl.uniform3f(u.highlightColor, HIGHLIGHT_CLIP_RGB[0] / 255, HIGHLIGHT_CLIP_RGB[1] / 255, HIGHLIGHT_CLIP_RGB[2] / 255);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
   private render(source: SizedTexture, params: PipelineParams, target: Target): void {
@@ -249,6 +376,7 @@ export class Renderer {
   private developPass(source: SizedTexture, params: PipelineParams, target: Target): void {
     const { gl } = this;
     const u = this.developUniforms;
+    const masks = this.maskUniforms(params);
     this.bindTarget(target);
     gl.useProgram(this.developProgram);
     gl.activeTexture(gl.TEXTURE0);
@@ -275,19 +403,26 @@ export class Renderer {
     gl.uniform1fv(u.hslSat, params.hsl?.sat ?? ZERO8);
     gl.uniform1fv(u.hslLum, params.hsl?.lum ?? ZERO8);
     this.setColorGrading(params);
-    this.setMasks(params);
+    this.setMasks(masks.masks, masks.b);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  private setMasks(params: PipelineParams): void {
+  /** Mask uniforms; brush rasters are uploaded to their layer first (call before binding the target). */
+  private maskUniforms(params: PipelineParams): { masks: PipelineParams['masks']; b: number[] } {
+    const masks = params.masks.slice(0, MAX_MASKS);
+    const b = masks.flatMap((m, i) => (m.shape.kind === 'brush' && m.shape.raster ? this.brushLayer(i, m.shape.raster) : m.shape.b));
+    return { masks, b };
+  }
+
+  private setMasks(masks: PipelineParams['masks'], b: number[]): void {
     const { gl } = this;
     const u = this.developUniforms;
-    const masks = params.masks.slice(0, MAX_MASKS);
+    this.bindBrushes(u.brush);
     gl.uniform1i(u.maskCount, masks.length);
     if (masks.length === 0) return;
-    gl.uniform1iv(u.maskKind, masks.map((m) => (m.shape.kind === 'linear' ? 0 : 1)));
+    gl.uniform1iv(u.maskKind, masks.map((m) => SHAPE_KIND[m.shape.kind]));
     gl.uniform4fv(u.maskA, masks.flatMap((m) => m.shape.a));
-    gl.uniform4fv(u.maskB, masks.flatMap((m) => m.shape.b));
+    gl.uniform4fv(u.maskB, b);
     gl.uniform3fv(u.maskWB, masks.flatMap((m) => [...m.whiteBalance]));
     gl.uniform1fv(u.maskGain, masks.map((m) => m.exposureGain));
     gl.uniform3fv(u.maskTone, masks.flatMap((m) => [m.tone.contrast, m.tone.highlights, m.tone.shadows]));
@@ -325,21 +460,52 @@ export class Renderer {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
+  /** Puts `raster` in brush layer `layer` (uploading only when it changed); returns the shape's b uniform. */
+  private brushLayer(layer: number, raster: BrushRaster): [number, number, number, number] {
+    const { gl } = this;
+    if (!this.brushTexture) {
+      this.brushTexture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.brushTexture);
+      gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.R8, BRUSH_RASTER_EDGE, BRUSH_RASTER_EDGE, BRUSH_LAYERS);
+    }
+    if (this.brushKeys[layer] !== raster.key) {
+      gl.activeTexture(gl.TEXTURE0 + BRUSH_UNIT);
+      gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.brushTexture);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, raster.width, raster.height, 1, gl.RED, gl.UNSIGNED_BYTE, raster.data);
+      this.brushKeys[layer] = raster.key;
+    }
+    return [raster.width, raster.height, layer, 0];
+  }
+
+  /** Binds the brush maps (or the empty stand-in) to their unit; always, so the sampler never shares a unit with a 2D texture. */
+  private bindBrushes(location: WebGLUniformLocation | null): void {
+    const { gl } = this;
+    gl.activeTexture(gl.TEXTURE0 + BRUSH_UNIT);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.brushTexture ?? this.emptyBrush);
+    gl.uniform1i(location, BRUSH_UNIT);
+  }
+
+  /** GPU memory of the brush maps (allocated with the first brush mask). */
+  get brushBytes(): number {
+    return this.brushTexture ? BRUSH_RASTER_EDGE * BRUSH_RASTER_EDGE * BRUSH_LAYERS : 0;
+  }
+
   private bindTarget(target: Target): void {
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, target.framebuffer);
     this.gl.viewport(0, 0, target.width, target.height);
   }
 
-  private createTarget(width: number, height: number): RenderTarget {
+  private createTarget(width: number, height: number, format: 'rgba8' | 'rg8' = 'rgba8'): RenderTarget {
     const { gl } = this;
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, format === 'rg8' ? gl.RG8 : gl.RGBA8, width, height);
     const framebuffer = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    return { texture, framebuffer, width, height };
+    return { texture, framebuffer, width, height, bytesPerPixel: format === 'rg8' ? 2 : 4 };
   }
 
   /** Reused RGBA8 target at source size, recreated when the size changes. */
@@ -347,7 +513,7 @@ export class Renderer {
     const current = this.intermediates[kind];
     if (current && current.width === size.width && current.height === size.height) return current;
     if (current) this.deleteTarget(current);
-    const created = this.createTarget(size.width, size.height);
+    const created = this.createTarget(size.width, size.height, SCRATCH_FORMAT[kind]);
     this.intermediates[kind] = created;
     return created;
   }
@@ -357,9 +523,20 @@ export class Renderer {
     this.gl.deleteTexture(t.texture);
   }
 
+  /** GPU memory held by scratch images between renders, in bytes. */
+  get scratchBytes(): number {
+    return Object.values(this.intermediates).reduce((n, t) => n + t.width * t.height * t.bytesPerPixel, 0);
+  }
+
+  /** Frees the scratch images (they are recreated on the next render that needs them). */
+  releaseScratch(): void {
+    this.releaseIntermediates();
+  }
+
   private releaseIntermediates(): void {
     for (const t of Object.values(this.intermediates)) this.deleteTarget(t);
     this.intermediates = {};
+    this.shownCache = null;
   }
 
   private pickSource(kind: SourceKind): SizedTexture {

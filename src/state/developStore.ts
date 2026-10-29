@@ -34,7 +34,15 @@ import { basicHistoryKey, basicHistoryLabel } from '../model/historyDisplay';
 import { applyPresetTo, type Preset } from '../model/presets';
 import { jsonEqual } from '../model/compare';
 import type { CurveChannel } from '../model/curveEdit';
-import { DETAIL_SLIDERS, EFFECTS_SLIDERS, GRADE_REGION_LABELS, gradeSliderDef, GRADING_SLIDERS, hslSliderDef, maskSliderDef, type HslProp } from '../model/sliders';
+import { BRUSH_FEATHER_SLIDER, BRUSH_SIZE_SLIDER, DETAIL_SLIDERS, EFFECTS_SLIDERS, GRADE_REGION_LABELS, gradeSliderDef, GRADING_SLIDERS, hslSliderDef, maskSliderDef, type HslProp } from '../model/sliders';
+
+export interface BrushOptions {
+  /** 1–100 (model/maskEdit.ts brushRadius). */
+  size: number;
+  feather: number;
+  /** Strokes erase instead of paint (Alt does this for one stroke). */
+  erase: boolean;
+}
 
 /** A decoded photo ready to render. The original file is never modified. */
 export interface LoadedPhoto {
@@ -67,8 +75,15 @@ interface DevelopState {
   maskTool: MaskKind | null;
   /** The Masks panel is open: mask pins and handles show on the canvas. */
   masksOpen: boolean;
+  /** White balance eyedropper active: the next click on the photo sets Temp/Tint (M20). */
+  wbPicking: boolean;
+  /** Brush options for new strokes (M21); not part of the edit. */
+  brush: BrushOptions;
+  setBrush: (patch: Partial<BrushOptions>) => void;
   /** Shows a photo with its saved history (or a fresh one). Closes the previous bitmap. */
   loadPhoto: (photo: LoadedPhoto, history?: History) => void;
+  /** Closes the open photo (e.g. it was deleted from the catalog). */
+  closePhoto: () => void;
   setBasic: (key: BasicSliderKey, value: number) => void;
   setTreatment: (treatment: Treatment) => void;
   /** Sets one channel's curve; `merge` lets a drag of the same channel be one history step. */
@@ -97,6 +112,7 @@ interface DevelopState {
   goToHistory: (index: number) => void;
   setInteracting: (interacting: boolean) => void;
   setCropping: (cropping: boolean) => void;
+  setWbPicking: (on: boolean) => void;
   setCrop: (rect: Rect) => void;
   setAngle: (angle: number) => void;
   setAspect: (aspect: CropAspect) => void;
@@ -162,11 +178,19 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
   selectedMaskId: null,
   maskTool: null,
   masksOpen: false,
+  wbPicking: false,
+  brush: { size: BRUSH_SIZE_SLIDER.defaultValue, feather: BRUSH_FEATHER_SLIDER.defaultValue, erase: false },
+  setBrush: (patch) => set((s) => ({ brush: { ...s.brush, ...patch } })),
   loadPhoto: (photo, history) =>
     set((s) => {
       if (s.photo && s.photo.bitmap !== photo.bitmap) s.photo.bitmap.close?.();
       const previousPhotoId = s.photo && s.photo.id !== photo.id ? s.photo.id : s.previousPhotoId;
-      return { photo, previousPhotoId, ...initialEditState(history), interacting: false, before: false, peeking: false, cropping: false, selectedMaskId: null, maskTool: null };
+      return { photo, previousPhotoId, ...initialEditState(history), interacting: false, before: false, peeking: false, cropping: false, selectedMaskId: null, maskTool: null, wbPicking: false };
+    }),
+  closePhoto: () =>
+    set((s) => {
+      s.photo?.bitmap.close?.();
+      return { photo: null, ...initialEditState(), interacting: false, before: false, peeking: false, cropping: false, selectedMaskId: null, maskTool: null, wbPicking: false };
     }),
   setBasic: (key, value) =>
     set((s) => {
@@ -202,7 +226,7 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
       const exists = s.settings.masks.some((m) => m.id === mask.id);
       if (!exists && s.settings.masks.length >= MAX_MASKS) return s;
       const masks = exists ? s.settings.masks.map((m) => (m.id === mask.id ? mask : m)) : [...s.settings.masks, mask];
-      const label = mask.kind === 'linear' ? 'New linear gradient' : 'New radial gradient';
+      const label = mask.kind === 'brush' ? (mask.strokes.at(-1)?.erase ? 'Erase' : 'Brush') : mask.kind === 'linear' ? 'New linear gradient' : 'New radial gradient';
       return { ...commit(s.history, { label, key: drawKey, settings: { ...s.settings, masks } }), selectedMaskId: mask.id };
     }),
   updateMask: (id, patch, label, key) =>
@@ -229,7 +253,9 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
     }),
   selectMask: (selectedMaskId) => set({ selectedMaskId }),
   setMaskTool: (maskTool) =>
-    set((s) => (s.photo || !maskTool ? { maskTool, cropping: maskTool ? false : s.cropping, masksOpen: maskTool ? true : s.masksOpen } : s)),
+    set((s) =>
+      s.photo || !maskTool ? { maskTool, cropping: maskTool ? false : s.cropping, masksOpen: maskTool ? true : s.masksOpen, wbPicking: maskTool ? false : s.wbPicking } : s,
+    ),
   setMasksOpen: (masksOpen) => set(() => (masksOpen ? { masksOpen } : { masksOpen, maskTool: null, selectedMaskId: null })),
   setGradeWheel: (region, patch, prop) =>
     set((s) => {
@@ -260,7 +286,9 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
   redo: () => set((s) => moveTo(redo(s.history))),
   goToHistory: (index) => set((s) => moveTo(goToHistory(s.history, index))),
   setInteracting: (interacting) => set({ interacting }),
-  setCropping: (cropping) => set((s) => (s.photo || !cropping ? { cropping, maskTool: cropping ? null : s.maskTool } : s)),
+  setCropping: (cropping) =>
+    set((s) => (s.photo || !cropping ? { cropping, maskTool: cropping ? null : s.maskTool, wbPicking: cropping ? false : s.wbPicking } : s)),
+  setWbPicking: (on) => set((s) => (s.photo || !on ? { wbPicking: on, ...(on ? { cropping: false, maskTool: null } : {}) } : s)),
   setCrop: (rect) =>
     set((s) => {
       const c = s.settings.geometry.cropRect;

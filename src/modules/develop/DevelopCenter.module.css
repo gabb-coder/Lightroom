@@ -75,6 +75,11 @@
   background: var(--color-panel);
 }
 
+/* Same specificity as the rule above, so the pressed state must be restated after it. */
+.toolbar .toolButton[aria-pressed='true'] {
+  background: var(--color-control-on);
+}
+
 .spacer {
   flex: 1 1 auto;
 }

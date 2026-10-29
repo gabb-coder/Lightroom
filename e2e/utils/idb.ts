@@ -82,3 +82,40 @@ export async function storedEditsByName(page: Page): Promise<Record<string, Stor
 export async function storeCount(page: Page, store: string): Promise<number> {
   return (await readAll(page, store)).length;
 }
+
+/**
+ * Everything in the catalog that a backup should reproduce, in a stable
+ * order: rows (minus fields a restore legitimately resets) and a SHA-256 of
+ * each stored original.
+ */
+export async function catalogDump(page: Page): Promise<unknown> {
+  return page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open('photo-editor');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    const all = (name: string) =>
+      new Promise<Record<string, unknown>[]>((resolve, reject) => {
+        const req = db.transaction(name).objectStore(name).getAll();
+        req.onsuccess = () => resolve(req.result as Record<string, unknown>[]);
+        req.onerror = () => reject(req.error);
+      });
+    const hex = async (blob: Blob) =>
+      Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer())), (b) => b.toString(16).padStart(2, '0')).join('');
+    const byId = (a: Record<string, unknown>, b: Record<string, unknown>) => String(a.id ?? a.photoId).localeCompare(String(b.id ?? b.photoId));
+    const photos = (await all('photos')).map(({ thumbVersion, ...rest }) => rest).sort(byId); // eslint-disable-line @typescript-eslint/no-unused-vars
+    const edits = (await all('edits')).map(({ updatedAt, ...rest }) => rest).sort(byId); // eslint-disable-line @typescript-eslint/no-unused-vars
+    const originals = await Promise.all((await all('originals')).sort(byId).map(async (o) => ({ photoId: o.photoId, sha: await hex(o.blob as Blob) })));
+    const result = {
+      photos,
+      edits,
+      originals,
+      collections: (await all('collections')).sort(byId),
+      snapshots: (await all('snapshots')).sort(byId),
+      presets: (await all('presets')).sort(byId),
+    };
+    db.close();
+    return result;
+  });
+}

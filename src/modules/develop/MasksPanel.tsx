@@ -2,15 +2,23 @@ import { SliderRow } from '../../components/SliderRow';
 import controls from '../../components/controls.module.css';
 import { MAX_MASKS, type Mask, type MaskAdjustKey, type MaskKind, type RadialMask } from '../../model/editSettings';
 import { maskNames } from '../../model/maskEdit';
-import { MASK_FEATHER_SLIDER, maskSliderDef } from '../../model/sliders';
+import { BRUSH_FEATHER_SLIDER, BRUSH_SIZE_SLIDER, MASK_ANGLE_SLIDER, MASK_FEATHER_SLIDER, maskSliderDef } from '../../model/sliders';
 import { useDevelopStore } from '../../state/developStore';
+import { useViewStore } from '../../state/viewStore';
 import styles from './MasksPanel.module.css';
 
 const ADJUST_KEYS: readonly MaskAdjustKey[] = ['exposure', 'contrast', 'highlights', 'shadows', 'temp', 'tint', 'saturation'];
-const TOOLS: readonly { kind: MaskKind; label: string; shortcut: string }[] = [
-  { kind: 'linear', label: 'Linear gradient', shortcut: 'M' },
-  { kind: 'radial', label: 'Radial gradient', shortcut: 'Shift+M' },
+const TOOLS: readonly { kind: MaskKind; label: string; short: string; shortcut: string }[] = [
+  { kind: 'linear', label: 'Linear gradient', short: 'Linear', shortcut: 'M' },
+  { kind: 'radial', label: 'Radial gradient', short: 'Radial', shortcut: 'Shift+M' },
+  { kind: 'brush', label: 'Brush', short: 'Brush', shortcut: 'K' },
 ];
+
+const TOOL_HINTS: Readonly<Record<MaskKind, string>> = {
+  linear: 'Drag on the photo to place it. Esc cancels.',
+  radial: 'Drag on the photo to place it. Esc cancels.',
+  brush: 'Paint on the photo; hold Alt to erase. Esc stops.',
+};
 
 function AdjustSlider({ mask, prop, disabled }: { mask: Mask; prop: MaskAdjustKey; disabled: boolean }) {
   const setMaskAdjust = useDevelopStore((s) => s.setMaskAdjust);
@@ -33,6 +41,14 @@ function RadialOptions({ mask, disabled }: { mask: RadialMask; disabled: boolean
   return (
     <>
       <SliderRow
+        def={MASK_ANGLE_SLIDER}
+        value={Math.round(mask.angle)}
+        disabled={disabled}
+        onChange={(angle) => updateMask(mask.id, { angle }, 'Rotate mask', `masks.${mask.id}.angle`)}
+        onDragStart={() => setInteracting(true)}
+        onDragEnd={() => setInteracting(false)}
+      />
+      <SliderRow
         def={MASK_FEATHER_SLIDER}
         value={mask.feather}
         disabled={disabled}
@@ -48,9 +64,41 @@ function RadialOptions({ mask, disabled }: { mask: RadialMask; disabled: boolean
   );
 }
 
+/** Size, feather and paint/erase for new brush strokes (session settings, not history). */
+function BrushOptions({ disabled }: { disabled: boolean }) {
+  const brush = useDevelopStore((s) => s.brush);
+  const setBrush = useDevelopStore((s) => s.setBrush);
+  return (
+    <div role="group" aria-label="Brush options" className={styles.brushOptions}>
+      <SliderRow def={BRUSH_SIZE_SLIDER} value={brush.size} disabled={disabled} onChange={(size) => setBrush({ size })} />
+      <SliderRow def={BRUSH_FEATHER_SLIDER} value={brush.feather} disabled={disabled} onChange={(feather) => setBrush({ feather })} />
+      <div className={`${controls.segmented} ${styles.paintMode}`} role="group" aria-label="Brush mode">
+        {([false, true] as const).map((erase) => (
+          <button key={String(erase)} type="button" className={controls.segment} aria-pressed={brush.erase === erase} disabled={disabled} onClick={() => setBrush({ erase })}>
+            {erase ? 'Erase' : 'Paint'}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** O: tint the selected mask's area on the photo. */
+function OverlayToggle({ disabled }: { disabled: boolean }) {
+  const show = useViewStore((s) => s.showMaskOverlay);
+  const setShow = useViewStore((s) => s.setShowMaskOverlay);
+  return (
+    <label className={styles.check} title="Show the selected mask's area in red (O)">
+      <input type="checkbox" checked={show} disabled={disabled} onChange={(e) => setShow(e.target.checked)} />
+      Show overlay
+    </label>
+  );
+}
+
 /**
- * Masks (M15): linear and radial gradients with their own adjustments.
- * Pick a tool and drag on the photo; select a mask to edit it.
+ * Masks (M15, M21): linear and radial gradients and brush masks, each with
+ * its own adjustments. Pick a tool and drag (or paint) on the photo; select
+ * a mask to edit it.
  */
 export function MasksPanel() {
   const disabled = useDevelopStore((s) => s.photo === null);
@@ -71,16 +119,20 @@ export function MasksPanel() {
             type="button"
             className={`${controls.button} ${styles.tool}`}
             aria-pressed={tool === t.kind}
+            aria-label={t.label}
             title={`${t.label} (${t.shortcut})`}
-            disabled={disabled || full}
+            // The brush can still paint into a selected brush mask when the list is full.
+            disabled={disabled || (full && !(t.kind === 'brush' && selected?.kind === 'brush'))}
             onClick={() => setMaskTool(tool === t.kind ? null : t.kind)}
           >
-            {t.label}
+            {t.short}
           </button>
         ))}
       </div>
-      {tool && <p className={styles.hint}>Drag on the photo to place it. Esc cancels.</p>}
-      {!tool && masks.length === 0 && <p className={styles.hint}>Brighten a sky or darken a corner: pick a gradient, then drag on the photo.</p>}
+      {tool && <p className={styles.hint}>{TOOL_HINTS[tool]}</p>}
+      {(tool === 'brush' || selected?.kind === 'brush') && <BrushOptions disabled={disabled} />}
+      {!tool && masks.length === 0 && <p className={styles.hint}>Brighten a sky or darken a corner: pick a gradient or the brush, then drag on the photo.</p>}
+      {masks.length > 0 && <OverlayToggle disabled={disabled} />}
       {full && <p className={styles.hint}>Up to {MAX_MASKS} masks per photo.</p>}
       {masks.length > 0 && (
         <ul className={styles.list} aria-label="Masks">

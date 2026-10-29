@@ -4,6 +4,7 @@ import { applySaturation, saturationScale } from './saturation';
 import { applyTone, toneParams, type ToneParams } from './tone';
 import { applyWhiteBalance, whiteBalanceGains } from './whiteBalance';
 import type { Mask, MaskAdjust } from '../model/editSettings';
+import { brushRaster, sampleBrush, type BrushRaster } from './brush';
 
 /**
  * Local adjustments (M15): each gradient mask has a weight per pixel (0..1)
@@ -17,11 +18,13 @@ import type { Mask, MaskAdjust } from '../model/editSettings';
  */
 
 export interface MaskShape {
-  kind: 'linear' | 'radial';
-  /** linear: x0, y0, x1, y1; radial: cx, cy, rx, ry (all normalized). */
+  kind: 'linear' | 'radial' | 'brush';
+  /** linear: x0, y0, x1, y1; radial: cx, cy, rx, ry (all normalized); brush: unused. */
   a: [number, number, number, number];
-  /** radial: cos(angle), sin(angle), feather 0..1, invert 0/1. */
+  /** radial: cos(angle), sin(angle), feather 0..1, invert 0/1; brush: raster width, height. */
   b: [number, number, number, number];
+  /** Brush masks (M21): the rasterized strokes (engine/brush.ts). */
+  raster: BrushRaster | null;
 }
 
 export interface MaskParams {
@@ -35,15 +38,19 @@ export interface MaskParams {
 const isNeutral = (a: MaskAdjust) => Object.values(a).every((v) => v === 0);
 
 export function maskShape(m: Mask): MaskShape {
-  if (m.kind === 'linear') return { kind: 'linear', a: [m.x0, m.y0, m.x1, m.y1], b: [0, 0, 0, 0] };
+  if (m.kind === 'linear') return { kind: 'linear', a: [m.x0, m.y0, m.x1, m.y1], b: [0, 0, 0, 0], raster: null };
+  if (m.kind === 'brush') {
+    const raster = brushRaster(m);
+    return { kind: 'brush', a: [0, 0, 0, 0], b: [raster.width, raster.height, 0, 0], raster };
+  }
   const t = (m.angle * Math.PI) / 180;
-  return { kind: 'radial', a: [m.cx, m.cy, m.rx, m.ry], b: [Math.cos(t), Math.sin(t), m.feather / 100, m.invert ? 1 : 0] };
+  return { kind: 'radial', a: [m.cx, m.cy, m.rx, m.ry], b: [Math.cos(t), Math.sin(t), m.feather / 100, m.invert ? 1 : 0], raster: null };
 }
 
-/** Masks that change something (a mask with neutral adjustments is skipped). */
+/** Masks that change something (neutral adjustments, or a brush with nothing painted, are skipped). */
 export function maskParams(masks: readonly Mask[]): MaskParams[] {
   return masks
-    .filter((m) => !isNeutral(m.adjust))
+    .filter((m) => !isNeutral(m.adjust) && !(m.kind === 'brush' && m.strokes.length === 0))
     .map((m) => ({
       shape: maskShape(m),
       whiteBalance: whiteBalanceGains(m.adjust.temp, m.adjust.tint),
@@ -63,9 +70,10 @@ const smoothstep = (a: number, b: number, x: number) => {
  * Weight of a mask at source pixel center (px, py) of a W × H image.
  * Linear: 1 up to the start point, smooth fall-off to 0 at the end point.
  * Radial: 1 inside the solid core, smooth fall-off over the feathered rim,
- * 0 outside (inverted: the reverse).
+ * 0 outside (inverted: the reverse). Brush: the painted weight map.
  */
 export function maskWeight(s: MaskShape, px: number, py: number, W: number, H: number): number {
+  if (s.kind === 'brush') return s.raster ? sampleBrush(s.raster, px / W, py / H) : 0;
   if (s.kind === 'linear') {
     const [x0, y0, x1, y1] = s.a;
     const dx = (x1 - x0) * W;

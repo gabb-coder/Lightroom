@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { copyImportIndex, displayName, masterIdOf, nextCopyNumber } from './virtualCopy';
+import { copyImportIndex, deletionSet, displayName, masterIdOf, nextCopyNumber } from './virtualCopy';
 
 describe('virtual copies', () => {
   it('names copies after their file and number', () => {
@@ -19,5 +19,14 @@ describe('virtual copies', () => {
     expect(copyImportIndex(5, 1)).toBeGreaterThan(5);
     expect(copyImportIndex(5, 999)).toBeLessThan(6);
     expect(copyImportIndex(5, 2)).toBeGreaterThan(copyImportIndex(5, 1));
+  });
+});
+
+describe('deleting photos', () => {
+  it('takes a master’s virtual copies with it, but not the other way round', () => {
+    const photos = [{ id: 'm' }, { id: 'c1', masterId: 'm' }, { id: 'c2', masterId: 'm' }, { id: 'x' }];
+    expect(deletionSet(photos, ['m'])).toEqual(['m', 'c1', 'c2']);
+    expect(deletionSet(photos, ['c1'])).toEqual(['c1']);
+    expect(deletionSet(photos, ['x', 'nope'])).toEqual(['x']);
   });
 });

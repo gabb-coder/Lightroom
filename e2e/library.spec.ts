@@ -46,7 +46,7 @@ test.describe('Library', () => {
       target.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
     }, files.map((f) => ({ name: f.name, mimeType: f.mimeType, bytes: Array.from(f.buffer) })));
     await expect(cells(page)).toHaveCount(2);
-    await expect(page.getByTestId('status-bar').getByRole('alert')).toHaveText('notes.txt is not a JPEG or PNG file.');
+    await expect(page.getByTestId('status-bar').getByRole('alert')).toHaveText('notes.txt is not a photo Darkroom can open (JPEG, PNG, WebP, AVIF and HEIC).');
   });
 
   test('reads the capture date from EXIF', async ({ page }) => {
@@ -92,7 +92,7 @@ test.describe('Library', () => {
       ...testFiles(1),
     ]);
     const metadata = page.getByRole('region', { name: 'Metadata' });
-    const row = (k: string) => metadata.locator('div', { has: page.locator('dt', { hasText: new RegExp(`^${k}$`) }) }).locator('dd');
+    const row = (k: string) => metadata.locator('dl > div', { has: page.locator('dt', { hasText: new RegExp(`^${k}$`) }) }).locator('dd');
     await cells(page).nth(0).click();
     await expect(row('Camera')).toHaveText('Canon EOS R5');
     await expect(row('Lens')).toHaveText('RF24-105mm F4 L IS USM');

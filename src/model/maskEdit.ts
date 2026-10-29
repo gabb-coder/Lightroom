@@ -1,5 +1,5 @@
 import { applyAffine, geometryMatrix, invertAffine, outputSize, type Size } from '../engine/geometry';
-import { defaultMaskAdjust, type Geometry, type LinearMask, type Mask, type RadialMask } from './editSettings';
+import { defaultMaskAdjust, MAX_STROKE_POINTS, type BrushMask, type BrushStroke, type Geometry, type LinearMask, type Mask, type RadialMask } from './editSettings';
 
 /**
  * Mask editing math (M15). Masks are stored normalized to the uploaded photo
@@ -89,6 +89,17 @@ export function moveMask<M extends Mask>(start: M, view: MaskView, dx: number, d
     const b = shift(start.x1, start.y1);
     return { ...start, x0: a.x, y0: a.y, x1: b.x, y1: b.y };
   }
+  if (start.kind === 'brush') {
+    const strokes = start.strokes.map((s) => {
+      const points: number[] = [];
+      for (let i = 0; i + 1 < s.points.length; i += 2) {
+        const q = shift(s.points[i] ?? 0, s.points[i + 1] ?? 0);
+        points.push(q.x, q.y);
+      }
+      return { ...s, points };
+    });
+    return { ...start, strokes };
+  }
   const c = shift(start.cx, start.cy);
   return { ...start, cx: c.x, cy: c.y };
 }
@@ -137,14 +148,86 @@ export function resizeRadial(m: RadialMask, view: MaskView, axis: 'x' | 'y', p: 
   return axis === 'x' ? { ...m, rx: lengthPx / W } : { ...m, ry: lengthPx / H };
 }
 
-/** Display names per kind and order: "Linear gradient 1", "Radial gradient 1"… */
+const KIND_NAMES = { linear: 'Linear gradient', radial: 'Radial gradient', brush: 'Brush' } as const;
+
+/** Display names per kind and order: "Linear gradient 1", "Radial gradient 1", "Brush 1"… */
 export function maskNames(masks: readonly Mask[]): Map<string, string> {
-  const counts = { linear: 0, radial: 0 };
+  const counts = { linear: 0, radial: 0, brush: 0 };
   const names = new Map<string, string>();
   for (const m of masks) {
     counts[m.kind]++;
-    names.set(m.id, `${m.kind === 'linear' ? 'Linear' : 'Radial'} gradient ${counts[m.kind]}`);
+    names.set(m.id, `${KIND_NAMES[m.kind]} ${counts[m.kind]}`);
   }
   return names;
+}
+
+/** Distance (frame px) of the rotate handle beyond the top of a radial mask. */
+export const ROTATE_HANDLE_PX = 24;
+
+/** The rotate handle: past the −y handle, away from the center. */
+export function rotateHandle(m: RadialMask, view: MaskView): Point2 {
+  const h = radialHandles(m, view);
+  const dx = h.yMinus.x - h.center.x;
+  const dy = h.yMinus.y - h.center.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: h.yMinus.x + (dx / len) * ROTATE_HANDLE_PX, y: h.yMinus.y + (dy / len) * ROTATE_HANDLE_PX };
+}
+
+/**
+ * Turns a radial mask so its rotate handle points at `p` (frame px). Works
+ * in source pixels, so it is right through any crop rotation or flip.
+ * `snap` rounds to 15° steps.
+ */
+export function rotateRadial(m: RadialMask, view: MaskView, p: Point2, snap = false): RadialMask {
+  const { width: W, height: H } = view.source;
+  const q = view.fromFrame(p.x, p.y);
+  const dx = (q.x - m.cx) * W;
+  const dy = (q.y - m.cy) * H;
+  if (Math.hypot(dx, dy) < 1e-9) return m;
+  // The handle sits along −y of the ellipse: (sin t, −cos t).
+  let angle = (Math.atan2(dx, -dy) * 180) / Math.PI;
+  angle = snap ? Math.round(angle / 15) * 15 : Math.round(angle * 10) / 10;
+  if (angle > 180) angle -= 360;
+  if (angle <= -180) angle += 360;
+  return { ...m, angle: angle + 0 };
+}
+
+/** Brush size slider (1–100) → radius as a fraction of the photo's long edge. */
+export function brushRadius(size: number): number {
+  return size / 500;
+}
+
+/** Brush radius in frame px, for the brush cursor. */
+export function brushRadiusFrame(radius: number, view: MaskView): number {
+  return (radius * Math.max(view.source.width, view.source.height)) / view.scale;
+}
+
+/** Minimum pointer travel (frame px) before a stroke gets another point. */
+export const STROKE_STEP_PX = 2;
+
+export function newStroke(view: MaskView, p: Point2, brush: { size: number; feather: number; erase: boolean }): BrushStroke {
+  const q = view.fromFrame(p.x, p.y);
+  return { erase: brush.erase, radius: brushRadius(brush.size), feather: brush.feather, points: [q.x, q.y] };
+}
+
+/** The stroke with `p` (frame px) added, or null when it hasn't moved far enough (or is full). */
+export function extendStroke(stroke: BrushStroke, view: MaskView, p: Point2): BrushStroke | null {
+  const n = stroke.points.length;
+  if (n >= MAX_STROKE_POINTS * 2) return null;
+  const last = view.toFrame(stroke.points[n - 2] ?? 0, stroke.points[n - 1] ?? 0);
+  if (Math.hypot(p.x - last.x, p.y - last.y) < STROKE_STEP_PX) return null;
+  const q = view.fromFrame(p.x, p.y);
+  return { ...stroke, points: [...stroke.points, q.x, q.y] };
+}
+
+/** A new, empty brush mask for a photo of `source` size. */
+export function createBrushMask(id: string, source: Size): BrushMask {
+  return { id, kind: 'brush', aspect: source.width / source.height, strokes: [], adjust: defaultMaskAdjust() };
+}
+
+/** Where a brush mask's pin sits (normalized): the start of its first stroke. */
+export function brushPin(m: BrushMask): { x: number; y: number } | null {
+  const p = m.strokes[0]?.points;
+  return p ? { x: p[0] ?? 0, y: p[1] ?? 0 } : null;
 }
 
