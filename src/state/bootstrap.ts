@@ -2,6 +2,7 @@ import { liveQuery } from 'dexie';
 import { db } from '../db/db';
 import { APP_MODULES, useAppStore, type AppModule } from './appStore';
 import { startEditPersistence } from './editPersistence';
+import { backfillExif } from './exifBackfill';
 import { THUMB_SIZE, useLibraryStore } from './libraryStore';
 import { startPhotoSession } from './photoSession';
 import { loadExportPresets } from './exportStore';
@@ -32,6 +33,7 @@ export function startCatalog(): void {
   });
   void loadSavedPresets().catch(() => undefined);
   void loadExportPresets().catch(() => undefined);
+  void backfillExif().catch(() => undefined);
   startPhotoSession();
   startEditPersistence();
   startThumbnailUpdater();

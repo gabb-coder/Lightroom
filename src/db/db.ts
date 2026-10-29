@@ -5,6 +5,18 @@ import type { ExportPreset } from '../model/exportOptions';
 import type { Preset } from '../model/presets';
 
 export type Flag = 'pick' | 'reject';
+
+/** Camera fields from the original's EXIF (io/exif.ts); null when the file doesn't say. */
+export interface PhotoExif {
+  camera: string | null;
+  lens: string | null;
+  iso: number | null;
+  /** Seconds. */
+  exposureTime: number | null;
+  fNumber: number | null;
+  /** Millimetres. */
+  focalLength: number | null;
+}
 export type ColorLabel = 'red' | 'yellow' | 'green' | 'blue' | 'purple';
 
 /** Catalog row: small, so the whole table can be loaded and filtered in memory. */
@@ -20,6 +32,8 @@ export interface PhotoRecord {
   /** EXIF capture time (local, epoch ms), or the file's last-modified time. */
   captureDate: number;
   captureDateFromExif: boolean;
+  /** Undefined only for photos imported before EXIF fields were read (state/exifBackfill.ts fills them). */
+  exif?: PhotoExif;
   rating: number;
   flag: Flag | null;
   colorLabel: ColorLabel | null;

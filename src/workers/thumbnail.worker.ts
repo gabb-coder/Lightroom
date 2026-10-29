@@ -1,9 +1,9 @@
 /**
- * Thumbnail worker: decodes photos off the main thread, reads the EXIF date
+ * Thumbnail worker: decodes photos off the main thread, reads EXIF (date, camera)
  * and makes JPEG thumbnails. Canvas 2D is fine here: thumbnails of originals
  * are resizes, not edits. Edited thumbnails arrive as already-rendered pixels.
  */
-import { EXIF_SCAN_BYTES, readExifCaptureDate } from '../io/exif';
+import { EXIF_SCAN_BYTES, readExif } from '../io/exif';
 import { fitLongEdge } from '../render/proxy';
 import { THUMBNAIL_QUALITY, type DecodeResult, type ThumbnailRequest, type ThumbnailResponse } from './thumbnailProtocol';
 
@@ -24,14 +24,14 @@ async function toJpeg(source: ImageBitmap | ImageData, width: number, height: nu
 }
 
 async function decode(blob: Blob, longEdge: number): Promise<DecodeResult> {
-  const exifDate = readExifCaptureDate(await blob.slice(0, EXIF_SCAN_BYTES).arrayBuffer());
+  const exif = readExif(await blob.slice(0, EXIF_SCAN_BYTES).arrayBuffer());
   const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
   try {
     const size = fitLongEdge(bitmap, longEdge);
     const small = await createImageBitmap(bitmap, { resizeWidth: size.width, resizeHeight: size.height, resizeQuality: 'high' });
     const thumbnail = await toJpeg(small, size.width, size.height);
     small.close();
-    return { width: bitmap.width, height: bitmap.height, exifDate, thumbnail };
+    return { width: bitmap.width, height: bitmap.height, exif, thumbnail };
   } finally {
     bitmap.close();
   }

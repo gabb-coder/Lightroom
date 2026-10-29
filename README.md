@@ -1,10 +1,10 @@
-# Lightroom Web
+# Darkroom
 
 A browser-based, Lightroom-style, non-destructive photo editor with a Library module (organize
 photos) and a Develop module (edit photos). It is a static web app with no
 backend: photos, edits and presets stay in the browser (IndexedDB) and are
-never uploaded. The name shown in the app, "Darkslide", is a placeholder
-from the design mockups; change it in `src/appName.ts`.
+never uploaded. The app is called Darkroom (`src/appName.ts`); the design
+mockups use the placeholder "Darkslide".
 
 Stack: Vite, React 18, TypeScript (strict), Zustand, Dexie, raw WebGL2,
 Vitest, Playwright.

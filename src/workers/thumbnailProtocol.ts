@@ -1,3 +1,5 @@
+import type { ExifInfo } from '../io/exif';
+
 /** Messages between the main thread and thumbnail.worker.ts. */
 
 export type ThumbnailRequest =
@@ -7,8 +9,8 @@ export type ThumbnailRequest =
 export interface DecodeResult {
   width: number;
   height: number;
-  /** EXIF capture time (epoch ms), or null. */
-  exifDate: number | null;
+  /** EXIF capture time and camera fields (null where missing). */
+  exif: ExifInfo;
   thumbnail: Blob;
 }
 

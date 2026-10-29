@@ -1,8 +1,9 @@
 # CLAUDE.md
 
 A browser-based, non-destructive Lightroom-style photo editor. Static site,
-no backend, deployed to Render. The UI name "Darkslide" is a placeholder from
-the mockups; it lives only in `src/appName.ts`.
+no backend, deployed to Render. The app is called Darkroom (`src/appName.ts`);
+the mockups' "Darkslide" is a placeholder. The repo, package and Render
+service keep the name `lightroom-web`.
 
 - `SPEC.md` is the source of truth for scope.
 - `design/README.md` explains the mockups, tokens and expected behavior; read
@@ -81,6 +82,9 @@ component library.
   q = x^(1/2.2) composed of individually monotonic parts; keep it that way.
 - Histogram: computed from a 512px rendered copy after every render
   (`rendererController.ts`), never from the original.
+- EXIF (`io/exif.ts`): capture date plus camera, lens, ISO, shutter,
+  aperture and focal length, read at import (thumbnail worker) into
+  `PhotoRecord.exif`; `state/exifBackfill.ts` fills it for older photos.
 - `src/db/db.ts` Dexie catalog: photos, originals (never modified),
   thumbnails (base + edited), edits (history per photo), presets. Anything
   read back goes through `parseEditSettings` / `parseStoredHistory`.

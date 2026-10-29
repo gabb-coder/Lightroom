@@ -1,4 +1,5 @@
 import { db, type PhotoRecord } from '../db/db';
+import { photoExif } from './exif';
 import { decodePhoto } from '../workers/thumbnailClient';
 import { isAcceptedFile } from './loadPhoto';
 
@@ -56,8 +57,9 @@ export async function importFiles(files: readonly File[], onProgress?: (p: Impor
         size: file.size,
         width: decoded.width,
         height: decoded.height,
-        captureDate: decoded.exifDate ?? file.lastModified,
-        captureDateFromExif: decoded.exifDate !== null,
+        captureDate: decoded.exif.captureDate ?? file.lastModified,
+        captureDateFromExif: decoded.exif.captureDate !== null,
+        exif: photoExif(decoded.exif),
         rating: 0,
         flag: null,
         colorLabel: null,

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { canvasPixels, slider, waitForFullRender } from './utils/develop';
-import { withExifDate } from './utils/jpeg';
+import { withExif, withExifDate } from './utils/jpeg';
 import { countDifferentPixels } from './utils/png';
 import { cells, gotoLibrary, importViaButton, testFiles } from './utils/library';
 
@@ -64,6 +64,71 @@ test.describe('Library', () => {
     const metadata = page.getByRole('region', { name: 'Metadata' });
     await expect(metadata).toContainText('2021');
     await expect(metadata).toContainText('09:15');
+  });
+
+  test('reads camera, lens, focal length, exposure and ISO from EXIF; fills them in for older photos', async ({ page }) => {
+    await gotoLibrary(page);
+    const jpeg = await page.evaluate(async () => {
+      const canvas = new OffscreenCanvas(60, 40);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('no 2d');
+      ctx.fillStyle = '#68a';
+      ctx.fillRect(0, 0, 60, 40);
+      const blob = await canvas.convertToBlob({ type: 'image/jpeg' });
+      return Array.from(new Uint8Array(await blob.arrayBuffer()));
+    });
+    const tagged = withExif(new Uint8Array(jpeg), {
+      ifd0: { 0x010f: 'Canon', 0x0110: 'Canon EOS R5' },
+      exif: {
+        0x829a: { rational: [1, 125] },
+        0x829d: { rational: [8, 1] },
+        0x8827: { short: 200 },
+        0x920a: { rational: [35, 1] },
+        0xa434: 'RF24-105mm F4 L IS USM',
+      },
+    });
+    await importViaButton(page, [
+      { name: 'camera.jpg', mimeType: 'image/jpeg', buffer: tagged },
+      ...testFiles(1),
+    ]);
+    const metadata = page.getByRole('region', { name: 'Metadata' });
+    const row = (k: string) => metadata.locator('div', { has: page.locator('dt', { hasText: new RegExp(`^${k}$`) }) }).locator('dd');
+    await cells(page).nth(0).click();
+    await expect(row('Camera')).toHaveText('Canon EOS R5');
+    await expect(row('Lens')).toHaveText('RF24-105mm F4 L IS USM');
+    await expect(row('Focal length')).toHaveText('35 mm');
+    await expect(row('Exposure')).toHaveText('1/125 s at f/8');
+    await expect(row('ISO')).toHaveText('200');
+    await page.screenshot({ path: 'test-results/screenshots/exif-metadata.png' });
+
+    // A PNG has no EXIF.
+    await cells(page).nth(1).click();
+    await expect(row('Camera')).toHaveText('Unknown');
+    await expect(row('ISO')).toHaveText('Unknown');
+
+    // Photos imported before these fields existed get them on the next start.
+    await page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const req = indexedDB.open('photo-editor');
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      const store = db.transaction('photos', 'readwrite').objectStore('photos');
+      const rows = await new Promise<Record<string, unknown>[]>((resolve) => {
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result as Record<string, unknown>[]);
+      });
+      for (const r of rows) {
+        delete r.exif;
+        store.put(r);
+      }
+      await new Promise((r) => (store.transaction.oncomplete = r));
+      db.close();
+    });
+    await page.reload();
+    await cells(page).nth(0).click();
+    await expect(row('Camera')).toHaveText('Canon EOS R5');
+    await expect(row('Exposure')).toHaveText('1/125 s at f/8');
   });
 
   test('the thumbnail size slider changes the grid columns', async ({ page }) => {

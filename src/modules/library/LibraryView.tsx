@@ -2,7 +2,8 @@ import { ImportIcon, PhotosIcon, RecentIcon } from '../../components/icons';
 import { PhotoThumb } from '../../components/PhotoThumb';
 import controls from '../../components/controls.module.css';
 import { useFileDrop } from '../../components/useFileDrop';
-import { formatBytes, formatDateTime } from '../../model/format';
+import { formatBytes, formatDateTime, formatExposure, formatFocalLength } from '../../model/format';
+import type { PhotoRecord } from '../../db/db';
 import { useAppStore } from '../../state/appStore';
 import { openImportPicker } from '../../state/importActions';
 import { COLOR_LABELS, labelInfo } from '../../model/organize';
@@ -154,6 +155,20 @@ function DevelopSettingsPanel() {
   );
 }
 
+const UNKNOWN = 'Unknown';
+
+/** Camera rows in design order (design/Library.dc.html); "Unknown" when the file doesn't say. */
+function exifRows(photo: PhotoRecord): [string, string][] {
+  const e = photo.exif;
+  return [
+    ['Camera', e?.camera ?? UNKNOWN],
+    ['Lens', e?.lens ?? UNKNOWN],
+    ['Focal length', e?.focalLength ? formatFocalLength(e.focalLength) : UNKNOWN],
+    ['Exposure', formatExposure(e?.exposureTime, e?.fNumber) ?? UNKNOWN],
+    ['ISO', e?.iso ? String(e.iso) : UNKNOWN],
+  ];
+}
+
 function DetailsPanel() {
   const photo = useLibraryStore((s) => s.photos.find((p) => p.id === s.selectedId) ?? null);
   const selectedCount = useLibraryStore((s) => s.selection.ids.length);
@@ -163,6 +178,7 @@ function DetailsPanel() {
         ['File name', photo.fileName],
         ['Captured', formatDateTime(photo.captureDate)],
         ['Dimensions', `${photo.width} × ${photo.height}`],
+        ...exifRows(photo),
         ['File size', formatBytes(photo.size)],
         ['Rating', photo.rating ? `${photo.rating} of 5` : 'None'],
         ['Flag', photo.flag === 'pick' ? 'Picked' : photo.flag === 'reject' ? 'Rejected' : 'None'],
