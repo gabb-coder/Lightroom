@@ -90,7 +90,11 @@ describe('watermark options (M23)', () => {
     expect(normalizeExportOptions({}).watermark).toEqual(DEFAULT_WATERMARK);
     expect(DEFAULT_WATERMARK.enabled).toBe(false);
     const w = normalizeWatermark({ enabled: true, logoId: 'a', position: 'middle', size: 500, opacity: -3, inset: 2.4 });
-    expect(w).toEqual({ enabled: true, logoId: 'a', position: 'bottom-right', size: 100, opacity: 5, inset: 2 });
+    expect(w).toEqual({ ...DEFAULT_WATERMARK, enabled: true, logoId: 'a', size: 100, opacity: 5, inset: 2 });
+    // Text watermarks (M24): one line, a valid color.
+    const t = normalizeWatermark({ kind: 'text', text: '© Me\nand you', textColor: '#FFD400', textShadow: false });
+    expect([t.kind, t.text, t.textColor, t.textShadow]).toEqual(['text', '© Me and you', '#ffd400', false]);
+    expect(normalizeWatermark({ kind: 'video', textColor: 'red', text: 'x'.repeat(500) })).toMatchObject({ kind: 'logo', textColor: '#ffffff', text: 'x'.repeat(200) });
     expect(normalizeWatermark('nope')).toEqual(DEFAULT_WATERMARK);
   });
 
@@ -98,6 +102,8 @@ describe('watermark options (M23)', () => {
     const on = normalizeExportOptions({ watermark: { ...DEFAULT_WATERMARK, enabled: true, logoId: 'x' } });
     expect(hasWatermark(on)).toBe(true);
     expect(hasWatermark(normalizeExportOptions({ watermark: { ...DEFAULT_WATERMARK, enabled: true } }))).toBe(false);
+    expect(hasWatermark(normalizeExportOptions({ watermark: { ...DEFAULT_WATERMARK, enabled: true, kind: 'text', text: '  ' } }))).toBe(false);
+    expect(hasWatermark(normalizeExportOptions({ watermark: { ...DEFAULT_WATERMARK, enabled: true, kind: 'text', text: '© Me' } }))).toBe(true);
     const preset = BUILTIN_EXPORT_PRESETS[1]?.options ?? DEFAULT_EXPORT_OPTIONS;
     expect(withKept(preset, on).watermark).toEqual(on.watermark);
     expect(sameLook(withKept(preset, on), preset)).toBe(true);

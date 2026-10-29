@@ -153,3 +153,12 @@ export function applyWatermark(
   compositeLogo(image, resizeLogo(logo, rect), rect, opacity);
   return rect;
 }
+
+/** Shadow color for text of color `hex` (#rrggbb): dark behind light text, light behind dark text. */
+export function textShadowColor(hex: string): string {
+  const n = Number.parseInt(hex.slice(1), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  // Rec. 709 luma of the encoded values is enough to pick a side.
+  const luma = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luma > 0.5 ? 'rgba(0, 0, 0, 0.55)' : 'rgba(255, 255, 255, 0.55)';
+}

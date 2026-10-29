@@ -26,10 +26,20 @@ export interface ExportOptions {
   watermark: WatermarkOptions;
 }
 
+export type WatermarkKind = 'logo' | 'text';
+
 export interface WatermarkOptions {
   enabled: boolean;
+  /** A stored logo image (M23) or a line of text (M24). */
+  kind: WatermarkKind;
   /** Stored logo (db `logos`), or null before one is added. */
   logoId: string | null;
+  /** Text watermark, e.g. "© Your Name" (one line). */
+  text: string;
+  /** Text color, #rrggbb. */
+  textColor: string;
+  /** A soft shadow behind the text, so it reads on any photo. */
+  textShadow: boolean;
   position: WatermarkPosition;
   /** Logo width, % of the photo's width. */
   size: number;
@@ -41,7 +51,20 @@ export interface WatermarkOptions {
 
 export const WATERMARK_RANGES = { size: { min: 2, max: 100 }, opacity: { min: 5, max: 100 }, inset: { min: 0, max: 25 } } as const;
 
-export const DEFAULT_WATERMARK: WatermarkOptions = { enabled: false, logoId: null, position: 'bottom-right', size: 15, opacity: 85, inset: 3 };
+export const MAX_WATERMARK_TEXT = 200;
+
+export const DEFAULT_WATERMARK: WatermarkOptions = {
+  enabled: false,
+  kind: 'logo',
+  logoId: null,
+  text: '',
+  textColor: '#ffffff',
+  textShadow: true,
+  position: 'bottom-right',
+  size: 15,
+  opacity: 85,
+  inset: 3,
+};
 
 export interface ExportPreset {
   id: string;
@@ -115,7 +138,12 @@ export function normalizeWatermark(raw: unknown): WatermarkOptions {
     typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.min(r.max, Math.max(r.min, v))) : fallback;
   return {
     enabled: w.enabled === true,
+    kind: w.kind === 'text' ? 'text' : 'logo',
     logoId: typeof w.logoId === 'string' && w.logoId ? w.logoId : null,
+    // One line: line breaks become spaces.
+    text: typeof w.text === 'string' ? w.text.replace(/[\r\n\t]+/g, ' ').slice(0, MAX_WATERMARK_TEXT) : d.text,
+    textColor: typeof w.textColor === 'string' && /^#[0-9a-f]{6}$/i.test(w.textColor) ? w.textColor.toLowerCase() : d.textColor,
+    textShadow: typeof w.textShadow === 'boolean' ? w.textShadow : d.textShadow,
     position: WATERMARK_POSITIONS.includes(w.position as WatermarkPosition) ? (w.position as WatermarkPosition) : d.position,
     size: num(w.size, WATERMARK_RANGES.size, d.size),
     opacity: num(w.opacity, WATERMARK_RANGES.opacity, d.opacity),
@@ -123,9 +151,11 @@ export function normalizeWatermark(raw: unknown): WatermarkOptions {
   };
 }
 
-/** True when exports get a logo (switched on and a logo chosen). */
+/** True when exports get a watermark: switched on, with a logo chosen or some text. */
 export function hasWatermark(o: Pick<ExportOptions, 'watermark'>): boolean {
-  return o.watermark.enabled && o.watermark.logoId !== null;
+  const w = o.watermark;
+  if (!w.enabled) return false;
+  return w.kind === 'text' ? w.text.trim() !== '' : w.logoId !== null;
 }
 
 /** Size of the exported image for a rendered output of `width × height`. */
