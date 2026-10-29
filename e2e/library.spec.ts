@@ -46,7 +46,7 @@ test.describe('Library', () => {
       target.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
     }, files.map((f) => ({ name: f.name, mimeType: f.mimeType, bytes: Array.from(f.buffer) })));
     await expect(cells(page)).toHaveCount(2);
-    await expect(page.getByTestId('status-bar').getByRole('alert')).toHaveText('notes.txt is not a JPEG or PNG file.');
+    await expect(page.getByTestId('status-bar').getByRole('alert')).toHaveText('notes.txt is not a photo Darkroom can open (JPEG, PNG, WebP, AVIF and HEIC).');
   });
 
   test('reads the capture date from EXIF', async ({ page }) => {

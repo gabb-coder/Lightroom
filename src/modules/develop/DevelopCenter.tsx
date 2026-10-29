@@ -152,7 +152,7 @@ function EmptyStage() {
       ) : libraryEmpty ? (
         <>
           <p className={styles.emptyTitle}>No photos yet</p>
-          <p className={styles.emptyHint}>Drop JPEG or PNG files here, or import them from your computer.</p>
+          <p className={styles.emptyHint}>Drop photos here (JPEG, PNG, WebP, AVIF), or import them from your computer.</p>
           <button type="button" className={`${controls.button} ${styles.openButton}`} onClick={openImportPicker}>
             Import photos…
           </button>

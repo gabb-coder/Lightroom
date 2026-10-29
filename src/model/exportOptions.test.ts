@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUILTIN_EXPORT_PRESETS, exportFileName, exportSize, normalizeExportOptions } from './exportOptions';
+import { BUILTIN_EXPORT_PRESETS, exportFileName, exportSize, normalizeExportOptions, sameLook, subfolderOf, withLocation, zipEntryPath, zipFileName } from './exportOptions';
 import { uniqueFileNames } from './exportOptions';
 
 describe('export presets', () => {
@@ -51,5 +51,36 @@ describe('normalizeExportOptions', () => {
 describe('batch file names', () => {
   it('adds -2, -3 to later duplicates (case-insensitive) and keeps unique names', () => {
     expect(uniqueFileNames(['a.jpg', 'b.jpg', 'A.jpg', 'a.jpg', 'a-2.jpg'])).toEqual(['a.jpg', 'b.jpg', 'A-2.jpg', 'a-3.jpg', 'a-2-2.jpg']);
+  });
+});
+
+describe('export locations (M19)', () => {
+  it('defaults to one ZIP in an "Exports" folder and normalizes stored values', () => {
+    const o = normalizeExportOptions({});
+    expect([o.destination, o.useSubfolder, o.subfolder]).toEqual(['zip', true, 'Exports']);
+    expect(normalizeExportOptions({ destination: 'cloud' as never }).destination).toBe('zip');
+    const typed = normalizeExportOptions({ subfolder: ' Trip/2024:\u0001 ' });
+    expect(typed.subfolder).toBe(' Trip_2024__ ');
+    expect(subfolderOf(typed)).toBe('Trip_2024__');
+    expect(subfolderOf({ useSubfolder: true, subfolder: '..' })).toBe('');
+    expect(subfolderOf({ useSubfolder: false, subfolder: 'Trip' })).toBe('');
+  });
+
+  it('names the ZIP and its entries after the subfolder', () => {
+    const o = normalizeExportOptions({});
+    expect(zipFileName(o)).toBe('Exports.zip');
+    expect(zipEntryPath(o, 'a.jpg')).toBe('Exports/a.jpg');
+    const flat = { ...o, useSubfolder: false };
+    expect(zipFileName(flat)).toBe('Darkroom export.zip');
+    expect(zipEntryPath(flat, 'a.jpg')).toBe('a.jpg');
+  });
+
+  it('presets keep the current location; the look ignores it', () => {
+    const mine = normalizeExportOptions({ destination: 'folder', subfolder: 'Trip' });
+    const preset = BUILTIN_EXPORT_PRESETS[1]?.options ?? normalizeExportOptions({});
+    const applied = withLocation(preset, mine);
+    expect([applied.destination, applied.subfolder, applied.quality]).toEqual(['folder', 'Trip', preset.quality]);
+    expect(sameLook(applied, preset)).toBe(true);
+    expect(sameLook(applied, mine)).toBe(false);
   });
 });

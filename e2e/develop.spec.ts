@@ -46,10 +46,10 @@ test.describe('Develop: open a photo', () => {
     await expect(page.getByTestId('info-strip')).toContainText('dropped.png');
   });
 
-  test('rejects files that are not JPEG or PNG', async ({ page }) => {
+  test('rejects files that are not photos it can open', async ({ page }) => {
     await gotoDevelop(page);
     await page.getByTestId('file-input').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hi') });
-    await expect(page.getByRole('alert')).toHaveText('notes.txt is not a JPEG or PNG file.');
+    await expect(page.getByRole('alert')).toHaveText('notes.txt is not a photo Darkroom can open (JPEG, PNG, WebP, AVIF and HEIC).');
   });
 });
 

@@ -123,6 +123,17 @@
   color: var(--color-text-bright);
 }
 
+.dest {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dest .select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .hint {
   color: var(--color-muted);
 }

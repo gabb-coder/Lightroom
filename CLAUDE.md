@@ -169,6 +169,15 @@ component library.
   can't do WebGL2, or with `?export=main`). Renderer scratch: blur target
   is RG8; `releaseScratch()` after exports. Manual cross-browser checklist:
   `docs/BROWSER_CHECKLIST.md` (only Chromium is automated).
+- Formats (M19): import accepts JPEG/PNG/WebP/AVIF/HEIC (`io/loadPhoto.ts`
+  `importTypeOf`, also by extension when the type is empty; HEIC only
+  where the browser decodes it, otherwise its own message). Export
+  destination (`ExportOptions.destination`: downloads / zip / folder, plus
+  subfolder) is a location setting: presets keep it (`withLocation`) and
+  changing it keeps the preset highlighted. `exportStore.runExport` picks
+  the folder first (needs the click's gesture), then delivers per
+  destination; a single photo never gets a ZIP. `io/folderAccess.ts` never
+  overwrites (`name-2.ext`). e2e mocks `showDirectoryPicker`.
 - Export (M7): `workers/export.worker.ts` runs the same `Renderer` on an
   OffscreenCanvas at full resolution (readPixels), resizes with the browser
   scaler only when asked, encodes, and copies EXIF per policy

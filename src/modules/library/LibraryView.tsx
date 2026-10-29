@@ -28,7 +28,7 @@ function DropZone() {
         <ImportIcon size={28} />
       </span>
       <span className={styles.dropTitle}>Drop photos here to import</span>
-      <span className={styles.dropHint}>JPEG and PNG. Originals stay untouched.</span>
+      <span className={styles.dropHint}>JPEG, PNG, WebP and AVIF (HEIC in Safari). Originals stay untouched.</span>
       <button type="button" className={`${controls.primary} ${styles.dropButton}`} onClick={openImportPicker}>
         Choose files
       </button>
