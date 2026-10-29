@@ -1,27 +1,30 @@
 import { create } from 'zustand';
 import { db } from '../db/db';
 import { downloadBlob } from '../io/download';
-import type { EditSettings } from '../model/editSettings';
 import {
   BUILTIN_EXPORT_PRESETS,
   exportFileName,
   normalizeExportOptions,
   type ExportOptions,
   type ExportPreset,
+  uniqueFileNames,
 } from '../model/exportOptions';
-import { currentSettings, parseStoredHistory } from '../model/history';
 import { cancelExport, ExportCancelled, exportInWorker } from '../workers/exportClient';
 import { STAGE_PROGRESS } from '../workers/exportProtocol';
 import { useAppStore } from './appStore';
-import { useDevelopStore } from './developStore';
 import { flushEdits } from './editPersistence';
-import { useLibraryStore } from './libraryStore';
+import { selectLibraryList, useLibraryStore } from './libraryStore';
+import { settingsOf } from './settingsSync';
 import { readUiPrefs, writeUiPrefs } from './uiPrefs';
 
 export interface ExportJob {
   status: 'running' | 'done' | 'error' | 'cancelled';
+  /** The file being written (or the last one). */
   fileName: string;
-  /** 0..1 */
+  /** 0-based photo being exported, and the batch size. */
+  index: number;
+  total: number;
+  /** Whole batch, 0..1 */
   progress: number;
   message?: string;
 }
@@ -72,13 +75,6 @@ export async function loadExportPresets(): Promise<void> {
     .setUserPresets(rows.filter((p) => typeof p.name === 'string').map((p) => ({ id: p.id, name: p.name, options: normalizeExportOptions(p.options) })));
 }
 
-/** The settings to export: the open photo's live settings, or the saved ones. */
-async function settingsFor(photoId: string): Promise<EditSettings> {
-  const develop = useDevelopStore.getState();
-  if (develop.photo?.id === photoId) return develop.settings;
-  return currentSettings(parseStoredHistory((await db.edits.get(photoId))?.history));
-}
-
 let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
 function finish(job: ExportJob): void {
@@ -93,32 +89,62 @@ export function closeExportDialog(): void {
   app.setModule(app.returnModule);
 }
 
+/** The photos to export: every selected photo, in the order the grid shows them. */
+export function exportTargets(): string[] {
+  const library = useLibraryStore.getState();
+  const selected = new Set(library.selection.ids);
+  const ordered = selectLibraryList(library)
+    .map((p) => p.id)
+    .filter((id) => selected.has(id));
+  return [...ordered, ...library.selection.ids.filter((id) => !ordered.includes(id))];
+}
+
+/** Renders one photo in the worker and downloads it. */
+async function exportOne(photoId: string, fileName: string, onProgress: (fraction: number) => void): Promise<void> {
+  const original = await db.originals.get(photoId);
+  if (!original) throw new Error('This photo is no longer in the catalog.');
+  const settings = await settingsOf(photoId);
+  const result = await exportInWorker(original.blob, settings, useExportStore.getState().options, (stage) => onProgress(STAGE_PROGRESS[stage]));
+  downloadBlob(result.blob, fileName);
+}
+
 /**
- * Exports the focused photo at full resolution in the worker and downloads
- * it. The original stored in the catalog is only read.
+ * Exports the selected photos one after another at full resolution in the
+ * worker and downloads each file. Originals in the catalog are only read.
+ * A photo that fails is reported and the rest still export; Cancel stops
+ * the batch.
  */
 export async function runExport(): Promise<void> {
-  const photoId = useLibraryStore.getState().selectedId;
-  if (!photoId || useExportStore.getState().job?.status === 'running') return;
+  const ids = exportTargets();
+  if (ids.length === 0 || useExportStore.getState().job?.status === 'running') return;
   const { options, setJob } = useExportStore.getState();
   if (hideTimer) clearTimeout(hideTimer);
   closeExportDialog();
   await flushEdits();
-  const [record, original] = await Promise.all([db.photos.get(photoId), db.originals.get(photoId)]);
-  if (!record || !original) return finish({ status: 'error', fileName: '', progress: 0, message: 'This photo is no longer in the catalog.' });
-  const fileName = exportFileName(options, record, 1);
-  setJob({ status: 'running', fileName, progress: 0 });
-  try {
-    const settings = await settingsFor(photoId);
-    const result = await exportInWorker(original.blob, settings, options, (stage) =>
-      setJob({ status: 'running', fileName, progress: STAGE_PROGRESS[stage] }),
-    );
-    downloadBlob(result.blob, fileName);
-    finish({ status: 'done', fileName, progress: 1 });
-  } catch (error) {
-    if (error instanceof ExportCancelled) finish({ status: 'cancelled', fileName, progress: 0 });
-    else finish({ status: 'error', fileName, progress: 0, message: error instanceof Error ? error.message : String(error) });
+  const records = await Promise.all(ids.map((id) => db.photos.get(id)));
+  const names = uniqueFileNames(records.map((r, i) => (r ? exportFileName(options, r, i + 1) : '')));
+  const total = ids.length;
+  const failed: string[] = [];
+  let lastError = '';
+  for (let index = 0; index < total; index++) {
+    const fileName = names[index] ?? '';
+    const progress = (fraction: number) => setJob({ status: 'running', fileName, index, total, progress: (index + fraction) / total });
+    progress(0);
+    try {
+      const id = ids[index];
+      if (!id || !records[index]) throw new Error('This photo is no longer in the catalog.');
+      await exportOne(id, fileName, progress);
+    } catch (error) {
+      if (error instanceof ExportCancelled) return finish({ status: 'cancelled', fileName, index, total, progress: index / total });
+      failed.push(records[index]?.fileName ?? fileName);
+      lastError = error instanceof Error ? error.message : String(error);
+    }
   }
+  const last = names[total - 1] ?? '';
+  if (failed.length === 0) return finish({ status: 'done', fileName: total > 1 ? `${total} photos` : last, index: total - 1, total, progress: 1 });
+  const message =
+    total === 1 ? lastError : `${total - failed.length} of ${total} exported. Could not export ${failed.join(', ')}: ${lastError}`;
+  finish({ status: 'error', fileName: last, index: total - 1, total, progress: 1, message });
 }
 
 export function cancelRunningExport(): void {

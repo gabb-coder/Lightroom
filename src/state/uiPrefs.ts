@@ -11,6 +11,8 @@ export interface UiPrefs {
   exportOptions?: Record<string, unknown>;
   selectedId?: string;
   thumbSize?: number;
+  /** Panels last ticked in the Copy / Sync settings dialog. */
+  copyPanels?: string[];
 }
 
 export function readUiPrefs(): UiPrefs {

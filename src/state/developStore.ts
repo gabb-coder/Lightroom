@@ -26,6 +26,7 @@ import {
 } from '../model/history';
 import { basicHistoryKey, basicHistoryLabel } from '../model/historyDisplay';
 import { applyPresetTo, type Preset } from '../model/presets';
+import { jsonEqual } from '../model/compare';
 import type { CurveChannel } from '../model/curveEdit';
 import { DETAIL_SLIDERS, EFFECTS_SLIDERS, hslSliderDef, type HslProp } from '../model/sliders';
 
@@ -41,6 +42,8 @@ export interface LoadedPhoto {
 
 interface DevelopState {
   photo: LoadedPhoto | null;
+  /** The photo shown before this one (Develop's "Previous" button). */
+  previousPhotoId: string | null;
   /** Every edit is a history step; `settings` is always the step at the cursor. */
   history: History;
   settings: EditSettings;
@@ -62,6 +65,8 @@ interface DevelopState {
   setDetail: (key: DetailKey, value: number) => void;
   setEffect: (key: EffectsKey, value: number) => void;
   applyPreset: (preset: Preset) => void;
+  /** Replaces all settings as one history step (paste, sync, Previous); no step if nothing changes. */
+  applySettings: (label: string, settings: EditSettings) => void;
   resetAll: () => void;
   undo: () => void;
   redo: () => void;
@@ -124,6 +129,7 @@ function initialEditState(history?: History): Pick<DevelopState, 'history' | 'se
  */
 export const useDevelopStore = create<DevelopState>()((set) => ({
   photo: null,
+  previousPhotoId: null,
   ...initialEditState(),
   interacting: false,
   before: false,
@@ -132,7 +138,8 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
   loadPhoto: (photo, history) =>
     set((s) => {
       if (s.photo && s.photo.bitmap !== photo.bitmap) s.photo.bitmap.close?.();
-      return { photo, ...initialEditState(history), interacting: false, before: false, peeking: false, cropping: false };
+      const previousPhotoId = s.photo && s.photo.id !== photo.id ? s.photo.id : s.previousPhotoId;
+      return { photo, previousPhotoId, ...initialEditState(history), interacting: false, before: false, peeking: false, cropping: false };
     }),
   setBasic: (key, value) =>
     set((s) => {
@@ -171,6 +178,8 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
     }),
   applyPreset: (preset) =>
     set((s) => commit(s.history, { label: `Preset: ${preset.name}`, key: null, settings: applyPresetTo(s.settings, preset) })),
+  applySettings: (label, settings) =>
+    set((s) => (jsonEqual(settings, s.settings) ? s : commit(s.history, { label, key: null, settings }))),
   resetAll: () => set((s) => commit(s.history, { label: 'Reset all', key: null, settings: defaultEditSettings() })),
   undo: () => set((s) => moveTo(undo(s.history))),
   redo: () => set((s) => moveTo(redo(s.history))),

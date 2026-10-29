@@ -48,3 +48,32 @@ export async function savedSettings(page: Page): Promise<EditSettings> {
   if (!s) throw new Error('no saved edits');
   return s;
 }
+
+export interface StoredPhotoEdits {
+  labels: string[];
+  cursor: number;
+  settings: EditSettings | null;
+  edited: boolean;
+  hasEditedThumbnail: boolean;
+}
+
+/** Saved history, edited flag and thumbnail state per photo, keyed by file name. */
+export async function storedEditsByName(page: Page): Promise<Record<string, StoredPhotoEdits>> {
+  const [photos, edits, thumbs] = await Promise.all([
+    readAll<{ id: string; fileName: string; edited: boolean }>(page, 'photos'),
+    readAll<{ photoId: string; history: { entries: { label: string; settings: EditSettings }[]; cursor: number } }>(page, 'edits'),
+    readAll<{ photoId: string; edited: Blob | null }>(page, 'thumbnails'),
+  ]);
+  const out: Record<string, StoredPhotoEdits> = {};
+  for (const p of photos) {
+    const h = edits.find((e) => e.photoId === p.id)?.history;
+    out[p.fileName] = {
+      labels: h?.entries.map((e) => e.label) ?? [],
+      cursor: h?.cursor ?? -1,
+      settings: h?.entries[h.cursor]?.settings ?? null,
+      edited: p.edited,
+      hasEditedThumbnail: Boolean(thumbs.find((t) => t.photoId === p.id)?.edited),
+    };
+  }
+  return out;
+}

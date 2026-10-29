@@ -114,3 +114,20 @@ export function exportFileName(o: Pick<ExportOptions, 'format' | 'naming' | 'cus
       return `${localDate(photo.captureDate)}-${sequence}.${ext}`;
   }
 }
+
+/**
+ * Makes a batch's file names unique (case-insensitively, as on most file
+ * systems) by adding -2, -3, … before the extension of later duplicates.
+ */
+export function uniqueFileNames(names: readonly string[]): string[] {
+  const used = new Set<string>();
+  return names.map((name) => {
+    const dot = name.lastIndexOf('.');
+    const base = dot > 0 ? name.slice(0, dot) : name;
+    const ext = dot > 0 ? name.slice(dot) : '';
+    let candidate = name;
+    for (let n = 2; used.has(candidate.toLowerCase()); n++) candidate = `${base}-${n}${ext}`;
+    used.add(candidate.toLowerCase());
+    return candidate;
+  });
+}

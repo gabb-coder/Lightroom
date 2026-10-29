@@ -11,6 +11,8 @@ import { hslParams } from '../../engine/hsl';
 import { Histogram } from './Histogram';
 import { DETAIL_SLIDERS, EFFECTS_SLIDERS, isBasicEdited, isGroupEdited } from '../../model/sliders';
 import { useDevelopStore } from '../../state/developStore';
+import { openSyncDialog, pasteFromPrevious } from '../../state/copyPasteStore';
+import { useLibraryStore } from '../../state/libraryStore';
 import controls from '../../components/controls.module.css';
 import layout from '../layout.module.css';
 import styles from './DevelopRightPanel.module.css';
@@ -61,6 +63,9 @@ export function DevelopRightPanel() {
   };
   const hasPhoto = useDevelopStore((s) => s.photo !== null);
   const resetAll = useDevelopStore((s) => s.resetAll);
+  const hasPrevious = useDevelopStore((s) => s.previousPhotoId !== null);
+  // Several photos selected in the filmstrip: "Previous" becomes "Sync…" (as in Lightroom).
+  const multiple = useLibraryStore((s) => s.selection.ids.length > 1);
   return (
     <aside className={`${layout.side} ${layout.right}`} aria-label="Develop panels" data-testid="right-panel">
       <Histogram />
@@ -77,9 +82,15 @@ export function DevelopRightPanel() {
       )}
       <div className={styles.spacer} />
       <div className={styles.footer}>
-        <button type="button" className={controls.button} disabled>
-          Previous
-        </button>
+        {multiple ? (
+          <button type="button" className={controls.button} disabled={!hasPhoto} onClick={openSyncDialog}>
+            Sync…
+          </button>
+        ) : (
+          <button type="button" className={controls.button} disabled={!hasPhoto || !hasPrevious} title="Paste the previous photo's settings (except crop)" onClick={() => void pasteFromPrevious()}>
+            Previous
+          </button>
+        )}
         <button type="button" className={controls.button} disabled={!hasPhoto} onClick={resetAll}>
           Reset all
         </button>

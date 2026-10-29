@@ -11,6 +11,10 @@
   --color-raised: #2a2a2a;
   --color-filter-bar: #1f1f1f;
   --color-control-on: #3a3a3a; /* pressed segment / toggle */
+  --color-dialog: #262626; /* design/Export.dc.html dialog */
+  --color-dialog-border: #353535;
+  --color-dialog-divider: #333333;
+  --color-scrim: rgba(0, 0, 0, 0.62);
 
   /* Lines */
   --color-border: #2f2f2f;

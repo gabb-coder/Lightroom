@@ -217,3 +217,23 @@
 .labelSwatch[aria-pressed='true'] {
   box-shadow: 0 0 0 2px var(--color-panel), 0 0 0 4px var(--color-white);
 }
+
+.developSettings {
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+.settingsButtons {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.settingsButtons > button {
+  flex: 1 1 0;
+}
+
+.syncButton {
+  width: 100%;
+  margin-top: 8px;
+}

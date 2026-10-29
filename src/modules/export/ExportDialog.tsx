@@ -208,12 +208,15 @@ function Settings() {
   );
 }
 
-/** Export dialog (design/Export.dc.html). Exports the focused photo. */
+const photoCount = (n: number) => `Export ${n} ${n === 1 ? 'photo' : 'photos'}`;
+
+/** Export dialog (design/Export.dc.html). Exports every selected photo. */
 export function ExportDialog() {
-  const hasPhoto = useLibraryStore((s) => s.selectedId !== null);
+  const count = useLibraryStore((s) => s.selection.ids.length);
+  const hasPhoto = count > 0;
   const running = useExportStore((s) => s.job?.status === 'running');
   const dialogRef = useRef<HTMLDivElement>(null);
-  const title = hasPhoto ? 'Export 1 photo' : 'No photo selected';
+  const title = hasPhoto ? photoCount(count) : 'No photo selected';
 
   useEffect(() => {
     dialogRef.current?.focus();
@@ -252,7 +255,7 @@ export function ExportDialog() {
           Cancel
         </button>
         <button type="button" className={`${controls.primary} ${styles.exportButton}`} disabled={!hasPhoto || running} onClick={() => void runExport()}>
-          {hasPhoto ? 'Export 1 photo' : 'Export'}
+          {hasPhoto ? photoCount(count) : 'Export'}
         </button>
       </div>
     </div>

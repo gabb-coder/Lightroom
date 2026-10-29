@@ -8,6 +8,7 @@ import { isArrowKeyTarget, isTextEntryTarget, type TargetLike } from './isTextEn
 import { neighborId, selectFilmstripList, selectLibraryList, useLibraryStore } from '../state/libraryStore';
 import { organizeTargets, setFlag, setRating } from '../state/organizeActions';
 import { matchOrganizeShortcut } from './organizeShortcuts';
+import { openCopyDialog, pasteSettings, useCopyPasteStore } from '../state/copyPasteStore';
 
 const MODULE_KEYS: Readonly<Record<string, AppModule>> = {
   g: 'library',
@@ -32,6 +33,19 @@ export function useGlobalShortcuts(): void {
     const onKeyDown = (event: KeyboardEvent): void => {
       // Text fields keep their own shortcuts (including native Ctrl/Cmd+Z).
       if (isTextEntryTarget(event.target as TargetLike | null)) return;
+      // A modal dialog (Copy / Sync settings) owns the keyboard.
+      if (useCopyPasteStore.getState().dialog) return;
+      const command = mac ? event.metaKey : event.ctrlKey;
+      // Ctrl/Cmd+Shift+C / V: copy and paste settings (design/Kit.dc.html).
+      if (command && event.shiftKey && useAppStore.getState().module !== 'export') {
+        const key = event.key.toLowerCase();
+        if (key === 'c' || key === 'v') {
+          event.preventDefault();
+          if (key === 'c') openCopyDialog();
+          else void pasteSettings();
+          return;
+        }
+      }
       // Ctrl/Cmd+Shift+E: Export (design/Kit.dc.html).
       if ((mac ? event.metaKey : event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'e') {
         event.preventDefault();

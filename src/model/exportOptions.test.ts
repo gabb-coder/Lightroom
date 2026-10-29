@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_EXPORT_PRESETS, exportFileName, exportSize, normalizeExportOptions } from './exportOptions';
+import { uniqueFileNames } from './exportOptions';
 
 describe('export presets', () => {
   it('match the design list', () => {
@@ -44,5 +45,11 @@ describe('normalizeExportOptions', () => {
     expect(o.longEdge).toBe(16);
     expect(o.format).toBe('jpeg');
     expect(o.metadata).toBe('copyright');
+  });
+});
+
+describe('batch file names', () => {
+  it('adds -2, -3 to later duplicates (case-insensitive) and keeps unique names', () => {
+    expect(uniqueFileNames(['a.jpg', 'b.jpg', 'A.jpg', 'a.jpg', 'a-2.jpg'])).toEqual(['a.jpg', 'b.jpg', 'A-2.jpg', 'a-3.jpg', 'a-2-2.jpg']);
   });
 });

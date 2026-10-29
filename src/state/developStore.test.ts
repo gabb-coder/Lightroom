@@ -206,3 +206,27 @@ describe('detail and effects edits', () => {
     expect(labels()).toHaveLength(1);
   });
 });
+
+describe('applying whole settings (paste, sync, Previous)', () => {
+  beforeEach(() => store().loadPhoto(fakePhoto('e.jpg')));
+
+  it('is one undoable history step, and none when nothing changes', () => {
+    const next = structuredClone(store().settings);
+    next.basic.exposure = 1;
+    next.effects.grain = 40;
+    store().applySettings('Paste settings', next);
+    expect(labels().slice(1)).toEqual([['Paste settings', '']]);
+    store().applySettings('Paste settings', structuredClone(next));
+    expect(labels()).toHaveLength(2);
+    store().undo();
+    expect(store().settings.basic.exposure).toBe(0);
+    expect(store().settings.effects.grain).toBe(0);
+  });
+
+  it('remembers the previously shown photo', () => {
+    expect(store().previousPhotoId).not.toBe('f.jpg');
+    const before = store().photo?.id;
+    store().loadPhoto(fakePhoto('f.jpg'));
+    expect(store().previousPhotoId).toBe(before);
+  });
+});

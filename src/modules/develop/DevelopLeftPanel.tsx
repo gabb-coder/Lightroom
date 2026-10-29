@@ -1,4 +1,6 @@
 import controls from '../../components/controls.module.css';
+import { openCopyDialog, pasteSettings, useCopyPasteStore } from '../../state/copyPasteStore';
+import { useDevelopStore } from '../../state/developStore';
 import layout from '../layout.module.css';
 import { HistoryPanel } from './HistoryPanel';
 import { PresetsPanel } from './PresetsPanel';
@@ -24,6 +26,27 @@ function Navigator() {
   );
 }
 
+function CopyPaste() {
+  const hasPhoto = useDevelopStore((s) => s.photo !== null);
+  const clipboard = useCopyPasteStore((s) => s.clipboard);
+  return (
+    <div className={styles.copyPaste}>
+      <button type="button" className={controls.button} disabled={!hasPhoto} onClick={openCopyDialog}>
+        Copy settings…
+      </button>
+      <button
+        type="button"
+        className={controls.button}
+        disabled={!hasPhoto || !clipboard}
+        title={clipboard ? `Paste settings copied from ${clipboard.from}` : undefined}
+        onClick={() => void pasteSettings()}
+      >
+        Paste
+      </button>
+    </div>
+  );
+}
+
 export function DevelopLeftPanel() {
   return (
     <aside
@@ -34,14 +57,7 @@ export function DevelopLeftPanel() {
       <Navigator />
       <PresetsPanel />
       <HistoryPanel />
-      <div className={styles.copyPaste}>
-        <button type="button" className={controls.button} disabled>
-          Copy settings…
-        </button>
-        <button type="button" className={controls.button} disabled>
-          Paste
-        </button>
-      </div>
+      <CopyPaste />
     </aside>
   );
 }

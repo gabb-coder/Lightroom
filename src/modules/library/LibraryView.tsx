@@ -9,6 +9,7 @@ import { COLOR_LABELS, labelInfo } from '../../model/organize';
 import { setColorLabel } from '../../state/organizeActions';
 import { latestBatchId, selectLibraryList, THUMB_SIZE, useLibraryStore, type CatalogView } from '../../state/libraryStore';
 import { LibraryFilterBar } from './LibraryFilterBar';
+import { openCopyDialog, openSyncDialog, pasteSettings, useCopyPasteStore } from '../../state/copyPasteStore';
 import layout from '../layout.module.css';
 import { LibraryGrid } from './LibraryGrid';
 import styles from './LibraryView.module.css';
@@ -63,6 +64,7 @@ function StatusBar({ shown, total }: { shown: number; total: number }) {
   const importing = useLibraryStore((s) => s.importing);
   const message = useLibraryStore((s) => s.importMessage);
   const thumbSize = useLibraryStore((s) => s.thumbSize);
+  const copyMessage = useCopyPasteStore((s) => s.message);
   const setThumbSize = useLibraryStore((s) => s.setThumbSize);
   return (
     <div className={`num ${styles.statusBar}`} data-testid="status-bar">
@@ -73,6 +75,11 @@ function StatusBar({ shown, total }: { shown: number; total: number }) {
       {importing && (
         <span role="status">
           Importing {importing.done} of {importing.total}…
+        </span>
+      )}
+      {copyMessage && (
+        <span role="status" data-testid="settings-message">
+          {copyMessage}
         </span>
       )}
       {message && (
@@ -115,6 +122,35 @@ function LabelPicker() {
         />
       ))}
     </div>
+  );
+}
+
+/** Copy, paste and sync Develop settings across the selection (Lightroom's Library "Sync Settings"). */
+function DevelopSettingsPanel() {
+  const hasPhoto = useLibraryStore((s) => s.selectedId !== null);
+  const selected = useLibraryStore((s) => s.selection.ids.length);
+  const clipboard = useCopyPasteStore((s) => s.clipboard);
+  return (
+    <section className={styles.developSettings} aria-label="Develop settings">
+      <div className={styles.metaTitle}>Develop settings</div>
+      <div className={styles.settingsButtons}>
+        <button type="button" className={controls.button} disabled={!hasPhoto} onClick={openCopyDialog}>
+          Copy settings…
+        </button>
+        <button
+          type="button"
+          className={controls.button}
+          disabled={selected === 0 || !clipboard}
+          title={clipboard ? `Paste settings copied from ${clipboard.from}` : undefined}
+          onClick={() => void pasteSettings()}
+        >
+          Paste
+        </button>
+      </div>
+      <button type="button" className={`${controls.button} ${styles.syncButton}`} disabled={!hasPhoto || selected < 2} onClick={openSyncDialog}>
+        Sync settings…
+      </button>
+    </section>
   );
 }
 
@@ -163,6 +199,7 @@ function DetailsPanel() {
           <p className={styles.metaEmpty}>No photo selected</p>
         )}
       </section>
+      <DevelopSettingsPanel />
     </aside>
   );
 }

@@ -52,6 +52,11 @@
   box-shadow: 0 0 0 2px var(--color-accent);
 }
 
+/* Other selected photos (not the one being edited): a thinner ring. */
+.item[aria-pressed='true']:not([aria-current]) {
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
 .editedBadge {
   position: absolute;
   right: 4px;

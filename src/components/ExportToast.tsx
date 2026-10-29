@@ -7,7 +7,7 @@ export function ExportToast() {
   if (!job) return null;
   const title =
     job.status === 'running'
-      ? 'Exporting 1 of 1'
+      ? `Exporting ${job.index + 1} of ${job.total}`
       : job.status === 'done'
         ? 'Export complete'
         : job.status === 'cancelled'

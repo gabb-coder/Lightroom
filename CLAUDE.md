@@ -61,6 +61,17 @@ component library.
   `history.ts` (snapshots + cursor; same-key edits at the tip merge),
   `presets.ts` (presets replace everything except geometry; JSON format),
   `validate.ts` (`parseEditSettings` for any untrusted/stored settings).
+- Copy / paste / sync (M10): `model/copySettings.ts` (panels, `pasteSettings`
+  replaces whole panels; a pasted crop is re-fitted to the target photo).
+  `state/settingsSync.ts` applies settings to photos as exactly ONE history
+  step each (`applySettings` for the open photo, a stored-history push for
+  the rest) and re-renders edited thumbnails of photos that aren't open
+  through a second export-worker client. Paste targets: the open photo in
+  Develop, every selected photo in Library; Sync: focused photo → the other
+  selected ones. `state/copyPasteStore.ts` holds the session clipboard and
+  the dialog (`components/SettingsDialog.tsx`). Batch export
+  (`exportStore.runExport`) exports the selection in grid order, one file
+  per photo, with `uniqueFileNames`.
 - `src/state/developStore.ts`: every edit goes through `commit()` into the
   history; `settings` is always `history.entries[cursor].settings`. Use a
   stable history key per control (`basic.exposure`) so drags merge.
