@@ -18,7 +18,7 @@ describe('clipping overlay', () => {
 
   it('skips transparent padding', () => {
     const img = new Uint8Array([0, 0, 0, 0, 0, 0, 0, 255]);
-    expect(Array.from(displayRgba8(img, null, 2, { shadows: true, highlights: true, split: null }))).toEqual([0, 0, 0, 0, ...SHADOW_CLIP_RGB, 255]);
+    expect(Array.from(displayRgba8(img, null, 2, { shadows: true, highlights: true, split: null, overlay: null }))).toEqual([0, 0, 0, 0, ...SHADOW_CLIP_RGB, 255]);
   });
 
   it('leaves the image alone with no options', () => {
@@ -39,7 +39,7 @@ describe('split view', () => {
   it('composes Before and After, then the clipping overlay on both halves', () => {
     const after = px([255, 255, 255], [9, 9, 9], [255, 255, 255], [9, 9, 9]);
     const before = px([1, 2, 3], [0, 0, 0], [4, 5, 6], [7, 8, 9]);
-    const out = displayRgba8(after, before, 4, { shadows: true, highlights: true, split: 0.5 });
+    const out = displayRgba8(after, before, 4, { shadows: true, highlights: true, split: 0.5, overlay: null });
     expect(Array.from(out)).toEqual(Array.from(px([1, 2, 3], [...SHADOW_CLIP_RGB], [...HIGHLIGHT_CLIP_RGB], [9, 9, 9])));
   });
 });

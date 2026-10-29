@@ -169,6 +169,16 @@ component library.
   can't do WebGL2, or with `?export=main`). Renderer scratch: blur target
   is RG8; `releaseScratch()` after exports. Manual cross-browser checklist:
   `docs/BROWSER_CHECKLIST.md` (only Chromium is automated).
+- Mask tools (M21): `BrushMask` (strokes normalized to the photo + its
+  `aspect`). `engine/brush.ts` rasterizes strokes on the CPU into an 8-bit
+  map (long edge 1024) that the GPU gets as an R8 texture-array layer and
+  samples with the same manual bilinear (`sampleBrush`); a per-mask cache
+  redraws only the stroke being painted. `BrushRaster` serializes to a key
+  so params stay cheap to compare. Shared GLSL `shapeWeight` (linear,
+  radial, brush) serves the develop pass and the mask overlay (selected
+  mask tinted in the display pass, O / "Show overlay"). Each stroke is one
+  history step (Alt erases, K picks the brush); radial masks rotate with a
+  handle (Shift: 15°) or the Angle slider.
 - Editing aids (M20): `engine/display.ts` is a display-only pass (clipping
   overlay on pure white/black, split Before/After by column) run by the
   Renderer's display pass on RGBA8 textures, so GPU = CPU exactly; it is

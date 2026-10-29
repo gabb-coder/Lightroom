@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultEditSettings, type Geometry } from './editSettings';
-import { createLinearMask, createRadialMask, maskNames, maskView, moveMask, radialHandles, resizeRadial, setLinearPoint } from './maskEdit';
+import { brushPin, brushRadius, createBrushMask, createLinearMask, createRadialMask, extendStroke, maskNames, maskView, moveMask, newStroke, radialHandles, resizeRadial, rotateHandle, rotateRadial, setLinearPoint } from './maskEdit';
 
 const SOURCE = { width: 600, height: 400 };
 const geo = (patch: Partial<Geometry> = {}): Geometry => ({ ...defaultEditSettings().geometry, ...patch });
@@ -84,5 +84,49 @@ describe('creating and editing masks', () => {
     const b = createRadialMask('b', view, { x: 0, y: 0 }, { x: 0, y: 50 });
     const c = createLinearMask('c', view, { x: 0, y: 0 }, { x: 0, y: 50 });
     expect([...maskNames([a, b, c]).values()]).toEqual(['Linear gradient 1', 'Radial gradient 1', 'Linear gradient 2']);
+  });
+});
+
+describe('radial rotation and brush strokes (M21)', () => {
+  const source = { width: 600, height: 400 };
+  const geometry = defaultEditSettings().geometry;
+  const view = maskView(source, geometry, { width: 300, height: 200 });
+
+  it('the rotate handle sits above the ellipse and turns it toward the pointer', () => {
+    const m = createRadialMask('r', view, { x: 150, y: 100 }, { x: 190, y: 100 });
+    const knob = rotateHandle(m, view);
+    expect(knob.x).toBeCloseTo(150, 6);
+    expect(knob.y).toBeLessThan(radialHandles(m, view).yMinus.y);
+    expect(rotateRadial(m, view, { x: 250, y: 100 }).angle).toBe(90); // pointer to the right: a quarter turn clockwise
+    expect(rotateRadial(m, view, { x: 150, y: 190 }).angle).toBe(180);
+    expect(rotateRadial(m, view, { x: 60, y: 10 }).angle).toBe(-45);
+    expect(rotateRadial(m, view, { x: 250, y: 90 }, true).angle).toBe(90); // snapped to 15°
+    // After rotating, the handle follows the pointer's direction.
+    const turned = rotateRadial(m, view, { x: 250, y: 100 });
+    expect(rotateHandle(turned, view).x).toBeGreaterThan(190);
+  });
+
+  it('rotation is measured on the photo, so it is right with a rotated crop', () => {
+    const rotated = maskView(source, { ...geometry, rotation: 1 }, { width: 200, height: 300 });
+    const m = createRadialMask('r', rotated, { x: 100, y: 150 }, { x: 140, y: 150 });
+    // On screen the photo is turned a quarter clockwise: dragging the knob to screen-right is photo-up.
+    expect(rotateRadial(m, rotated, { x: 190, y: 150 }).angle).toBe(0);
+  });
+
+  it('strokes add a point only after the pointer moves a little, in photo coordinates', () => {
+    const s = newStroke(view, { x: 30, y: 40 }, { size: 25, feather: 50, erase: false });
+    expect(s).toEqual({ erase: false, radius: brushRadius(25), feather: 50, points: [0.1, 0.2] });
+    expect(extendStroke(s, view, { x: 31, y: 40 })).toBeNull();
+    expect(extendStroke(s, view, { x: 60, y: 40 })?.points).toEqual([0.1, 0.2, 0.2, 0.2]);
+  });
+
+  it('a brush mask moves with all its strokes, is named and pinned', () => {
+    const b = { ...createBrushMask('b', source), strokes: [{ erase: false, radius: 0.05, feather: 50, points: [0.1, 0.2, 0.3, 0.4] }] };
+    expect(b.aspect).toBe(1.5);
+    const moved = moveMask(b, view, 30, 20); // 30 frame px = 0.1 of the width; 20 = 0.1 of the height
+    expect(moved.strokes[0]?.points.map((v) => Number(v.toFixed(6)))).toEqual([0.2, 0.3, 0.4, 0.5]);
+    expect(brushPin(b)).toEqual({ x: 0.1, y: 0.2 });
+    expect(brushPin(createBrushMask('e', source))).toBeNull();
+    expect([...maskNames([b, { ...b, id: 'c' }]).values()]).toEqual(['Brush 1', 'Brush 2']);
   });
 });

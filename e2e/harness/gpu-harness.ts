@@ -4,8 +4,10 @@
  * compares it with the CPU reference in src/engine/.
  */
 import { displayRgba8, type DisplayOptions } from '../../src/engine/display';
+import { geometryMatrix } from '../../src/engine/geometry';
+import { maskShape } from '../../src/engine/masks';
 import { pipelineParams, renderRgba8 } from '../../src/engine/pipeline';
-import { defaultEditSettings, type BasicSettings, type Geometry } from '../../src/model/editSettings';
+import { defaultEditSettings, type BasicSettings, type Geometry, type Mask } from '../../src/model/editSettings';
 import type { RgbaImage } from '../../src/render/gl';
 import { Renderer } from '../../src/render/Renderer';
 import type { GpuCheckResult, GpuExtra, GpuHarness } from './types';
@@ -103,7 +105,8 @@ function scratchCheck() {
  * Display pass (clipping overlay, split view) against its CPU reference
  * applied to the GPU's own After and Before images: must match exactly.
  */
-function displayCheck(options: DisplayOptions, basic: Partial<BasicSettings>, geometry: Partial<Geometry> = {}) {
+function displayCheck(baseOptions: DisplayOptions, basic: Partial<BasicSettings>, geometry: Partial<Geometry> = {}, overlayMask: Mask | null = null) {
+  const options = { ...baseOptions, overlay: overlayMask ? maskShape(overlayMask) : null };
   const settings = defaultEditSettings();
   settings.basic = { ...settings.basic, ...basic };
   settings.geometry = { ...settings.geometry, ...geometry };
@@ -112,7 +115,8 @@ function displayCheck(options: DisplayOptions, basic: Partial<BasicSettings>, ge
   const after = renderer.readPixels(params);
   const beforeImage = renderer.readPixels(before);
   const shown = renderer.readPixels(params, 'full', { options, before });
-  const reference = displayRgba8(after.data, beforeImage.data, after.width, options);
+  const frame = { matrix: geometryMatrix(source, params.geometry, after), source };
+  const reference = displayRgba8(after.data, beforeImage.data, after.width, options, frame);
   const count = (rgb: readonly number[]) => {
     let n = 0;
     for (let i = 0; i < reference.length; i += 4) if (reference[i] === rgb[0] && reference[i + 1] === rgb[1] && reference[i + 2] === rgb[2]) n++;
@@ -124,8 +128,8 @@ function displayCheck(options: DisplayOptions, basic: Partial<BasicSettings>, ge
 const harness: GpuHarness = {
   runGpuCheck,
   scratchCheck,
-  displayCheck: (options, basic, geometry) => {
-    const r = displayCheck(options, basic, geometry);
+  displayCheck: (options, basic, geometry, overlayMask) => {
+    const r = displayCheck(options, basic, geometry, overlayMask);
     return { maxDiff: r.maxDiff, width: r.width, height: r.height, shadowPixels: r.count([30, 110, 255]), highlightPixels: r.count([255, 40, 40]), sameAsAfter: r.sameAsAfter };
   },
 };

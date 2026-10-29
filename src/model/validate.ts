@@ -14,8 +14,11 @@ import {
   type GradeWheel,
   defaultMaskAdjust,
   MAX_MASKS,
+  type BrushStroke,
   type Mask,
   type MaskAdjust,
+  MAX_BRUSH_STROKES,
+  MAX_STROKE_POINTS,
 } from './editSettings';
 import {
   ANGLE_SLIDER,
@@ -133,7 +136,23 @@ function masks(raw: unknown): Mask[] {
         invert: m.invert === true,
         adjust: maskAdjust(m.adjust),
       });
+    } else if (m.kind === 'brush') {
+      out.push({ id, kind: 'brush', aspect: clampNumber(m.aspect, 0.01, 100, 1.5), strokes: brushStrokes(m.strokes), adjust: maskAdjust(m.adjust) });
     }
+  }
+  return out;
+}
+
+/** Brush strokes with finite, in-range values; strokes without points are dropped. */
+function brushStrokes(raw: unknown): BrushStroke[] {
+  if (!Array.isArray(raw)) return [];
+  const out: BrushStroke[] = [];
+  for (const s of raw.slice(0, MAX_BRUSH_STROKES)) {
+    if (!isObject(s) || !Array.isArray(s.points)) continue;
+    const points = s.points.slice(0, MAX_STROKE_POINTS * 2).map((v) => clampNumber(v, -1, 2, 0));
+    if (points.length % 2 === 1) points.pop();
+    if (points.length === 0) continue;
+    out.push({ erase: s.erase === true, radius: clampNumber(s.radius, 0.001, 0.5, 0.05), feather: clampNumber(s.feather, 0, 100, 50), points });
   }
   return out;
 }

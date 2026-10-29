@@ -1,5 +1,5 @@
 import type { DisplayOptions } from '../../src/engine/display';
-import type { BasicSettings, EditSettings, Geometry } from '../../src/model/editSettings';
+import type { BasicSettings, EditSettings, Geometry, Mask } from '../../src/model/editSettings';
 
 export interface GpuCheckResult {
   width: number;
@@ -32,5 +32,6 @@ export interface GpuHarness {
     options: DisplayOptions,
     basic: Partial<BasicSettings>,
     geometry?: Partial<Geometry>,
+    overlayMask?: Mask | null,
   ) => { maxDiff: number; width: number; height: number; shadowPixels: number; highlightPixels: number; sameAsAfter: boolean };
 }

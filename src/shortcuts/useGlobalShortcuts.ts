@@ -135,6 +135,19 @@ export function useGlobalShortcuts(): void {
         develop.setWbPicking(false);
         return;
       }
+      // K: brush (as in Lightroom); O: show the selected mask as an overlay.
+      if (event.key.toLowerCase() === 'k' && !event.shiftKey && developHasPhoto()) {
+        event.preventDefault();
+        develop.setMaskTool(develop.maskTool === 'brush' ? null : 'brush');
+        return;
+      }
+      if (event.key.toLowerCase() === 'o' && !event.shiftKey && developHasPhoto()) {
+        event.preventDefault();
+        const view = useViewStore.getState();
+        view.setShowMaskOverlay(!view.showMaskOverlay);
+        if (!develop.masksOpen) develop.setMasksOpen(true);
+        return;
+      }
       if (event.key === 'Escape' && develop.maskTool) {
         event.preventDefault();
         develop.setMaskTool(null);

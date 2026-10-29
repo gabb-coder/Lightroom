@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { HSL_COLORS, type BasicSettings, type EditSettings, type Geometry } from '../src/model/editSettings';
+import { HSL_COLORS, type BasicSettings, type EditSettings, type Geometry, type Mask } from '../src/model/editSettings';
 import { BASIC_SLIDERS } from '../src/model/sliders';
 import type { GpuExtra, GpuHarness } from './harness/types';
 import { DEV_PORT } from '../playwright.config';
@@ -168,6 +168,36 @@ const MASK_CASES: Record<string, [Partial<BasicSettings>, Partial<Geometry>, Gpu
     { rotation: 1, flipH: true, cropRect: { x: 0.1, y: 0.1, w: 0.8, h: 0.75 } },
     { masks: [{ id: 'a', kind: 'linear', x0: 0.1, y0: 0.5, x1: 0.6, y1: 0.5, adjust: { ...ADJ, exposure: 1.2 } }] },
   ],
+  'mask: brush strokes (paint, erase, feather)': [
+    {},
+    {},
+    {
+      masks: [
+        {
+          id: 'brush-gpu-1',
+          kind: 'brush',
+          aspect: 64 / 48,
+          strokes: [
+            { erase: false, radius: 0.15, feather: 60, points: [0.1, 0.3, 0.5, 0.5, 0.9, 0.4] },
+            { erase: true, radius: 0.08, feather: 30, points: [0.5, 0.1, 0.5, 0.9] },
+            { erase: false, radius: 0.05, feather: 0, points: [0.2, 0.8] },
+          ],
+          adjust: { ...ADJ, exposure: 1.5, saturation: -60 },
+        },
+      ],
+    },
+  ],
+  'mask: brush with gradients, cropped and rotated, as a proxy': [
+    {},
+    { rotation: 1, angle: 5, cropRect: { x: 0.1, y: 0.1, w: 0.8, h: 0.8 } },
+    {
+      proxy: true,
+      masks: [
+        { id: 'a', kind: 'linear', x0: 0.5, y0: 0, x1: 0.5, y1: 0.6, adjust: { ...ADJ, exposure: -1 } },
+        { id: 'brush-gpu-2', kind: 'brush', aspect: 64 / 48, strokes: [{ erase: false, radius: 0.2, feather: 80, points: [0.3, 0.3, 0.7, 0.7] }], adjust: { ...ADJ, temp: 50, contrast: 30 } },
+      ],
+    },
+  ],
   'mask: proxy at half size': [
     {},
     {},
@@ -178,7 +208,7 @@ const MASK_CASES: Record<string, [Partial<BasicSettings>, Partial<Geometry>, Gpu
   ],
 };
 
-test.describe('WebGL2 gradient masks match the CPU reference', () => {
+test.describe('WebGL2 gradient and brush masks match the CPU reference', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(`http://localhost:${DEV_PORT}/e2e/harness/gpu.html`);
     await expect(page.locator('#status')).toHaveText('ready');
@@ -297,11 +327,29 @@ test.describe('Renderer scratch memory (M18)', () => {
 
 test.describe('Display pass (M20)', () => {
   const CASES = [
-    { name: 'clipping both ends', options: { shadows: true, highlights: true, split: null }, basic: { exposure: 1.5, blacks: -60 } },
-    { name: 'highlights only', options: { shadows: false, highlights: true, split: null }, basic: { exposure: 2 } },
-    { name: 'split view', options: { shadows: false, highlights: false, split: 0.4 }, basic: { exposure: 1, temp: 40 } },
-    { name: 'split with highlight clipping, cropped and rotated', options: { shadows: false, highlights: true, split: 0.6 }, basic: { exposure: 3, blacks: -80 }, geometry: { rotation: 1, angle: 7, cropRect: { x: 0.2, y: 0.05, w: 0.8, h: 0.8 } } },
+    { name: 'clipping both ends', options: { shadows: true, highlights: true, split: null, overlay: null }, basic: { exposure: 1.5, blacks: -60 } },
+    { name: 'highlights only', options: { shadows: false, highlights: true, split: null, overlay: null }, basic: { exposure: 2 } },
+    { name: 'split view', options: { shadows: false, highlights: false, split: 0.4, overlay: null }, basic: { exposure: 1, temp: 40 } },
+    { name: 'split with highlight clipping, cropped and rotated', options: { shadows: false, highlights: true, split: 0.6, overlay: null }, basic: { exposure: 3, blacks: -80 }, geometry: { rotation: 1, angle: 7, cropRect: { x: 0.2, y: 0.05, w: 0.8, h: 0.8 } } },
   ] as const;
+  const OVERLAYS: { name: string; mask: Mask; geometry?: Partial<Geometry> }[] = [
+    { name: 'radial', mask: { id: 'o1', kind: 'radial', cx: 0.4, cy: 0.5, rx: 0.3, ry: 0.2, angle: 30, feather: 60, invert: false, adjust: { ...ADJ } } },
+    { name: 'brush, cropped and rotated', geometry: { rotation: 3, angle: -4, cropRect: { x: 0.05, y: 0.1, w: 0.85, h: 0.8 } }, mask: { id: 'o2', kind: 'brush', aspect: 64 / 48, strokes: [{ erase: false, radius: 0.2, feather: 50, points: [0.2, 0.2, 0.8, 0.6] }], adjust: { ...ADJ } } },
+  ];
+  for (const c of OVERLAYS) {
+    test(`mask overlay within ±2/255 of its CPU reference: ${c.name}`, async ({ page }) => {
+      await page.goto(`http://localhost:${DEV_PORT}/e2e/harness/gpu.html`);
+      await expect(page.locator('#status')).toHaveText('ready');
+      const r = await page.evaluate(
+        ([mask, geometry]) => (window as unknown as GpuHarness).displayCheck({ shadows: false, highlights: false, split: null, overlay: null }, { exposure: 0.5 }, geometry, mask),
+        [c.mask, c.geometry ?? {}] as const,
+      );
+      if (process.env.LOG_GPU_DIFF) console.log(`overlay ${c.name}`, r);
+      expect(r.maxDiff).toBeLessThanOrEqual(TOLERANCE);
+      expect(r.sameAsAfter).toBe(false);
+    });
+  }
+
   for (const c of CASES) {
     test(`matches its CPU reference exactly: ${c.name}`, async ({ page }) => {
       await page.goto(`http://localhost:${DEV_PORT}/e2e/harness/gpu.html`);

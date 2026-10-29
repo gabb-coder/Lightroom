@@ -94,6 +94,12 @@ export function maskSliderDef(key: keyof typeof MASK_LABELS): SliderDef {
 
 export const MASK_FEATHER_SLIDER: SliderDef = { ...unipolar('mask-feather', 'Feather', 0, 100, 1, 50, 'uint', 'Mask feather'), ariaLabel: 'Mask feather' };
 
+export const MASK_ANGLE_SLIDER: SliderDef = { ...bipolar('mask-angle', 'Angle', -180, 180, 1, 'deg'), historyLabel: 'Mask angle', ariaLabel: 'Mask angle' };
+
+/** Brush options (M21): session settings for new strokes, not edit history. */
+export const BRUSH_SIZE_SLIDER: SliderDef = { ...unipolar('brush-size', 'Size', 1, 100, 1, 25, 'uint', 'Brush size'), ariaLabel: 'Brush size' };
+export const BRUSH_FEATHER_SLIDER: SliderDef = { ...unipolar('brush-feather', 'Feather', 0, 100, 1, 50, 'uint', 'Brush feather'), ariaLabel: 'Brush feather' };
+
 export const ANGLE_SLIDER: SliderDef = bipolar('angle', 'Straighten', -45, 45, 0.1, 'deg');
 
 /** Color mixer hue / saturation / luminance offsets. */

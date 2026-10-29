@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { DisplayOptions } from '../engine/display';
+import type { MaskShape } from '../engine/masks';
 import { FULL_VIEW, toggledZoom, type ViewRect, type ZoomMode } from '../model/zoom';
 
 /** Default split position (Before on the left half). */
@@ -21,6 +22,9 @@ interface ViewState {
   toggleClipping: () => void;
   setSplit: (on: boolean) => void;
   setSplitAt: (at: number) => void;
+  /** Mask overlay (M21, O): tint the selected mask's area while the Masks panel is open. */
+  showMaskOverlay: boolean;
+  setShowMaskOverlay: (on: boolean) => void;
   zoom: ZoomMode;
   /** Mode to return to when Z leaves 1:1. */
   previousZoom: ZoomMode;
@@ -48,6 +52,8 @@ export const useViewStore = create<ViewState>()((set) => ({
     }),
   setSplit: (split) => set({ split }),
   setSplitAt: (at) => set({ splitAt: Math.min(1, Math.max(0, at)) }),
+  showMaskOverlay: false,
+  setShowMaskOverlay: (showMaskOverlay) => set({ showMaskOverlay }),
   zoom: 'fit',
   previousZoom: 'fit',
   visible: FULL_VIEW,
@@ -72,7 +78,10 @@ function sameRect(a: ViewRect, b: ViewRect): boolean {
   return Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6 && Math.abs(a.w - b.w) < 1e-6 && Math.abs(a.h - b.h) < 1e-6;
 }
 
-/** What the display pass should do now (the split only when it applies: not while cropping or showing Before). */
-export function displayOptions(view: Pick<ViewState, 'clipShadows' | 'clipHighlights' | 'split' | 'splitAt'>, splitApplies: boolean): DisplayOptions {
-  return { shadows: view.clipShadows, highlights: view.clipHighlights, split: view.split && splitApplies ? view.splitAt : null };
+/**
+ * What the display pass should do now. The split only applies when not
+ * cropping or showing Before; `overlay` is the mask to tint (or null).
+ */
+export function displayOptions(view: Pick<ViewState, 'clipShadows' | 'clipHighlights' | 'split' | 'splitAt'>, splitApplies: boolean, overlay: MaskShape | null = null): DisplayOptions {
+  return { shadows: view.clipShadows, highlights: view.clipHighlights, split: view.split && splitApplies ? view.splitAt : null, overlay };
 }

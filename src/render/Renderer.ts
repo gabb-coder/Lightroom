@@ -1,6 +1,8 @@
 import { CURVE_LUT_SIZE } from '../engine/curve';
 import { geometryMatrix, isIdentityGeometry, outputSize } from '../engine/geometry';
-import { HIGHLIGHT_CLIP_RGB, isPlainDisplay, SHADOW_CLIP_RGB, type DisplayOptions } from '../engine/display';
+import { BRUSH_RASTER_EDGE, type BrushRaster } from '../engine/brush';
+import { HIGHLIGHT_CLIP_RGB, isPlainDisplay, MASK_OVERLAY_OPACITY, MASK_OVERLAY_RGB, SHADOW_CLIP_RGB, type DisplayOptions } from '../engine/display';
+import type { MaskShape } from '../engine/masks';
 import { hasDetailStage, type PipelineParams } from '../engine/pipeline';
 import { sharpenKernel } from '../engine/sharpen';
 import { MAX_MASKS } from '../model/editSettings';
@@ -26,6 +28,7 @@ const DEVELOP_UNIFORMS = [
   'hslHue',
   'hslSat',
   'hslLum',
+  'brush',
   'maskCount',
   'maskKind',
   'maskA',
@@ -44,7 +47,33 @@ const DEVELOP_UNIFORMS = [
 const BLUR_UNIFORMS = ['image', 'taps', 'weights'] as const;
 const DETAIL_UNIFORMS = ['image', 'blur', 'taps', 'weights', 'sharpenOn', 'sharpenAmount', 'grainOn', 'grainAmount', 'grainCell', 'scale'] as const;
 const GEOMETRY_UNIFORMS = ['image', 'flipY', 'outSize', 'rowX', 'rowY', 'vignette'] as const;
-const DISPLAY_UNIFORMS = ['after', 'before', 'flipY', 'splitX', 'shadows', 'highlights', 'shadowColor', 'highlightColor'] as const;
+const DISPLAY_UNIFORMS = [
+  'after',
+  'before',
+  'flipY',
+  'splitX',
+  'shadows',
+  'highlights',
+  'shadowColor',
+  'highlightColor',
+  'brush',
+  'overlayOn',
+  'overlayKind',
+  'overlayA',
+  'overlayB',
+  'rowX',
+  'rowY',
+  'srcSize',
+  'overlayColor',
+  'overlayOpacity',
+] as const;
+
+/** Texture unit of the brush weight maps (units 0–1 hold the image and the curve table). */
+const BRUSH_UNIT = 2;
+/** Brush layers: one per mask slot, plus one for the mask overlay. */
+const BRUSH_LAYERS = MAX_MASKS + 1;
+const OVERLAY_LAYER = MAX_MASKS;
+const SHAPE_KIND: Readonly<Record<MaskShape['kind'], number>> = { linear: 0, radial: 1, brush: 2 };
 
 /**
  * Display-only extras for the screen (never exports or the histogram):
@@ -123,6 +152,14 @@ export class Renderer {
    * toggling clipping only re-runs the display pass. Compared by reference.
    */
   private shownCache: { source: SizedTexture; after: PipelineParams; before: PipelineParams | null } | null = null;
+  /**
+   * Brush weight maps (M21): an R8 texture array, BRUSH_RASTER_EDGE square
+   * per layer, made when the first brush mask shows up. Until then a 1×1
+   * array keeps the sampler valid. `brushKeys` says which raster each layer holds.
+   */
+  private brushTexture: WebGLTexture | null = null;
+  private readonly emptyBrush: WebGLTexture;
+  private brushKeys: (string | null)[] = new Array<string | null>(BRUSH_LAYERS).fill(null);
   /** RGBA32F tone-curve table (CURVE_LUT_SIZE × 1), uploaded when curves are set. */
   private readonly curveTexture: WebGLTexture;
 
@@ -140,6 +177,9 @@ export class Renderer {
     this.detailUniforms = locate(gl, this.detailProgram, DETAIL_UNIFORMS);
     this.geometryUniforms = locate(gl, this.geometryProgram, GEOMETRY_UNIFORMS);
     this.displayUniforms = locate(gl, this.displayProgram, DISPLAY_UNIFORMS);
+    this.emptyBrush = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.emptyBrush);
+    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.R8, 1, 1, 1);
     this.curveTexture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.curveTexture);
     gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, CURVE_LUT_SIZE, 1);
@@ -211,6 +251,8 @@ export class Renderer {
     this.clearImage();
     this.releaseIntermediates();
     this.gl.deleteTexture(this.curveTexture);
+    this.gl.deleteTexture(this.emptyBrush);
+    if (this.brushTexture) this.gl.deleteTexture(this.brushTexture);
     for (const program of [this.developProgram, this.blurProgram, this.detailProgram, this.geometryProgram, this.displayProgram]) this.gl.deleteProgram(program);
   }
 
@@ -238,14 +280,29 @@ export class Renderer {
       if (!fresh || cache.before !== wantBefore) this.render(source, { ...wantBefore, geometry: params.geometry }, this.offscreen(before));
     }
     this.shownCache = { source, after: params, before: wantBefore ?? (fresh ? cache.before : null) };
-    this.displayPass(after, before, split === null ? -1 : split * target.width, display.options, target);
+    this.displayPass(after, before, split === null ? -1 : split * target.width, display.options, target, geometryMatrix(source, params.geometry, target), source);
   }
 
-  private displayPass(after: RenderTarget, before: RenderTarget, splitX: number, o: DisplayOptions, target: Target): void {
+  private displayPass(after: RenderTarget, before: RenderTarget, splitX: number, o: DisplayOptions, target: Target, toSource: readonly number[], source: SizedTexture): void {
     const { gl } = this;
     const u = this.displayUniforms;
+    // Upload before binding the target: the brush upload binds its own texture unit.
+    const overlay = o.overlay;
+    const overlayB = overlay?.kind === 'brush' && overlay.raster ? this.brushLayer(OVERLAY_LAYER, overlay.raster) : overlay?.b;
     this.bindTarget(target);
     gl.useProgram(this.displayProgram);
+    this.bindBrushes(u.brush);
+    gl.uniform1i(u.overlayOn, overlay ? 1 : 0);
+    if (overlay && overlayB) {
+      gl.uniform1i(u.overlayKind, SHAPE_KIND[overlay.kind]);
+      gl.uniform4f(u.overlayA, ...overlay.a);
+      gl.uniform4f(u.overlayB, overlayB[0], overlayB[1], overlayB[2], overlayB[3]);
+      gl.uniform3f(u.rowX, toSource[0] ?? 0, toSource[1] ?? 0, toSource[2] ?? 0);
+      gl.uniform3f(u.rowY, toSource[3] ?? 0, toSource[4] ?? 0, toSource[5] ?? 0);
+      gl.uniform2f(u.srcSize, source.width, source.height);
+      gl.uniform3f(u.overlayColor, MASK_OVERLAY_RGB[0] / 255, MASK_OVERLAY_RGB[1] / 255, MASK_OVERLAY_RGB[2] / 255);
+      gl.uniform1f(u.overlayOpacity, MASK_OVERLAY_OPACITY);
+    }
     this.bindTexture(0, after.texture, u.after);
     this.bindTexture(1, before.texture, u.before);
     gl.uniform1i(u.flipY, target.flipY ? 1 : 0);
@@ -319,6 +376,7 @@ export class Renderer {
   private developPass(source: SizedTexture, params: PipelineParams, target: Target): void {
     const { gl } = this;
     const u = this.developUniforms;
+    const masks = this.maskUniforms(params);
     this.bindTarget(target);
     gl.useProgram(this.developProgram);
     gl.activeTexture(gl.TEXTURE0);
@@ -345,19 +403,26 @@ export class Renderer {
     gl.uniform1fv(u.hslSat, params.hsl?.sat ?? ZERO8);
     gl.uniform1fv(u.hslLum, params.hsl?.lum ?? ZERO8);
     this.setColorGrading(params);
-    this.setMasks(params);
+    this.setMasks(masks.masks, masks.b);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  private setMasks(params: PipelineParams): void {
+  /** Mask uniforms; brush rasters are uploaded to their layer first (call before binding the target). */
+  private maskUniforms(params: PipelineParams): { masks: PipelineParams['masks']; b: number[] } {
+    const masks = params.masks.slice(0, MAX_MASKS);
+    const b = masks.flatMap((m, i) => (m.shape.kind === 'brush' && m.shape.raster ? this.brushLayer(i, m.shape.raster) : m.shape.b));
+    return { masks, b };
+  }
+
+  private setMasks(masks: PipelineParams['masks'], b: number[]): void {
     const { gl } = this;
     const u = this.developUniforms;
-    const masks = params.masks.slice(0, MAX_MASKS);
+    this.bindBrushes(u.brush);
     gl.uniform1i(u.maskCount, masks.length);
     if (masks.length === 0) return;
-    gl.uniform1iv(u.maskKind, masks.map((m) => (m.shape.kind === 'linear' ? 0 : 1)));
+    gl.uniform1iv(u.maskKind, masks.map((m) => SHAPE_KIND[m.shape.kind]));
     gl.uniform4fv(u.maskA, masks.flatMap((m) => m.shape.a));
-    gl.uniform4fv(u.maskB, masks.flatMap((m) => m.shape.b));
+    gl.uniform4fv(u.maskB, b);
     gl.uniform3fv(u.maskWB, masks.flatMap((m) => [...m.whiteBalance]));
     gl.uniform1fv(u.maskGain, masks.map((m) => m.exposureGain));
     gl.uniform3fv(u.maskTone, masks.flatMap((m) => [m.tone.contrast, m.tone.highlights, m.tone.shadows]));
@@ -393,6 +458,37 @@ export class Renderer {
     gl.uniform3f(u.rowY, m[3], m[4], m[5]);
     gl.uniform1f(u.vignette, params.vignette);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** Puts `raster` in brush layer `layer` (uploading only when it changed); returns the shape's b uniform. */
+  private brushLayer(layer: number, raster: BrushRaster): [number, number, number, number] {
+    const { gl } = this;
+    if (!this.brushTexture) {
+      this.brushTexture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.brushTexture);
+      gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.R8, BRUSH_RASTER_EDGE, BRUSH_RASTER_EDGE, BRUSH_LAYERS);
+    }
+    if (this.brushKeys[layer] !== raster.key) {
+      gl.activeTexture(gl.TEXTURE0 + BRUSH_UNIT);
+      gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.brushTexture);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, raster.width, raster.height, 1, gl.RED, gl.UNSIGNED_BYTE, raster.data);
+      this.brushKeys[layer] = raster.key;
+    }
+    return [raster.width, raster.height, layer, 0];
+  }
+
+  /** Binds the brush maps (or the empty stand-in) to their unit; always, so the sampler never shares a unit with a 2D texture. */
+  private bindBrushes(location: WebGLUniformLocation | null): void {
+    const { gl } = this;
+    gl.activeTexture(gl.TEXTURE0 + BRUSH_UNIT);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.brushTexture ?? this.emptyBrush);
+    gl.uniform1i(location, BRUSH_UNIT);
+  }
+
+  /** GPU memory of the brush maps (allocated with the first brush mask). */
+  get brushBytes(): number {
+    return this.brushTexture ? BRUSH_RASTER_EDGE * BRUSH_RASTER_EDGE * BRUSH_LAYERS : 0;
   }
 
   private bindTarget(target: Target): void {

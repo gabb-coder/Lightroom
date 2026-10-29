@@ -1,5 +1,6 @@
 import type { DisplayOptions } from '../engine/display';
 import { computeHistogram } from '../engine/histogram';
+import { maskShape } from '../engine/masks';
 import { pipelineParams, type PipelineParams } from '../engine/pipeline';
 import { jsonEqual } from '../model/compare';
 import { displayGeometry } from '../model/crop';
@@ -51,7 +52,8 @@ export function attachRenderer(canvas: HTMLCanvasElement, onError: (message: str
     const geometry = displayGeometry(state.settings.geometry, { before, cropping: state.cropping });
     let params = before ? BEFORE_PARAMS : { ...pipelineParams(state.settings), geometry };
     const kind = state.interacting ? 'proxy' : 'full';
-    const display = displayOptions(useViewStore.getState(), !before && !state.cropping);
+    const view = useViewStore.getState();
+    const display = displayOptions(view, !before && !state.cropping, overlayShape(state, view.showMaskOverlay && !before));
     // E.g. moving the crop box while cropping changes settings, not pixels.
     const sameParams = shown !== null && shown.kind === kind && jsonEqual(shown.params, params);
     if (shown && sameParams && jsonEqual(shown.display, display)) return;
@@ -102,13 +104,22 @@ export function attachRenderer(canvas: HTMLCanvasElement, onError: (message: str
       state.settings !== prev.settings ||
       state.interacting !== prev.interacting ||
       state.cropping !== prev.cropping ||
+      state.selectedMaskId !== prev.selectedMaskId ||
+      state.masksOpen !== prev.masksOpen ||
       selectShowingBefore(state) !== selectShowingBefore(prev)
     )
       schedule();
   });
 
   const unsubscribeView = useViewStore.subscribe((view, prev) => {
-    if (view.clipShadows !== prev.clipShadows || view.clipHighlights !== prev.clipHighlights || view.split !== prev.split || view.splitAt !== prev.splitAt) schedule();
+    if (
+      view.clipShadows !== prev.clipShadows ||
+      view.clipHighlights !== prev.clipHighlights ||
+      view.split !== prev.split ||
+      view.splitAt !== prev.splitAt ||
+      view.showMaskOverlay !== prev.showMaskOverlay
+    )
+      schedule();
   });
 
   return () => {
@@ -119,6 +130,13 @@ export function attachRenderer(canvas: HTMLCanvasElement, onError: (message: str
     renderer.dispose();
     useHistogramStore.getState().setHistogram(null);
   };
+}
+
+/** The selected mask's shape for the overlay (Masks panel open, overlay on, not cropping), or null. */
+function overlayShape(state: ReturnType<typeof useDevelopStore.getState>, show: boolean) {
+  if (!show || !state.masksOpen || state.cropping) return null;
+  const mask = state.settings.masks.find((m) => m.id === state.selectedMaskId);
+  return mask ? maskShape(mask) : null;
 }
 
 /** Downscaled copy of `bitmap` with the given long edge, or null if it is already that small. */

@@ -35,7 +35,7 @@ devices come out at that size.
 3. **Develop:** move Exposure, Contrast, the tone curve, a color mixer slider, color grading and sharpening. The photo updates smoothly while dragging and looks sharp after letting go.
 4. **Zoom:** Fit, Fill, 1:1, Z, drag to pan, Navigator click.
 5. **Crop:** straighten 10°, aspect 1:1, rotate 90°, flip.
-6. **Masks:** a linear and a radial gradient with exposure; they stay put after rotating.
+6. **Masks:** a linear and a radial gradient with exposure (rotate the radial with its handle), and a brush mask (paint, Alt to erase); they stay put after rotating. Show overlay (O) tints the selected one.
 7. **History:** undo/redo, Before/After with `\`.
 8. **Export:** one photo as JPEG (resized) and as PNG (full size); open both and compare with the screen. Then a batch of 3 as one ZIP (unzip it), as separate downloads, and (Chrome/Edge) into a chosen folder twice: the second run adds `-2` names instead of replacing files.
 9. **Backup:** back up the catalog, open the app in a private window (or another browser profile), restore, compare.

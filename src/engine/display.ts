@@ -1,4 +1,6 @@
+import { applyAffine, type Affine, type Size } from './geometry';
 import { HISTOGRAM_BINS, type Histogram } from './histogram';
+import { maskWeight, type MaskShape } from './masks';
 
 /**
  * Display-only stage (M20): clipping warnings and the split Before/After
@@ -14,16 +16,28 @@ export interface DisplayOptions {
   highlights: boolean;
   /** Split position across the width (0–1, Before on the left), or null for no split. */
   split: number | null;
+  /** Mask overlay (M21): tint where this mask applies, or null. */
+  overlay: MaskShape | null;
 }
 
-export const NO_DISPLAY: DisplayOptions = { shadows: false, highlights: false, split: null };
+export const NO_DISPLAY: DisplayOptions = { shadows: false, highlights: false, split: null, overlay: null };
+
+/** Mask overlay tint and its strength at full mask weight. */
+export const MASK_OVERLAY_RGB = [255, 30, 60] as const;
+export const MASK_OVERLAY_OPACITY = 0.5;
+
+/** Maps output pixels to source pixels (the geometry matrix), for the mask overlay. */
+export interface DisplayFrame {
+  matrix: Affine;
+  source: Size;
+}
 
 /** Overlay colors (RGB bytes): blue for crushed shadows, red for blown highlights. */
 export const SHADOW_CLIP_RGB = [30, 110, 255] as const;
 export const HIGHLIGHT_CLIP_RGB = [255, 40, 40] as const;
 
 export function isPlainDisplay(o: DisplayOptions): boolean {
-  return !o.shadows && !o.highlights && o.split === null;
+  return !o.shadows && !o.highlights && o.split === null && o.overlay === null;
 }
 
 /** Clipping overlay for one pixel's bytes: the overlay color, or null to keep the pixel. */
@@ -39,10 +53,17 @@ export function showsBefore(x: number, width: number, split: number | null): boo
 }
 
 /**
- * CPU reference for the display pass: picks Before or After per column, then
- * applies the clipping overlay. `before` is only read when splitting.
+ * CPU reference for the display pass: picks Before or After per column,
+ * applies the clipping overlay, then the mask overlay (needs `frame`).
+ * `before` is only read when splitting.
  */
-export function displayRgba8(after: Uint8Array | Uint8ClampedArray, before: Uint8Array | Uint8ClampedArray | null, width: number, o: DisplayOptions): Uint8ClampedArray {
+export function displayRgba8(
+  after: Uint8Array | Uint8ClampedArray,
+  before: Uint8Array | Uint8ClampedArray | null,
+  width: number,
+  o: DisplayOptions,
+  frame: DisplayFrame | null = null,
+): Uint8ClampedArray {
   const out = new Uint8ClampedArray(after.length);
   for (let i = 0; i < after.length; i += 4) {
     const x = (i / 4) % width;
@@ -57,6 +78,14 @@ export function displayRgba8(after: Uint8Array | Uint8ClampedArray, before: Uint
     out[i + 1] = clip ? clip[1] : g;
     out[i + 2] = clip ? clip[2] : b;
     out[i + 3] = a;
+    if (o.overlay && frame && a > 0) {
+      const [sx, sy] = applyAffine(frame.matrix, x + 0.5, Math.floor(i / 4 / width) + 0.5);
+      const t = MASK_OVERLAY_OPACITY * maskWeight(o.overlay, sx, sy, frame.source.width, frame.source.height);
+      for (let ch = 0; ch < 3; ch++) {
+        const v = (out[i + ch] ?? 0) / 255;
+        out[i + ch] = Math.round((v * (1 - t) + (MASK_OVERLAY_RGB[ch] ?? 0) / 255 * t) * 255);
+      }
+    }
   }
   return out;
 }
