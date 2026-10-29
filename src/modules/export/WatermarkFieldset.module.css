@@ -1,0 +1,86 @@
+/* Watermark section of the Export dialog (M23); reuses the dialog's grid. */
+.logoRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.logoRow > select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+.sliderValue {
+  width: 40px;
+  text-align: right;
+  color: var(--color-text-strong);
+}
+
+/* 3 × 3 position grid: each cell shows a dot where the logo would sit. */
+.positions {
+  width: fit-content;
+  display: grid;
+  grid-template-columns: repeat(3, 26px);
+  grid-template-rows: repeat(3, 20px);
+  gap: 3px;
+}
+
+.position {
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border-control);
+  border-radius: 3px;
+  background: var(--color-app-bg);
+}
+
+.position > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-muted);
+}
+
+.position[aria-checked='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-selected-bg);
+}
+
+.position[aria-checked='true'] > span {
+  background: var(--color-accent);
+}
+
+.position:disabled {
+  opacity: 0.5;
+}
+
+.preview {
+  min-height: 40px;
+}
+
+.previewFrame {
+  position: relative;
+  max-width: 100%;
+  max-height: 180px;
+  width: fit-content;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--color-app-bg);
+}
+
+.previewFrame > img:first-child {
+  display: block;
+  max-width: 100%;
+  max-height: 180px;
+}
+
+.previewLogo {
+  position: absolute;
+  pointer-events: none;
+}

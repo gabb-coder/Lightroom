@@ -169,6 +169,14 @@ component library.
   can't do WebGL2, or with `?export=main`). Renderer scratch: blur target
   is RG8; `releaseScratch()` after exports. Manual cross-browser checklist:
   `docs/BROWSER_CHECKLIST.md` (only Chromium is automated).
+- Logo watermark (M23): `ExportOptions.watermark` (logo id, 3×3 position,
+  size % of width, opacity, margin % of the shorter side); like the export
+  location it is a kept setting (`KEPT_KEYS` / `withKept`: presets don't
+  change it). Logos live in DB v6 table `logos` (`state/logoStore.ts`;
+  PNG/JPEG/WebP) and in backups. `engine/watermark.ts` (placement,
+  premultiplied area/bilinear resampling, "over" compositing) runs on the
+  final export pixels in `render/exportRender.ts`, after any resize; no
+  GPU twin. The dialog preview uses the same `watermarkRect`.
 - Interface (M22): every shortcut is listed in `shortcuts/shortcutList.ts`
   (the `?` / top-bar dialog renders it; a unit test reads the handler
   sources and fails if a handled key is missing, so add new shortcuts

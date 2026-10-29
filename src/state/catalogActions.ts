@@ -26,7 +26,7 @@ export function backupFileName(now = new Date()): string {
 /** Builds the backup archive: manifest, originals (masters only) and thumbnails. */
 export async function createBackup(onProgress: Progress = () => undefined): Promise<Blob> {
   await flushEdits();
-  const [photos, edits, thumbnails, collections, snapshots, presets, exportPresets] = await Promise.all([
+  const [photos, edits, thumbnails, collections, snapshots, presets, exportPresets, logoRows] = await Promise.all([
     db.photos.orderBy('importIndex').toArray(),
     db.edits.toArray(),
     db.thumbnails.toArray(),
@@ -34,6 +34,7 @@ export async function createBackup(onProgress: Progress = () => undefined): Prom
     db.snapshots.toArray(),
     db.presets.toArray(),
     db.exportPresets.toArray(),
+    db.logos.toArray(),
   ]);
   const editsById = new Map(edits.map((e) => [e.photoId, e.history]));
   const thumbsById = new Map(thumbnails.map((t) => [t.photoId, t]));
@@ -55,7 +56,12 @@ export async function createBackup(onProgress: Progress = () => undefined): Prom
     if (thumbs?.edited && editedThumbnail) files.push({ name: editedThumbnail, data: thumbs.edited });
     entries.push({ photo, history: editsById.get(photo.id) ?? null, original, thumbnail, editedThumbnail });
   }
-  const manifest = { format: BACKUP_FORMAT, version: BACKUP_VERSION, createdAt: Date.now(), photos: entries, collections, snapshots, presets, exportPresets };
+  const logos = logoRows.map(({ blob, ...logo }) => {
+    const file = `logos/${logo.id}.${extensionForType(blob.type)}`;
+    files.push({ name: file, data: blob, date: logo.addedAt });
+    return { ...logo, file, type: blob.type };
+  });
+  const manifest = { format: BACKUP_FORMAT, version: BACKUP_VERSION, createdAt: Date.now(), photos: entries, collections, snapshots, presets, exportPresets, logos };
   onProgress(photos.length, photos.length);
   return createZip([{ name: MANIFEST_NAME, data: JSON.stringify(manifest) }, ...files]);
 }
@@ -128,8 +134,23 @@ export async function restoreBackup(file: Blob, onProgress: Progress = () => und
     }
   }
   await restoreExtras(manifest, restored, existing, result);
+  await restoreLogos(manifest, byName);
   onProgress(ordered.length, ordered.length);
   return result;
+}
+
+/** Watermark logos not already in the catalog (a damaged file is skipped). */
+async function restoreLogos(manifest: BackupManifest, byName: ReadonlyMap<string, ZipEntry>): Promise<void> {
+  for (const logo of manifest.logos) {
+    const entry = byName.get(logo.file);
+    if (!entry || (await db.logos.get(logo.id))) continue;
+    try {
+      const blob = new Blob([(await readEntryBytes(entry)).slice().buffer as ArrayBuffer], { type: logo.type });
+      await db.logos.add({ id: logo.id, name: logo.name, blob, width: logo.width, height: logo.height, addedAt: logo.addedAt });
+    } catch {
+      // A damaged logo file: the rest of the backup still restores.
+    }
+  }
 }
 
 /** Collections, snapshots and presets that come with the restored photos. */

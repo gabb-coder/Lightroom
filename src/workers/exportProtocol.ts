@@ -7,6 +7,8 @@ export interface ExportRequest {
   original: Blob;
   settings: EditSettings;
   options: ExportOptions;
+  /** The watermark logo file (M23), when the options use one. */
+  logo: Blob | null;
 }
 
 export type ExportStage = 'decode' | 'render' | 'encode';

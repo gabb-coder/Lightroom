@@ -36,7 +36,22 @@ export interface BackupManifest {
   snapshots: SnapshotRecord[];
   presets: Preset[];
   exportPresets: ExportPreset[];
+  /** Watermark logos (M23); older backups have none. */
+  logos: BackupLogo[];
 }
+
+export interface BackupLogo {
+  id: string;
+  name: string;
+  /** Path inside the archive. */
+  file: string;
+  type: string;
+  width: number;
+  height: number;
+  addedAt: number;
+}
+
+const LOGO_FILE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
 export class BackupFormatError extends Error {
   constructor(message: string) {
@@ -162,7 +177,17 @@ export function parseManifest(raw: unknown): BackupManifest {
     if (!id || !name) return [];
     return [{ id, name, options: normalizeExportOptions(isObject(p.options) ? p.options : {}) }];
   });
-  return { format: BACKUP_FORMAT, version, createdAt: num(raw.createdAt, 0), photos, collections, snapshots, presets, exportPresets };
+  const logos = list(raw.logos).flatMap((l): BackupLogo[] => {
+    if (!isObject(l)) return [];
+    const id = str(l.id);
+    const file = str(l.file);
+    const type = str(l.type);
+    const width = num(l.width, 0);
+    const height = num(l.height, 0);
+    if (!id || !file || !type || !LOGO_FILE_TYPES.includes(type) || width <= 0 || height <= 0) return [];
+    return [{ id, name: (str(l.name) ?? 'Logo').slice(0, 120), file, type, width, height, addedAt: num(l.addedAt, 0) }];
+  });
+  return { format: BACKUP_FORMAT, version, createdAt: num(raw.createdAt, 0), photos, collections, snapshots, presets, exportPresets, logos };
 }
 
 /**

@@ -31,10 +31,16 @@ export function createExportClient() {
    * worker can't (e.g. no WebGL2 on an OffscreenCanvas there), on the main
    * thread instead.
    */
-  async function run(original: Blob, settings: EditSettings, options: ExportOptions, onStage: (stage: ExportStage) => void = () => undefined): Promise<ExportResult> {
+  async function run(
+    original: Blob,
+    settings: EditSettings,
+    options: ExportOptions,
+    onStage: (stage: ExportStage) => void = () => undefined,
+    logo: Blob | null = null,
+  ): Promise<ExportResult> {
     if (!useMainThread) {
       try {
-        return await runInWorker(original, settings, options, onStage);
+        return await runInWorker(original, settings, options, onStage, logo);
       } catch (error) {
         if (error instanceof ExportCancelled) throw error;
         if (!isWorkerCapabilityError(error)) throw error;
@@ -42,10 +48,10 @@ export function createExportClient() {
       }
     }
     const { exportOnMainThread } = await import('../render/mainThreadExport');
-    return exportOnMainThread(original, settings, options, onStage);
+    return exportOnMainThread(original, settings, options, onStage, logo);
   }
 
-  function runInWorker(original: Blob, settings: EditSettings, options: ExportOptions, onStage: (stage: ExportStage) => void): Promise<ExportResult> {
+  function runInWorker(original: Blob, settings: EditSettings, options: ExportOptions, onStage: (stage: ExportStage) => void, logo: Blob | null): Promise<ExportResult> {
     worker ??= new Worker(new URL('./export.worker.ts', import.meta.url), { type: 'module' });
     const w = worker;
     const id = nextId++;
@@ -80,7 +86,7 @@ export function createExportClient() {
         cancelCurrent = null;
         reject(new ExportCancelled());
       };
-      w.postMessage({ id, original, settings, options });
+      w.postMessage({ id, original, settings, options, logo });
     });
   }
 

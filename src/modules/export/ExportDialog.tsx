@@ -17,6 +17,7 @@ import { closeExportDialog, runExport, useExportStore } from '../../state/export
 import { supportsFolderExport } from '../../io/folderAccess';
 import { useLibraryStore } from '../../state/libraryStore';
 import styles from './ExportDialog.module.css';
+import { WatermarkFieldset } from './WatermarkFieldset';
 
 function PresetList() {
   const presetId = useExportStore((s) => s.presetId);
@@ -237,6 +238,8 @@ function Settings() {
           <span className={styles.hint}>px</span>
         </div>
       </Fieldset>
+
+      <WatermarkFieldset />
 
       <Fieldset legend="Metadata">
         <label htmlFor="ex-meta" className={styles.label}>

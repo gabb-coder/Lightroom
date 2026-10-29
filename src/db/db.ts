@@ -86,6 +86,16 @@ export interface EditRecord {
   updatedAt: number;
 }
 
+/** A logo for export watermarks (M23). The file is kept as added. */
+export interface LogoRecord {
+  id: string;
+  name: string;
+  blob: Blob;
+  width: number;
+  height: number;
+  addedAt: number;
+}
+
 export const DB_NAME = 'photo-editor';
 
 export class CatalogDb extends Dexie {
@@ -97,6 +107,7 @@ export class CatalogDb extends Dexie {
   exportPresets!: Table<ExportPreset, string>;
   collections!: Table<CollectionRecord, string>;
   snapshots!: Table<SnapshotRecord, string>;
+  logos!: Table<LogoRecord, string>;
 
   constructor(name = DB_NAME) {
     super(name);
@@ -124,6 +135,8 @@ export class CatalogDb extends Dexie {
     this.version(4).stores({ collections: 'id' });
     // v5 (M13): snapshots per photo.
     this.version(5).stores({ snapshots: 'id, photoId' });
+    // v6 (M23): logos for export watermarks.
+    this.version(6).stores({ logos: 'id' });
   }
 }
 

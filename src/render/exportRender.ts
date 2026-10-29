@@ -2,12 +2,14 @@
  * Export rendering, shared by the export worker and the main-thread
  * fallback (browsers without WebGL2 on an OffscreenCanvas in workers):
  * renders a photo at full resolution with the screen's pipeline, resizes
- * if asked, encodes, and copies EXIF per policy. The original is only read.
+ * if asked, lays the logo watermark on (M23), encodes, and copies EXIF per
+ * policy. The original is only read.
  */
 import { pipelineParams } from '../engine/pipeline';
+import { applyWatermark } from '../engine/watermark';
 import { copyExif } from '../io/exifWrite';
 import type { EditSettings } from '../model/editSettings';
-import { exportSize, type ExportOptions } from '../model/exportOptions';
+import { exportSize, hasWatermark, type ExportOptions } from '../model/exportOptions';
 import type { RgbaImage } from './gl';
 import { fitLongEdge } from './proxy';
 import { Renderer } from './Renderer';
@@ -47,6 +49,28 @@ async function toCanvas(env: ExportEnvironment, image: RgbaImage, options: Expor
   return canvas;
 }
 
+/** The logo's RGBA8 pixels (straight alpha). Canvas 2D only decodes here; the compositing is engine/watermark.ts. */
+async function logoPixels(env: ExportEnvironment, logo: Blob): Promise<RgbaImage> {
+  const bitmap = await createImageBitmap(logo, { premultiplyAlpha: 'none' });
+  const canvas = env.createCanvas(bitmap.width, bitmap.height);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No 2D context for the logo');
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  return { width: canvas.width, height: canvas.height, data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength) };
+}
+
+/** Lays the logo on the final pixels, if the options ask for one. */
+async function watermark(env: ExportEnvironment, canvas: EncodableCanvas, options: ExportOptions, logo: Blob | null): Promise<void> {
+  if (!logo || !hasWatermark(options)) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No 2D context for encoding');
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  applyWatermark(image, await logoPixels(env, logo), options.watermark, options.watermark.opacity / 100);
+  ctx.putImageData(image, 0, 0);
+}
+
 async function encode(env: ExportEnvironment, canvas: EncodableCanvas, original: Blob, options: ExportOptions): Promise<Blob> {
   if (options.format === 'png') return env.toBlob(canvas, 'image/png');
   const jpeg = await env.toBlob(canvas, 'image/jpeg', options.quality / 100);
@@ -61,6 +85,7 @@ export async function renderExport(
   settings: EditSettings,
   options: ExportOptions,
   progress: (stage: ExportStage) => void,
+  logo: Blob | null = null,
 ): Promise<{ blob: Blob; width: number; height: number }> {
   progress('decode');
   const r = env.renderer();
@@ -81,6 +106,7 @@ export async function renderExport(
   r.releaseScratch();
   progress('encode');
   const canvas = await toCanvas(env, image, options);
+  await watermark(env, canvas, options, logo);
   const blob = await encode(env, canvas, original, options);
   return { blob, width: canvas.width, height: canvas.height };
 }

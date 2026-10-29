@@ -73,3 +73,20 @@ describe('backup manifest', () => {
     expect(extensionForType('image/jpeg')).toBe('jpg');
   });
 });
+
+describe('logos in backups (M23)', () => {
+  it('keeps valid logos and drops broken ones; older backups have none', () => {
+    const base = { format: 'darkroom-backup', version: 1, photos: [] };
+    const m = parseManifest({
+      ...base,
+      logos: [
+        { id: 'l1', name: 'Studio.png', file: 'logos/l1.png', type: 'image/png', width: 400, height: 120, addedAt: 5 },
+        { id: 'l2', file: 'logos/l2.svg', type: 'image/svg+xml', width: 10, height: 10 },
+        { id: 'l3', file: 'logos/l3.png', type: 'image/png', width: 0, height: 10 },
+        'junk',
+      ],
+    });
+    expect(m.logos).toEqual([{ id: 'l1', name: 'Studio.png', file: 'logos/l1.png', type: 'image/png', width: 400, height: 120, addedAt: 5 }]);
+    expect(parseManifest(base).logos).toEqual([]);
+  });
+});
