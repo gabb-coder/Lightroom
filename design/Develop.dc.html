@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Develop</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+body{margin:0;background:#1b1b1b}
+a{color:#cfcfcf}a:hover{color:#ffffff}
+.app{height:100vh;min-height:640px}
+.scroll{overflow-y:auto}
+button{font:inherit;cursor:pointer}
+button:disabled{cursor:default}
+button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #4aa3ff;outline-offset:1px}
+.rng{-webkit-appearance:none;appearance:none;width:100%;height:16px;margin:0;background:transparent;cursor:pointer}
+.rng::-webkit-slider-runnable-track{height:16px;background:transparent}
+.rng::-moz-range-track{background:transparent}
+.rng::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;margin-top:2.5px;border-radius:50%;background:#d6d6d6;border:none;box-shadow:0 0 0 2px #232323}
+.rng::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:#d6d6d6;border:none;box-shadow:0 0 0 2px #232323}
+.rng:hover::-webkit-slider-thumb{background:#ffffff}
+.rng:focus{outline:none}
+.rng:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 2px #232323,0 0 0 4px #4aa3ff}
+.rng:focus-visible::-moz-range-thumb{box-shadow:0 0 0 2px #232323,0 0 0 4px #4aa3ff}
+@media (max-width:900px){.app{height:auto}.scroll{overflow:visible}.lp{order:3}}
+</style>
+</helmet>
+<div class="app" style="display: flex; flex-direction: column; box-sizing: border-box; background: #1b1b1b; color: #cfcfcf; font-family: Inter, system-ui, sans-serif; font-size: 12px; line-height: 1.35">
+
+<header style="flex: 0 0 auto; height: 44px; display: flex; align-items: center; gap: 16px; padding: 0 12px 0 16px; background: #161616; border-bottom: 1px solid #2f2f2f; box-sizing: border-box">
+<div style="flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 8px">
+<svg aria-hidden="true" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#cfcfcf" stroke-width="1.4"><circle cx="9" cy="9" r="7.25"></circle><path d="M9 1.75L12.4 7.9M16.2 9.2L9.6 12.5M12.3 15.6L5.6 12M1.8 9.6L6.2 4.4M4.9 3L12.6 3.4"></path></svg>
+<span style="font-size: 13px; font-weight: 600; color: #ececec">Darkslide</span>
+</div>
+<nav aria-label="Modules" style="display: flex; gap: 2px">
+<a href="Library.dc.html" style="padding: 0 14px; height: 44px; display: flex; align-items: center; color: #b5b5b5; text-decoration: none; font-weight: 500">Library</a>
+<a href="Develop.dc.html" aria-current="page" style="padding: 0 14px; height: 44px; display: flex; align-items: center; color: #ffffff; text-decoration: none; font-weight: 600; box-shadow: inset 0 -2px 0 #4aa3ff">Develop</a>
+<a href="Export.dc.html" style="padding: 0 14px; height: 44px; display: flex; align-items: center; color: #b5b5b5; text-decoration: none; font-weight: 500">Export</a>
+</nav>
+<div style="flex: 1 1 0; min-width: 0; display: flex; justify-content: flex-end; align-items: center; gap: 2px">
+<button aria-label="Undo" onClick="{{undo}}" disabled="{{undoDisabled}}" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 4px; color: {{undoColor}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4L3 7l3 3"></path><path d="M3 7h7a3 3 0 010 6H8"></path></svg></button>
+<button aria-label="Redo" onClick="{{redo}}" disabled="{{redoDisabled}}" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 4px; color: {{redoColor}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4l3 3-3 3"></path><path d="M13 7H6a3 3 0 000 6h2"></path></svg></button>
+<a href="Kit.dc.html" aria-label="Keyboard shortcuts" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: #b5b5b5; border-radius: 4px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="1.5" y="4" width="13" height="8.5" rx="1.2"></rect><path d="M4.2 7h.6M7.2 7h.6M10.2 7h.6M5 10h6"></path></svg></a>
+</div>
+</header>
+
+<div style="flex: 1 1 auto; min-height: 0; display: flex; flex-wrap: wrap">
+
+<aside class="lp scroll" aria-label="Navigator, presets and history" style="flex: 1 1 248px; max-width: 100%; min-width: 0; box-sizing: border-box; background: #232323; border-right: 1px solid #2f2f2f; display: flex; flex-direction: column">
+<section aria-label="Navigator" style="padding: 10px 14px 14px; border-bottom: 1px solid #2f2f2f">
+<div style="display: flex; align-items: center; justify-content: space-between; height: 24px; margin-bottom: 8px">
+<span style="font-weight: 600; color: #ececec">Navigator</span>
+<div role="group" aria-label="Zoom" style="display: flex; gap: 2px">
+<sc-for list="{{zooms}}" as="z" hint-placeholder-count="3">
+<button onClick="{{z.pick}}" aria-pressed="{{z.pressed}}" style="height: 22px; padding: 0 7px; border: none; border-radius: 3px; background: {{z.bg}}; color: {{z.fg}}; font-size: 11px">{{z.label}}</button>
+</sc-for>
+</div>
+</div>
+<div style="position: relative; width: 100%; aspect-ratio: 3 / 2; overflow: hidden; background: #000000">
+<div style="position: absolute; inset: 0; filter: {{imgFilter}}">
+<svg viewBox="0 0 600 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="display: block; width: 100%; height: 100%"><defs><linearGradient id="gn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{{ph.sky1}}"></stop><stop offset="1" stop-color="{{ph.sky2}}"></stop></linearGradient></defs><rect x="0" y="0" width="600" height="280" fill="url(#gn)"></rect><circle cx="420" cy="196" r="30" fill="{{ph.sun}}"></circle><polygon points="0,232 70,170 130,206 210,138 290,200 360,158 440,214 520,168 600,206 600,280 0,280" fill="{{ph.far}}"></polygon><polygon points="0,254 90,204 170,242 250,196 330,246 400,214 480,250 560,220 600,236 600,280 0,280" fill="{{ph.mid}}"></polygon><rect x="0" y="272" width="600" height="70" fill="{{ph.water}}"></rect><rect x="398" y="284" width="44" height="3" fill="{{ph.sun}}" opacity="0.7"></rect><rect x="406" y="296" width="28" height="2" fill="{{ph.sun}}" opacity="0.5"></rect><polygon points="0,272 40,262 90,270 0,280" fill="{{ph.near}}"></polygon><polygon points="0,338 110,316 220,330 330,304 450,326 600,308 600,400 0,400" fill="{{ph.ground}}"></polygon></svg>
+</div>
+<sc-if value="{{showNavRect}}" hint-placeholder-val="{{false}}">
+<div aria-hidden="true" style="position: absolute; left: {{navPos}}%; top: {{navPos}}%; width: {{navSize}}%; height: {{navSize}}%; box-sizing: border-box; border: 1px solid #ffffff; box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.45)"></div>
+</sc-if>
+</div>
+</section>
+
+<section aria-label="Presets" style="border-bottom: 1px solid #2f2f2f">
+<button onClick="{{togglePresets}}" aria-expanded="{{presetsExpanded}}" style="width: 100%; height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 14px; background: transparent; border: none; color: #ececec; font-weight: 600; text-align: left">
+<svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="transform: {{presetsChev}}; transition: transform 120ms"><path d="M6 4l4 4-4 4"></path></svg>
+<span style="flex: 1 1 auto">Presets</span>
+<span aria-hidden="true" style="color: #9e9e9e; font-weight: 400; font-size: 16px; line-height: 1">+</span>
+</button>
+<sc-if value="{{presetsOpen}}" hint-placeholder-val="{{true}}">
+<div style="padding: 0 8px 10px">
+<sc-for list="{{presetGroups}}" as="pg" hint-placeholder-count="2">
+<div style="padding: 6px 6px 2px; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: #9e9e9e">{{pg.group}}</div>
+<sc-for list="{{pg.items}}" as="p" hint-placeholder-count="3">
+<button onClick="{{p.apply}}" style="width: 100%; height: 26px; display: flex; align-items: center; padding: 0 6px 0 20px; background: transparent; border: none; border-radius: 3px; color: #cfcfcf; text-align: left">{{p.name}}</button>
+</sc-for>
+</sc-for>
+</div>
+</sc-if>
+</section>
+
+<section aria-label="History" style="flex: 1 1 auto; display: flex; flex-direction: column; min-height: 160px">
+<div style="height: 34px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px">
+<span style="font-weight: 600; color: #ececec">History</span>
+<span style="color: #9e9e9e; font-variant-numeric: tabular-nums">{{histCount}} steps</span>
+</div>
+<ol style="list-style: none; margin: 0; padding: 0 8px 10px">
+<sc-for list="{{history}}" as="h" hint-placeholder-count="6">
+<li>
+<button onClick="{{h.go}}" aria-current="{{h.ariaCurrent}}" style="width: 100%; height: 26px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px; border: none; border-radius: 3px; background: {{h.bg}}; color: {{h.fg}}; font-style: {{h.style}}; text-align: left">
+<span>{{h.label}}</span><span style="font-variant-numeric: tabular-nums">{{h.value}}</span>
+</button>
+</li>
+</sc-for>
+</ol>
+</section>
+
+<div style="display: flex; gap: 6px; padding: 10px 14px; border-top: 1px solid #2f2f2f">
+<button style="flex: 1 1 0; height: 28px; border: 1px solid #3a3a3a; border-radius: 4px; background: #2a2a2a; color: #e2e2e2">Copy settings…</button>
+<button style="flex: 1 1 0; height: 28px; border: 1px solid #3a3a3a; border-radius: 4px; background: #2a2a2a; color: #e2e2e2">Paste</button>
+</div>
+</aside>
+
+<main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; background: #141414">
+<div style="flex: 0 0 auto; height: 32px; display: flex; align-items: center; gap: 12px; padding: 0 16px; color: #9e9e9e; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden">
+<span style="color: #e2e2e2; font-weight: 500">{{fileName}}</span>
+<span>6000 × 4000</span>
+<span>Photo {{photoNum}} of 14</span>
+</div>
+<div style="flex: 1 1 auto; min-height: 360px; display: flex; align-items: center; justify-content: center; padding: 8px 24px 16px">
+<div style="position: relative; width: min(100%, 980px, calc((100vh - 250px) * 1.5)); aspect-ratio: 3 / 2; overflow: hidden; background: #000000; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55)">
+<div style="position: absolute; inset: 0; filter: {{imgFilter}}; transform: {{imgTransform}}; transform-origin: center; transition: transform 160ms">
+<svg viewBox="0 0 600 400" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Sample photo of mountains above a lake" style="display: block; width: 100%; height: 100%"><defs><linearGradient id="gm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{{ph.sky1}}"></stop><stop offset="1" stop-color="{{ph.sky2}}"></stop></linearGradient></defs><rect x="0" y="0" width="600" height="280" fill="url(#gm)"></rect><circle cx="420" cy="196" r="30" fill="{{ph.sun}}"></circle><polygon points="0,232 70,170 130,206 210,138 290,200 360,158 440,214 520,168 600,206 600,280 0,280" fill="{{ph.far}}"></polygon><polygon points="0,254 90,204 170,242 250,196 330,246 400,214 480,250 560,220 600,236 600,280 0,280" fill="{{ph.mid}}"></polygon><rect x="0" y="272" width="600" height="70" fill="{{ph.water}}"></rect><rect x="398" y="284" width="44" height="3" fill="{{ph.sun}}" opacity="0.7"></rect><rect x="406" y="296" width="28" height="2" fill="{{ph.sun}}" opacity="0.5"></rect><rect x="412" y="307" width="16" height="2" fill="{{ph.sun}}" opacity="0.35"></rect><polygon points="0,272 40,262 90,270 0,280" fill="{{ph.near}}"></polygon><polygon points="0,338 110,316 220,330 330,304 450,326 600,308 600,400 0,400" fill="{{ph.ground}}"></polygon></svg>
+</div>
+<div aria-hidden="true" style="position: absolute; inset: 0; pointer-events: none; background: {{vignetteBg}}"></div>
+<sc-if value="{{before}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; top: 12px; left: 12px; padding: 4px 8px; border-radius: 3px; background: rgba(0, 0, 0, 0.7); color: #ffffff; font-weight: 600">Before</div>
+</sc-if>
+</div>
+</div>
+<div style="flex: 0 0 auto; min-height: 44px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 6px 16px; border-top: 1px solid #262626; box-sizing: border-box">
+<button onClick="{{toggleBefore}}" aria-pressed="{{beforePressed}}" style="height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid #3a3a3a; border-radius: 4px; background: {{beforeBg}}; color: #e2e2e2">
+<svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1"></rect><path d="M8 3v10"></path></svg>Before / After</button>
+<button onClick="{{openCrop}}" style="height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid #3a3a3a; border-radius: 4px; background: #232323; color: #e2e2e2">
+<svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 1v11h11"></path><path d="M1 4h11v11"></path></svg>Crop</button>
+<div style="flex: 1 1 auto"></div>
+<div role="group" aria-label="Rating" style="display: flex; gap: 0">
+<sc-for list="{{stars}}" as="s" hint-placeholder-count="5">
+<button onClick="{{s.pick}}" aria-label="{{s.label}}" style="width: 26px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; padding: 0"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="{{s.fill}}" stroke="#b5b5b5" stroke-width="1.2" stroke-linejoin="round"><path d="M8 1.6l1.95 4 4.35.55-3.2 3 .85 4.35L8 11.3l-3.95 2.2.85-4.35-3.2-3 4.35-.55z"></path></svg></button>
+</sc-for>
+</div>
+<div role="group" aria-label="Flag" style="display: flex; gap: 2px">
+<button onClick="{{pickFlag}}" aria-pressed="{{pickPressed}}" aria-label="Pick" style="width: 30px; height: 28px; display: flex; align-items: center; justify-content: center; border: none; border-radius: 4px; background: {{pickBg}}; color: {{pickFg}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M4 14V2"></path><path d="M4 2.5h8l-2 3 2 3H4"></path></svg></button>
+<button onClick="{{rejectFlag}}" aria-pressed="{{rejectPressed}}" aria-label="Reject" style="width: 30px; height: 28px; display: flex; align-items: center; justify-content: center; border: none; border-radius: 4px; background: {{rejectBg}}; color: {{rejectFg}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"></path></svg></button>
+</div>
+</div>
+</main>
+
+<aside class="scroll" aria-label="Develop panels" style="flex: 1 1 300px; max-width: 100%; min-width: 0; box-sizing: border-box; background: #232323; border-left: 1px solid #2f2f2f; display: flex; flex-direction: column">
+<section aria-label="Histogram" style="padding: 12px 14px 10px; border-bottom: 1px solid #2f2f2f">
+<div style="position: relative; height: 84px; background: #1b1b1b; border-radius: 2px; overflow: hidden">
+<svg viewBox="0 0 268 84" preserveAspectRatio="none" role="img" aria-label="Histogram of the edited photo" style="display: block; width: 100%; height: 100%"><path d="M0 21H268M0 42H268M0 63H268M67 0V84M134 0V84M201 0V84" stroke="#262626" stroke-width="1"></path><g transform="{{histShift}}"><path d="M0,84 C20,80 40,60 70,55 C100,50 120,70 150,62 C180,54 200,30 230,40 C250,48 260,70 268,84 Z" fill="#d9534f" opacity="0.5"></path><path d="M0,84 C25,78 45,50 75,48 C105,46 125,58 155,52 C185,46 205,44 230,58 C250,68 262,78 268,84 Z" fill="#5cb85c" opacity="0.5"></path><path d="M0,84 C15,70 35,40 65,42 C95,44 120,64 150,66 C180,68 205,60 228,66 C248,72 260,80 268,84 Z" fill="#4a7fe0" opacity="0.5"></path></g></svg>
+<button aria-label="Show shadow clipping" style="position: absolute; left: 4px; top: 4px; width: 18px; height: 18px; padding: 0; display: flex; align-items: center; justify-content: center; background: transparent; border: none; color: #9e9e9e"><svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M0 10L10 0V10Z"></path></svg></button>
+<button aria-label="Show highlight clipping" style="position: absolute; right: 4px; top: 4px; width: 18px; height: 18px; padding: 0; display: flex; align-items: center; justify-content: center; background: transparent; border: none; color: #9e9e9e"><svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M0 0L10 10H0Z"></path></svg></button>
+</div>
+<div style="display: flex; justify-content: space-between; margin-top: 8px; color: #9e9e9e; font-variant-numeric: tabular-nums">
+<span>ISO 200</span><span>35 mm</span><span>f/8</span><span>1/125 s</span>
+</div>
+</section>
+
+<sc-for list="{{sections}}" as="sec" hint-placeholder-count="6">
+<section aria-label="{{sec.title}}" style="border-bottom: 1px solid #2f2f2f">
+<button onClick="{{sec.toggle}}" aria-expanded="{{sec.expanded}}" style="width: 100%; height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 14px; background: transparent; border: none; color: #ececec; font-weight: 600; text-align: left">
+<svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="transform: {{sec.chev}}; transition: transform 120ms"><path d="M6 4l4 4-4 4"></path></svg>
+<span style="flex: 1 1 auto">{{sec.title}}</span>
+<sc-if value="{{sec.edited}}" hint-placeholder-val="{{false}}"><span aria-label="Edited" style="width: 6px; height: 6px; border-radius: 50%; background: #d6d6d6"></span></sc-if>
+</button>
+<sc-if value="{{sec.open}}" hint-placeholder-val="{{true}}">
+<div style="padding: 0 14px 12px">
+
+<sc-if value="{{sec.isBasic}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; align-items: center; justify-content: space-between; height: 28px; margin-bottom: 4px">
+<span style="color: #9e9e9e">Treatment</span>
+<div role="group" aria-label="Treatment" style="display: flex; padding: 2px; gap: 2px; background: #1b1b1b; border-radius: 4px">
+<sc-for list="{{treat}}" as="t" hint-placeholder-count="2">
+<button onClick="{{t.pick}}" aria-pressed="{{t.pressed}}" style="height: 22px; padding: 0 12px; border: none; border-radius: 3px; background: {{t.bg}}; color: {{t.fg}}">{{t.label}}</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{sec.isCurve}}" hint-placeholder-val="{{false}}">
+<div role="group" aria-label="Curve channel" style="display: flex; gap: 2px; margin: 2px 0 8px; padding: 2px; background: #1b1b1b; border-radius: 4px; width: fit-content">
+<sc-for list="{{curveChs}}" as="c" hint-placeholder-count="4">
+<button onClick="{{c.pick}}" aria-pressed="{{c.pressed}}" style="height: 22px; min-width: 36px; padding: 0 8px; border: none; border-radius: 3px; background: {{c.bg}}; color: {{c.fg}}">{{c.label}}</button>
+</sc-for>
+</div>
+<svg viewBox="0 0 272 200" role="img" aria-label="Tone curve with a gentle S shape" style="display: block; width: 100%; height: auto; background: #1b1b1b; border-radius: 2px"><path d="M68 0V200M136 0V200M204 0V200M0 50H272M0 100H272M0 150H272" stroke="#2c2c2c" stroke-width="1"></path><path d="M0 200L272 0" stroke="#444444" stroke-width="1" stroke-dasharray="3 3"></path><path d="M0 200 C 40 194, 60 172, 82 160 S 120 114, 136 100 S 180 46, 204 34 S 250 6, 272 0" fill="none" stroke="{{curveColor}}" stroke-width="1.6"></path><circle cx="82" cy="160" r="4" fill="#232323" stroke="{{curveColor}}" stroke-width="1.5"></circle><circle cx="136" cy="100" r="4" fill="#232323" stroke="{{curveColor}}" stroke-width="1.5"></circle><circle cx="204" cy="34" r="4" fill="#232323" stroke="{{curveColor}}" stroke-width="1.5"></circle></svg>
+<div style="display: flex; justify-content: space-between; margin-top: 6px; color: #9e9e9e"><span>Shadows</span><span>Midtones</span><span>Highlights</span></div>
+</sc-if>
+
+<sc-if value="{{sec.isHsl}}" hint-placeholder-val="{{false}}">
+<div role="group" aria-label="Color mixer property" style="display: flex; gap: 2px; margin: 2px 0 8px; padding: 2px; background: #1b1b1b; border-radius: 4px">
+<sc-for list="{{hslTabs}}" as="ht" hint-placeholder-count="3">
+<button onClick="{{ht.pick}}" aria-pressed="{{ht.pressed}}" style="flex: 1 1 0; height: 22px; border: none; border-radius: 3px; background: {{ht.bg}}; color: {{ht.fg}}">{{ht.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-for list="{{sec.groups}}" as="g" hint-placeholder-count="3">
+<sc-if value="{{g.hasLabel}}" hint-placeholder-val="{{true}}">
+<div style="margin: 8px 0 2px; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: #9e9e9e">{{g.label}}</div>
+</sc-if>
+<sc-for list="{{g.rows}}" as="r" hint-placeholder-count="3">
+<div style="display: grid; grid-template-columns: 78px minmax(0, 1fr) 48px; align-items: center; column-gap: 8px; height: 24px">
+<label for="{{r.inputId}}" onDoubleClick="{{r.reset}}" title="Double-click to reset" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: ew-resize; user-select: none; color: #cfcfcf">{{r.label}}</label>
+<div style="position: relative; height: 16px">
+<div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 7px; height: 2px; border-radius: 1px; background: {{r.track}}"></div>
+<div aria-hidden="true" style="position: absolute; left: 50%; top: 4px; width: 1px; height: 8px; background: #5c5c5c; display: {{r.tick}}"></div>
+<input class="rng" type="range" id="{{r.inputId}}" min="{{r.min}}" max="{{r.max}}" step="{{r.step}}" value="{{r.value}}" onChange="{{r.onChange}}" onDoubleClick="{{r.reset}}" style="position: absolute; left: 0; top: 0; width: 100%">
+</div>
+<output for="{{r.inputId}}" style="text-align: right; font-variant-numeric: tabular-nums; color: {{r.valueColor}}">{{r.display}}</output>
+</div>
+</sc-for>
+</sc-for>
+
+<sc-if value="{{sec.isGeo}}" hint-placeholder-val="{{false}}">
+<div style="display: grid; grid-template-columns: 78px minmax(0, 1fr); align-items: center; column-gap: 8px; margin-top: 8px">
+<label for="aspect" style="color: #cfcfcf">Aspect</label>
+<select id="aspect" style="height: 26px; border: 1px solid #3a3a3a; border-radius: 4px; background: #1b1b1b; color: #e2e2e2; padding: 0 6px; font: inherit">
+<option>Original</option><option>1 : 1</option><option>4 : 5</option><option>3 : 2</option><option>16 : 9</option><option>Custom</option>
+</select>
+</div>
+<div style="display: flex; gap: 6px; margin-top: 10px">
+<button onClick="{{flipH}}" aria-pressed="{{flipPressed}}" style="flex: 1 1 0; height: 28px; border: 1px solid #3a3a3a; border-radius: 4px; background: {{flipBg}}; color: #e2e2e2">Flip horizontal</button>
+<button style="flex: 1 1 0; height: 28px; border: 1px solid #3a3a3a; border-radius: 4px; background: #2a2a2a; color: #e2e2e2">Rotate 90°</button>
+</div>
+</sc-if>
+
+</div>
+</sc-if>
+</section>
+</sc-for>
+
+<div style="flex: 1 1 auto"></div>
+<div style="display: flex; gap: 6px; padding: 10px 14px; border-top: 1px solid #2f2f2f; position: sticky; bottom: 0; background: #232323">
+<button style="flex: 1 1 0; height: 28px; border: 1px solid #3a3a3a; border-radius: 4px; background: #2a2a2a; color: #e2e2e2">Previous</button>
+<button onClick="{{resetAll}}" style="flex: 1 1 0; height: 28px; border: 1px solid #3a3a3a; border-radius: 4px; background: #2a2a2a; color: #e2e2e2">Reset all</button>
+</div>
+</aside>
+</div>
+
+<footer aria-label="Filmstrip" style="flex: 0 0 auto; height: 112px; box-sizing: border-box; background: #161616; border-top: 1px solid #2f2f2f; display: flex; flex-direction: column">
+<div style="height: 26px; display: flex; align-items: center; gap: 12px; padding: 0 16px; color: #9e9e9e">
+<span>Filmstrip</span><span>14 photos</span><span>1 selected</span>
+<div style="flex: 1 1 auto"></div>
+<label for="fs-filter">Filter</label>
+<select id="fs-filter" style="height: 20px; border: 1px solid #333333; border-radius: 3px; background: #1b1b1b; color: #cfcfcf; font: inherit; font-size: 11px"><option>All photos</option><option>Picks</option><option>3 stars and up</option><option>Edited</option></select>
+</div>
+<div style="flex: 1 1 auto; display: flex; gap: 8px; align-items: center; padding: 0 16px 10px; overflow-x: auto">
+<sc-for list="{{thumbs}}" as="t" hint-placeholder-count="10">
+<button onClick="{{t.pick}}" aria-pressed="{{t.pressed}}" aria-label="{{t.name}}" style="position: relative; flex: 0 0 auto; width: 108px; height: 72px; padding: 0; border: none; border-radius: 2px; overflow: hidden; background: #000000; box-shadow: {{t.ring}}">
+<svg viewBox="0 0 600 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style="display: block; width: 100%; height: 100%"><defs><linearGradient id="gt{{$index}}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{{t.p.sky1}}"></stop><stop offset="1" stop-color="{{t.p.sky2}}"></stop></linearGradient></defs><rect x="0" y="0" width="600" height="280" fill="url(#gt{{$index}})"></rect><circle cx="{{t.sunX}}" cy="196" r="30" fill="{{t.p.sun}}"></circle><polygon points="0,232 70,170 130,206 210,138 290,200 360,158 440,214 520,168 600,206 600,280 0,280" fill="{{t.p.far}}"></polygon><polygon points="0,254 90,204 170,242 250,196 330,246 400,214 480,250 560,220 600,236 600,280 0,280" fill="{{t.p.mid}}"></polygon><rect x="0" y="272" width="600" height="70" fill="{{t.p.water}}"></rect><polygon points="0,338 110,316 220,330 330,304 450,326 600,308 600,400 0,400" fill="{{t.p.ground}}"></polygon></svg>
+<sc-if value="{{t.edited}}" hint-placeholder-val="{{false}}">
+<span aria-label="Edited" style="position: absolute; right: 4px; bottom: 4px; width: 14px; height: 14px; border-radius: 2px; background: rgba(0, 0, 0, 0.65); display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round"><path d="M1 2h6M1 6h6"></path><circle cx="3" cy="2" r="1" fill="#000000"></circle><circle cx="5" cy="6" r="1" fill="#000000"></circle></svg></span>
+</sc-if>
+</button>
+</sc-for>
+</div>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(...a) {
+    super(...a);
+    var base = this.zero();
+    var steps = [['exposure', 0.35], ['contrast', 12], ['highlights', -38], ['shadows', 24], ['vibrance', 15], ['temp', 6], ['vignette', -18]];
+    var hist = [{ label: 'Import', key: null, vals: base }];
+    var cur = base;
+    for (var i = 0; i < steps.length; i++) {
+      cur = Object.assign({}, cur);
+      cur[steps[i][0]] = steps[i][1];
+      hist.push({ label: this.def(steps[i][0]).hl, key: steps[i][0], vals: cur });
+    }
+    this.state = {
+      hist: hist, cursor: hist.length - 1,
+      open: { basic: true, curve: false, hsl: false, detail: false, effects: false, geometry: false },
+      hslTab: 'hue', curveCh: 'rgb', before: false, sel: 0, rating: 4, flag: 'pick', zoom: 'fit', presetsOpen: true, flip: false
+    };
+  }
+  hslColors() {
+    return [
+      { id: 'red', label: 'Red', c: '#e0524d' }, { id: 'orange', label: 'Orange', c: '#e88a3c' },
+      { id: 'yellow', label: 'Yellow', c: '#e3c84a' }, { id: 'green', label: 'Green', c: '#5bb35b' },
+      { id: 'aqua', label: 'Aqua', c: '#48b8b0' }, { id: 'blue', label: 'Blue', c: '#4a7fe0' },
+      { id: 'purple', label: 'Purple', c: '#8a5ce0' }, { id: 'magenta', label: 'Magenta', c: '#d050b0' }
+    ];
+  }
+  defs() {
+    if (this._defs) return this._defs;
+    var d = {};
+    function add(id, label, min, max, step, fmt, bip, dflt, track, hl) {
+      d[id] = { id: id, label: label, min: min, max: max, step: step, fmt: fmt, bipolar: bip, dflt: dflt, track: track || '#3d3d3d', hl: hl || label };
+    }
+    add('temp', 'Temp', -100, 100, 1, 'int', true, 0, 'linear-gradient(90deg, #4d78c9, #8a8a8a, #d4b44e)', 'Temperature');
+    add('tint', 'Tint', -100, 100, 1, 'int', true, 0, 'linear-gradient(90deg, #4fa865, #8a8a8a, #b956b0)');
+    add('exposure', 'Exposure', -5, 5, 0.05, 'ev', true, 0);
+    add('contrast', 'Contrast', -100, 100, 1, 'int', true, 0);
+    add('highlights', 'Highlights', -100, 100, 1, 'int', true, 0);
+    add('shadows', 'Shadows', -100, 100, 1, 'int', true, 0);
+    add('whites', 'Whites', -100, 100, 1, 'int', true, 0);
+    add('blacks', 'Blacks', -100, 100, 1, 'int', true, 0);
+    add('vibrance', 'Vibrance', -100, 100, 1, 'int', true, 0);
+    add('saturation', 'Saturation', -100, 100, 1, 'int', true, 0);
+    add('sharpAmount', 'Amount', 0, 150, 1, 'uint', false, 40, null, 'Sharpening');
+    add('sharpRadius', 'Radius', 0.5, 3, 0.1, 'dec', false, 1, null, 'Sharpen radius');
+    add('vignette', 'Amount', -100, 100, 1, 'int', true, 0, null, 'Vignette');
+    add('grainAmount', 'Amount', 0, 100, 1, 'uint', false, 0, null, 'Grain');
+    add('grainSize', 'Size', 0, 100, 1, 'uint', false, 25, null, 'Grain size');
+    add('angle', 'Straighten', -45, 45, 0.1, 'deg', true, 0);
+    add('bw', 'Treatment', 0, 1, 1, 'uint', false, 0);
+    var cs = this.hslColors();
+    for (var i = 0; i < cs.length; i++) {
+      var c = cs[i], prev = cs[(i + cs.length - 1) % cs.length], next = cs[(i + 1) % cs.length];
+      add('hue_' + c.id, c.label, -100, 100, 1, 'int', true, 0, 'linear-gradient(90deg, ' + prev.c + ', ' + c.c + ', ' + next.c + ')', c.label + ' hue');
+      add('sat_' + c.id, c.label, -100, 100, 1, 'int', true, 0, 'linear-gradient(90deg, #7a7a7a, ' + c.c + ')', c.label + ' saturation');
+      add('lum_' + c.id, c.label, -100, 100, 1, 'int', true, 0, 'linear-gradient(90deg, #202020, ' + c.c + ', #eeeeee)', c.label + ' luminance');
+    }
+    this._defs = d;
+    return d;
+  }
+  def(id) { return this.defs()[id]; }
+  zero() {
+    var d = this.defs(), z = {};
+    for (var k in d) z[k] = d[k].dflt;
+    return z;
+  }
+  vals() { return this.state.hist[this.state.cursor].vals; }
+  fmt(df, v) {
+    var m = '−';
+    if (df.fmt === 'ev') return (v > 0.001 ? '+' : v < -0.001 ? m : '') + Math.abs(v).toFixed(2);
+    if (df.fmt === 'int') { var r = Math.round(v); return (r > 0 ? '+' : r < 0 ? m : '') + Math.abs(r); }
+    if (df.fmt === 'deg') return (v > 0.04 ? '+' : v < -0.04 ? m : '') + Math.abs(v).toFixed(1) + '°';
+    if (df.fmt === 'dec') return Number(v).toFixed(1);
+    return String(Math.round(v));
+  }
+  push(entry) {
+    var st = this.state, hist = st.hist.slice(0, st.cursor + 1), last = hist[hist.length - 1];
+    var atTip = st.cursor === st.hist.length - 1;
+    if (atTip && entry.key && last.key === entry.key && hist.length > 1) hist[hist.length - 1] = entry; else hist.push(entry);
+    this.setState({ hist: hist, cursor: hist.length - 1 });
+  }
+  setVal(id, v) {
+    var next = Object.assign({}, this.vals());
+    next[id] = v;
+    this.push({ label: this.def(id).hl, key: id, vals: next });
+  }
+  presets() {
+    return [
+      { group: 'User presets', items: [
+        { name: 'Warm film', v: { temp: 18, tint: 4, contrast: -8, highlights: -30, shadows: 20, vibrance: -10, saturation: -6, grainAmount: 30, vignette: -22 } },
+        { name: 'Soft matte', v: { contrast: -24, blacks: 30, highlights: -20, saturation: -12 } },
+        { name: 'Crisp B&W', v: { bw: 1, contrast: 30, whites: 16, blacks: -20, sharpAmount: 60 } } ] },
+      { group: 'Built-in', items: [
+        { name: 'Clean daylight', v: { temp: -6, exposure: 0.15, vibrance: 20, shadows: 15 } },
+        { name: 'High contrast', v: { contrast: 45, highlights: -25, shadows: -10, blacks: -15 } },
+        { name: 'Faded', v: { contrast: -30, blacks: 40, saturation: -25 } } ] }
+    ];
+  }
+  palettes() {
+    return [
+      { sky1: '#26385a', sky2: '#e3a06a', sun: '#ffd9a6', far: '#5b5e7c', mid: '#3c3f5c', near: '#262840', water: '#7a6c86', ground: '#14151f' },
+      { sky1: '#3f78b8', sky2: '#b9d6ee', sun: '#fff6dc', far: '#6f8fa8', mid: '#4a6a7f', near: '#2f4a59', water: '#5d8fb3', ground: '#1d2d24' },
+      { sky1: '#607a6a', sky2: '#c9d4b8', sun: '#f4f1dc', far: '#4f6b55', mid: '#36503d', near: '#22362a', water: '#5c7a68', ground: '#162119' },
+      { sky1: '#0d1426', sky2: '#2b3d6b', sun: '#e9eefc', far: '#273352', mid: '#1b2440', near: '#121a2f', water: '#2a3a63', ground: '#080c16' },
+      { sky1: '#d98a54', sky2: '#f3d1a0', sun: '#fff1d0', far: '#b8704a', mid: '#94573a', near: '#6e3f2c', water: '#c49270', ground: '#3d2318' },
+      { sky1: '#8b9097', sky2: '#d4d6d8', sun: '#f6f6f4', far: '#9ea3aa', mid: '#848a92', near: '#6a7078', water: '#a9adb3', ground: '#3c4046' }
+    ];
+  }
+  seg(items, current, onPick) {
+    return items.map(function (it) {
+      var on = it.id === current;
+      return { label: it.label, pressed: on ? 'true' : 'false', bg: on ? '#3a3a3a' : 'transparent', fg: on ? '#ffffff' : '#a8a8a8', pick: function () { onPick(it.id); } };
+    });
+  }
+  row(id, vals) {
+    var self = this, df = this.def(id), v = vals[id];
+    return {
+      inputId: 's-' + id, label: df.label, min: df.min, max: df.max, step: df.step, value: v,
+      display: this.fmt(df, v), valueColor: Math.abs(v - df.dflt) < 1e-6 ? '#9e9e9e' : '#f2f2f2',
+      track: df.track, tick: df.bipolar ? 'block' : 'none',
+      onChange: function (e) { self.setVal(id, parseFloat(e.target.value)); },
+      reset: function () { self.setVal(id, df.dflt); }
+    };
+  }
+  grp(label, ids, vals) {
+    var self = this;
+    return { label: label, hasLabel: !!label, rows: ids.map(function (i) { return self.row(i, vals); }) };
+  }
+  section(id, title, groups, ids, vals, extra) {
+    var self = this, open = !!this.state.open[id], d = this.defs();
+    var edited = ids.some(function (k) { return Math.abs(vals[k] - d[k].dflt) > 1e-6; });
+    return Object.assign({
+      title: title, open: open, edited: edited, expanded: open ? 'true' : 'false', chev: open ? 'rotate(90deg)' : 'rotate(0deg)',
+      toggle: function () { var o = Object.assign({}, self.state.open); o[id] = !o[id]; self.setState({ open: o }); },
+      groups: groups, isBasic: false, isCurve: false, isHsl: false, isGeo: false
+    }, extra || {});
+  }
+  renderVals() {
+    var self = this, st = this.state, v = this.vals(), d = this.defs();
+    var pal = this.palettes(), ph = pal[st.sel % pal.length];
+
+    var b = Math.pow(2, v.exposure * 0.6) * (1 + (v.whites * 0.12 + v.shadows * 0.08 + v.blacks * 0.06 + v.highlights * 0.05) / 100);
+    var c = Math.max(0.2, 1 + v.contrast / 150);
+    var s = Math.max(0, 1 + (v.saturation + v.vibrance * 0.6) / 100);
+    var sep = v.temp > 0 ? v.temp / 220 : 0;
+    var hr = (v.temp < 0 ? v.temp * 0.25 : 0) + v.tint * 0.2;
+    var imgFilter = st.before ? 'none' : 'brightness(' + b.toFixed(3) + ') contrast(' + c.toFixed(3) + ') saturate(' + s.toFixed(3) + ') sepia(' + sep.toFixed(3) + ') hue-rotate(' + hr.toFixed(1) + 'deg) grayscale(' + (v.bw ? 1 : 0) + ')';
+    var zs = { fit: 1, fill: 1.18, '1:1': 2 }[st.zoom];
+    var ang = st.before ? 0 : v.angle;
+    var sc = (1 + Math.abs(ang) / 30) * zs;
+    var imgTransform = 'rotate(' + ang + 'deg) scale(' + (st.flip ? -sc : sc) + ', ' + sc + ')';
+    var va = Math.abs(v.vignette) / 100 * 0.75;
+    var vignetteBg = (st.before || v.vignette === 0) ? 'none' : 'radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, ' + (v.vignette < 0 ? 'rgba(0,0,0,' : 'rgba(255,255,255,') + va.toFixed(3) + ') 100%)';
+    var histShift = 'translate(' + (st.before ? 0 : (v.exposure * 14 + v.whites * 0.1)).toFixed(1) + ' 0)';
+
+    var basicIds = ['temp', 'tint', 'exposure', 'contrast', 'highlights', 'shadows', 'whites', 'blacks', 'vibrance', 'saturation', 'bw'];
+    var hslIds = [];
+    ['hue', 'sat', 'lum'].forEach(function (t) { self.hslColors().forEach(function (cc) { hslIds.push(t + '_' + cc.id); }); });
+    var sections = [
+      this.section('basic', 'Basic', [this.grp('White balance', ['temp', 'tint'], v), this.grp('Tone', ['exposure', 'contrast', 'highlights', 'shadows', 'whites', 'blacks'], v), this.grp('Presence', ['vibrance', 'saturation'], v)], basicIds, v, { isBasic: true }),
+      this.section('curve', 'Tone curve', [], [], v, { isCurve: true }),
+      this.section('hsl', 'Color mixer', [this.grp('', this.hslColors().map(function (cc) { return st.hslTab + '_' + cc.id; }), v)], hslIds, v, { isHsl: true }),
+      this.section('detail', 'Detail', [this.grp('Sharpening', ['sharpAmount', 'sharpRadius'], v)], ['sharpAmount', 'sharpRadius'], v),
+      this.section('effects', 'Effects', [this.grp('Vignette', ['vignette'], v), this.grp('Grain', ['grainAmount', 'grainSize'], v)], ['vignette', 'grainAmount', 'grainSize'], v),
+      this.section('geometry', 'Crop and geometry', [this.grp('', ['angle'], v)], ['angle'], v, { isGeo: true })
+    ];
+
+    var history = st.hist.map(function (h, i) {
+      var val = '';
+      if (h.key === 'bw') val = h.vals.bw ? 'B&W' : 'Color';
+      else if (h.key && d[h.key]) val = self.fmt(d[h.key], h.vals[h.key]);
+      var cur = i === st.cursor, undone = i > st.cursor;
+      return {
+        label: h.label, value: val, ariaCurrent: cur ? 'step' : 'false',
+        bg: cur ? 'rgba(74, 163, 255, 0.18)' : 'transparent', fg: cur ? '#ffffff' : (undone ? '#8f8f8f' : '#cfcfcf'), style: undone ? 'italic' : 'normal',
+        go: function () { self.setState({ cursor: i }); }
+      };
+    }).reverse();
+
+    var presetGroups = this.presets().map(function (g) {
+      return { group: g.group, items: g.items.map(function (p) {
+        return { name: p.name, apply: function () { self.push({ label: 'Preset: ' + p.name, key: null, vals: Object.assign(self.zero(), p.v) }); } };
+      }) };
+    });
+
+    var thumbs = [];
+    for (var i = 0; i < 14; i++) {
+      (function (i) {
+        var on = i === st.sel;
+        thumbs.push({ p: pal[i % pal.length], sunX: 160 + (i * 67) % 340, name: 'IMG_' + ('0000' + (418 + i)).slice(-4) + '.JPG', edited: i % 3 === 0,
+          pressed: on ? 'true' : 'false', ring: on ? '0 0 0 2px #4aa3ff' : '0 0 0 1px #2f2f2f', pick: function () { self.setState({ sel: i }); } });
+      })(i);
+    }
+
+    var stars = [1, 2, 3, 4, 5].map(function (n) {
+      return { label: 'Rate ' + n + (n > 1 ? ' stars' : ' star'), fill: n <= st.rating ? '#d8d8d8' : 'none', pick: function () { self.setState({ rating: st.rating === n ? 0 : n }); } };
+    });
+    var curveColor = { rgb: '#d8d8d8', r: '#e0524d', g: '#5bb35b', b: '#4a7fe0' }[st.curveCh];
+    var navSize = 100 / zs;
+
+    return {
+      sections: sections, history: history, histCount: st.hist.length, presetGroups: presetGroups,
+      presetsOpen: st.presetsOpen, presetsExpanded: st.presetsOpen ? 'true' : 'false', presetsChev: st.presetsOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+      togglePresets: function () { self.setState({ presetsOpen: !st.presetsOpen }); },
+      thumbs: thumbs, ph: ph, fileName: 'IMG_' + ('0000' + (418 + st.sel)).slice(-4) + '.JPG', photoNum: st.sel + 1,
+      imgFilter: imgFilter, imgTransform: imgTransform, vignetteBg: vignetteBg, histShift: histShift,
+      before: st.before, beforePressed: st.before ? 'true' : 'false', beforeBg: st.before ? '#3a3a3a' : '#232323',
+      toggleBefore: function () { self.setState({ before: !st.before }); },
+      openCrop: function () { var o = Object.assign({}, st.open); o.geometry = true; self.setState({ open: o }); },
+      stars: stars,
+      pickFlag: function () { self.setState({ flag: st.flag === 'pick' ? null : 'pick' }); },
+      rejectFlag: function () { self.setState({ flag: st.flag === 'reject' ? null : 'reject' }); },
+      pickPressed: st.flag === 'pick' ? 'true' : 'false', pickBg: st.flag === 'pick' ? '#3a3a3a' : 'transparent', pickFg: st.flag === 'pick' ? '#ffffff' : '#9e9e9e',
+      rejectPressed: st.flag === 'reject' ? 'true' : 'false', rejectBg: st.flag === 'reject' ? '#3a3a3a' : 'transparent', rejectFg: st.flag === 'reject' ? '#ffffff' : '#9e9e9e',
+      zooms: this.seg([{ id: 'fit', label: 'Fit' }, { id: 'fill', label: 'Fill' }, { id: '1:1', label: '1:1' }], st.zoom, function (z) { self.setState({ zoom: z }); }),
+      showNavRect: st.zoom !== 'fit', navSize: navSize.toFixed(2), navPos: ((100 - navSize) / 2).toFixed(2),
+      treat: this.seg([{ id: 0, label: 'Color' }, { id: 1, label: 'B&W' }], v.bw, function (t) { if (t !== v.bw) self.setVal('bw', t); }),
+      hslTabs: this.seg([{ id: 'hue', label: 'Hue' }, { id: 'sat', label: 'Saturation' }, { id: 'lum', label: 'Luminance' }], st.hslTab, function (t) { self.setState({ hslTab: t }); }),
+      curveChs: this.seg([{ id: 'rgb', label: 'RGB' }, { id: 'r', label: 'R' }, { id: 'g', label: 'G' }, { id: 'b', label: 'B' }], st.curveCh, function (t) { self.setState({ curveCh: t }); }),
+      curveColor: curveColor,
+      flipH: function () { self.setState({ flip: !st.flip }); }, flipPressed: st.flip ? 'true' : 'false', flipBg: st.flip ? '#3a3a3a' : '#2a2a2a',
+      resetAll: function () { self.push({ label: 'Reset all', key: null, vals: self.zero() }); },
+      undo: function () { if (st.cursor > 0) self.setState({ cursor: st.cursor - 1 }); },
+      redo: function () { if (st.cursor < st.hist.length - 1) self.setState({ cursor: st.cursor + 1 }); },
+      undoDisabled: st.cursor === 0, redoDisabled: st.cursor >= st.hist.length - 1,
+      undoColor: st.cursor === 0 ? '#5f5f5f' : '#cfcfcf', redoColor: st.cursor >= st.hist.length - 1 ? '#5f5f5f' : '#cfcfcf'
+    };
+  }
+}
+</script>
+</body>
+</html>

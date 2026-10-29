@@ -1,0 +1,95 @@
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 96px 16px 32px;
+  overflow-y: auto;
+  background: var(--color-scrim);
+}
+
+.dialog {
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px 16px;
+  background: var(--color-dialog);
+  border: 1px solid var(--color-dialog-border);
+  border-radius: 8px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  outline: none;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-dialog);
+  font-weight: 600;
+  color: var(--color-text-strong);
+}
+
+.intro {
+  margin: 0;
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+
+.panels {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: var(--font-size-group);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.check {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text);
+}
+
+.check input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--color-accent);
+}
+
+.all {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.all > button {
+  flex: 1 1 0;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-dialog-divider);
+}
+
+.action {
+  height: 32px;
+  padding: 0 16px;
+}

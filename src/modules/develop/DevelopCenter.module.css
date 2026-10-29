@@ -1,0 +1,134 @@
+.center {
+  background: var(--color-canvas);
+}
+
+.infoStrip {
+  flex: none;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.stage {
+  flex: 1 1 auto;
+  min-height: 360px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 24px 16px;
+}
+
+.stage[data-drag-over='true'] {
+  outline: 2px dashed var(--color-accent);
+  outline-offset: -8px;
+}
+
+.fileName {
+  color: var(--color-text-bright);
+  font-weight: 500;
+}
+
+.openButton {
+  margin-top: 12px;
+}
+
+.error {
+  margin: 10px 0 0;
+  color: var(--color-text-bright);
+}
+
+.empty {
+  text-align: center;
+}
+
+.emptyTitle {
+  margin: 0 0 4px;
+  font-size: var(--font-size-title);
+  font-weight: 500;
+  color: var(--color-text-bright);
+}
+
+.emptyHint {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.toolbar {
+  flex: none;
+  min-height: 44px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+  border-top: 1px solid var(--color-border-soft);
+}
+
+/* Two classes so this wins over the shared button background. */
+.toolbar .toolButton {
+  background: var(--color-panel);
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.group {
+  display: flex;
+  gap: 2px;
+}
+
+.star,
+.flag {
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.star {
+  width: 26px;
+}
+
+.flag {
+  width: 30px;
+}
+
+.flag[aria-pressed='true'] {
+  background: var(--color-control-on);
+  color: var(--color-white);
+}
+
+.star:disabled,
+.flag:disabled {
+  opacity: 0.5;
+}
+
+.labelButton {
+  width: 14px;
+  height: 14px;
+  margin: 0 3px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  align-self: center;
+}
+
+.labelButton[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--color-canvas), 0 0 0 4px var(--color-white);
+}
+
+.labelButton:disabled {
+  opacity: 0.35;
+}

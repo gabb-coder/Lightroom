@@ -1,0 +1,63 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.crop {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  /* Dims everything outside the crop; clipped by the overlay. */
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  cursor: move;
+  touch-action: none;
+}
+
+.crop:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.thirds {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.vLine,
+.hLine {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.vLine {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.hLine {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  background: var(--color-white);
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  touch-action: none;
+}
+
+.handle[data-handle='nw'] { left: 0; top: 0; cursor: nwse-resize; }
+.handle[data-handle='n'] { left: 50%; top: 0; cursor: ns-resize; }
+.handle[data-handle='ne'] { left: 100%; top: 0; cursor: nesw-resize; }
+.handle[data-handle='e'] { left: 100%; top: 50%; cursor: ew-resize; }
+.handle[data-handle='se'] { left: 100%; top: 100%; cursor: nwse-resize; }
+.handle[data-handle='s'] { left: 50%; top: 100%; cursor: ns-resize; }
+.handle[data-handle='sw'] { left: 0; top: 100%; cursor: nesw-resize; }
+.handle[data-handle='w'] { left: 0; top: 50%; cursor: ew-resize; }

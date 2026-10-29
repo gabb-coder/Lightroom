@@ -1,0 +1,146 @@
+.row {
+  display: grid;
+  grid-template-columns: var(--slider-label-width) minmax(0, 1fr) var(--slider-value-width);
+  align-items: center;
+  column-gap: 8px;
+  height: 24px;
+}
+
+.label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+  touch-action: none;
+  cursor: ew-resize;
+  color: var(--color-text);
+}
+
+.label[data-disabled='true'] {
+  cursor: default;
+}
+
+.trackWrap {
+  position: relative;
+  height: 16px;
+}
+
+.track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 7px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.tick {
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  width: 1px;
+  height: 8px;
+  background: var(--color-slider-tick);
+}
+
+.value {
+  width: 100%;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  text-align: right;
+  color: var(--color-muted);
+  cursor: text;
+}
+
+.value:disabled {
+  cursor: default;
+}
+
+.valueInput {
+  width: 100%;
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid var(--color-accent);
+  border-radius: 3px;
+  background: var(--color-app-bg);
+  color: var(--color-text-strong);
+  text-align: right;
+  outline: none;
+}
+
+.value[data-edited='true'] {
+  color: var(--color-text-strong);
+}
+
+/* Native range input over a custom track; thumb from design/Kit.dc.html. */
+.range {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.range:disabled {
+  cursor: default;
+}
+
+.range:focus {
+  outline: none;
+}
+
+.range::-webkit-slider-runnable-track {
+  height: 16px;
+  background: transparent;
+}
+
+.range::-moz-range-track {
+  background: transparent;
+}
+
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 11px;
+  height: 11px;
+  margin-top: 2.5px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-slider-thumb);
+  box-shadow: 0 0 0 2px var(--color-panel);
+}
+
+.range::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-slider-thumb);
+  box-shadow: 0 0 0 2px var(--color-panel);
+}
+
+.range:hover:not(:disabled)::-webkit-slider-thumb {
+  background: var(--color-white);
+}
+
+.range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px var(--color-panel), 0 0 0 4px var(--color-accent);
+}
+
+.range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 2px var(--color-panel), 0 0 0 4px var(--color-accent);
+}
+
+.range:disabled::-webkit-slider-thumb {
+  background: var(--color-disabled);
+}
+
+.range:disabled::-moz-range-thumb {
+  background: var(--color-disabled);
+}

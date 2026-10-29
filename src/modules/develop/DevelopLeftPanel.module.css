@@ -1,0 +1,40 @@
+.title {
+  font-weight: 600;
+  color: var(--color-title);
+}
+
+.navigator {
+  padding: 10px 14px 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.navHeader {
+  height: 24px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.navPreview {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  background: #000000;
+}
+
+
+
+
+
+.copyPaste {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+.copyPaste > button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 6px;
+}

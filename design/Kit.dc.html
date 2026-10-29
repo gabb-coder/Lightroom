@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>UI kit and shortcuts</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+body{margin:0;background:#1b1b1b}
+a{color:#cfcfcf}a:hover{color:#ffffff}
+button{font:inherit}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1100px; box-sizing: border-box; padding: 48px; background: #1b1b1b; color: #cfcfcf; font-family: Inter, system-ui, sans-serif; font-size: 12px; line-height: 1.4; display: flex; flex-direction: column; gap: 28px">
+
+<div style="display: flex; align-items: baseline; gap: 16px">
+<h1 style="margin: 0; font-size: 22px; font-weight: 600; color: #f2f2f2">UI kit</h1>
+<span style="color: #9e9e9e">Neutral grays so the interface never tints how a photo looks. One accent, only for active and selected states.</span>
+</div>
+
+<div style="flex: 1 1 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: start">
+
+<div style="display: flex; flex-direction: column; gap: 24px">
+<section style="background: #232323; border: 1px solid #2f2f2f; border-radius: 6px; padding: 20px">
+<h2 style="margin: 0 0 14px; font-size: 13px; font-weight: 600; color: #ececec">Color tokens</h2>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+<sc-for list="{{swatches}}" as="s" hint-placeholder-count="8">
+<div style="display: flex; align-items: center; gap: 10px">
+<div style="width: 36px; height: 36px; border-radius: 4px; background: {{s.c}}; box-shadow: inset 0 0 0 1px #3a3a3a"></div>
+<div style="display: flex; flex-direction: column"><span style="color: #e2e2e2">{{s.name}}</span><span style="color: #9e9e9e; font-variant-numeric: tabular-nums">{{s.c}}</span></div>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section style="background: #232323; border: 1px solid #2f2f2f; border-radius: 6px; padding: 20px">
+<h2 style="margin: 0 0 14px; font-size: 13px; font-weight: 600; color: #ececec">Type (Inter)</h2>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 15px; font-weight: 600; color: #f2f2f2">Dialog title</span><span style="color: #9e9e9e">15 / 600</span></div>
+<div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 13px; font-weight: 600; color: #ececec">Panel and wordmark</span><span style="color: #9e9e9e">13 / 600</span></div>
+<div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 12px; color: #cfcfcf">Control label</span><span style="color: #9e9e9e">12 / 400</span></div>
+<div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: #9e9e9e">Group label</span><span style="color: #9e9e9e">11 / 500 caps</span></div>
+<div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 12px; color: #f2f2f2; font-variant-numeric: tabular-nums">+0.35   −38   +124</span><span style="color: #9e9e9e">12 tabular numerals</span></div>
+</div>
+</section>
+
+<section style="background: #232323; border: 1px solid #2f2f2f; border-radius: 6px; padding: 20px">
+<h2 style="margin: 0 0 14px; font-size: 13px; font-weight: 600; color: #ececec">Export progress</h2>
+<div role="status" style="display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 6px; background: #2a2a2a; border: 1px solid #3a3a3a; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5)">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<span style="color: #f2f2f2; font-weight: 500">Exporting 2 of 3</span>
+<button style="height: 26px; padding: 0 10px; border: 1px solid #3f3f3f; border-radius: 4px; background: #2f2f2f; color: #e2e2e2">Cancel</button>
+</div>
+<div style="height: 4px; border-radius: 2px; background: #3a3a3a; overflow: hidden"><div style="width: 66%; height: 100%; background: #4aa3ff"></div></div>
+<span style="color: #9e9e9e">IMG_0421.jpg</span>
+</div>
+</section>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 24px">
+<section style="background: #232323; border: 1px solid #2f2f2f; border-radius: 6px; padding: 20px">
+<h2 style="margin: 0 0 14px; font-size: 13px; font-weight: 600; color: #ececec">Slider states</h2>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<sc-for list="{{sliders}}" as="r" hint-placeholder-count="5">
+<div style="display: grid; grid-template-columns: 96px minmax(0, 1fr) 48px; align-items: center; column-gap: 8px; height: 26px">
+<span style="color: #cfcfcf">{{r.label}}</span>
+<div style="position: relative; height: 16px">
+<div style="position: absolute; left: 0; right: 0; top: 7px; height: 2px; border-radius: 1px; background: {{r.track}}"></div>
+<div style="position: absolute; left: 50%; top: 4px; width: 1px; height: 8px; background: #5c5c5c"></div>
+<div style="position: absolute; top: 2.5px; left: {{r.pos}}; width: 11px; height: 11px; margin-left: -5.5px; border-radius: 50%; background: {{r.thumb}}; box-shadow: {{r.ring}}"></div>
+</div>
+<span style="text-align: right; font-variant-numeric: tabular-nums; color: {{r.vc}}">{{r.v}}</span>
+</div>
+</sc-for>
+</div>
+<ul style="margin: 14px 0 0; padding-left: 16px; color: #9e9e9e; display: flex; flex-direction: column; gap: 4px">
+<li>Value turns white once it differs from the default.</li>
+<li>Double-click the label or thumb to reset.</li>
+<li>Drag the label sideways to scrub; click the value to type.</li>
+</ul>
+</section>
+
+<section style="background: #232323; border: 1px solid #2f2f2f; border-radius: 6px; padding: 20px">
+<h2 style="margin: 0 0 14px; font-size: 13px; font-weight: 600; color: #ececec">Panel headers</h2>
+<div style="border: 1px solid #2f2f2f; border-radius: 4px; overflow: hidden">
+<div style="height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 14px; color: #ececec; font-weight: 600; border-bottom: 1px solid #2f2f2f">
+<svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4"></path></svg>
+<span style="flex: 1 1 auto">Tone curve</span><span style="color: #9e9e9e; font-weight: 400">Collapsed</span>
+</div>
+<div style="height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 14px; color: #ececec; font-weight: 600">
+<svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(90deg)"><path d="M6 4l4 4-4 4"></path></svg>
+<span style="flex: 1 1 auto">Basic</span><span aria-label="Edited" style="width: 6px; height: 6px; border-radius: 50%; background: #d6d6d6"></span><span style="color: #9e9e9e; font-weight: 400; margin-left: 6px">Open, edited</span>
+</div>
+</div>
+</section>
+
+<section style="background: #232323; border: 1px solid #2f2f2f; border-radius: 6px; padding: 20px">
+<h2 style="margin: 0 0 14px; font-size: 13px; font-weight: 600; color: #ececec">Buttons</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+<button style="height: 32px; padding: 0 16px; border: none; border-radius: 4px; background: #4aa3ff; color: #0b1a2b; font-weight: 600">Primary</button>
+<button style="height: 32px; padding: 0 14px; border: 1px solid #3a3a3a; border-radius: 4px; background: #2e2e2e; color: #e2e2e2">Secondary</button>
+<button aria-label="Undo" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: none; border-radius: 4px; background: transparent; color: #cfcfcf"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4L3 7l3 3"></path><path d="M3 7h7a3 3 0 010 6H8"></path></svg></button>
+<div role="group" aria-label="Segmented example" style="display: flex; padding: 2px; gap: 2px; background: #1b1b1b; border-radius: 4px">
+<button aria-pressed="true" style="height: 24px; padding: 0 12px; border: none; border-radius: 3px; background: #3a3a3a; color: #ffffff">Color</button>
+<button aria-pressed="false" style="height: 24px; padding: 0 12px; border: none; border-radius: 3px; background: transparent; color: #a8a8a8">B&amp;W</button>
+</div>
+</div>
+</section>
+
+<section style="background: #232323; border: 1px solid #2f2f2f; border-radius: 6px; padding: 20px">
+<h2 style="margin: 0 0 14px; font-size: 13px; font-weight: 600; color: #ececec">Rating, flags and labels</h2>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 18px">
+<span role="img" aria-label="3 star rating" style="color: #d8d8d8; letter-spacing: 2px; font-size: 14px">★★★<span style="color: #5f5f5f">★★</span></span>
+<span style="display: flex; align-items: center; gap: 6px; color: #e2e2e2"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="#e2e2e2" stroke="#e2e2e2" stroke-width="1.4" stroke-linejoin="round"><path d="M4 14V2" fill="none"></path><path d="M4 2.5h8l-2 3 2 3H4"></path></svg>Picked</span>
+<span style="display: flex; align-items: center; gap: 6px; color: #9e9e9e"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"></path></svg>Rejected (thumbnail dims)</span>
+<div style="display: flex; gap: 8px">
+<sc-for list="{{labels}}" as="l" hint-placeholder-count="5"><span role="img" aria-label="{{l.n}}" style="width: 14px; height: 14px; border-radius: 50%; background: {{l.c}}"></span></sc-for>
+</div>
+</div>
+</section>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 24px">
+<section aria-labelledby="ks" style="background: #232323; border: 1px solid #2f2f2f; border-radius: 6px; padding: 20px">
+<h2 id="ks" style="margin: 0 0 14px; font-size: 13px; font-weight: 600; color: #ececec">Keyboard shortcuts</h2>
+<dl style="margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; row-gap: 9px; column-gap: 12px; align-items: center">
+<sc-for list="{{keys}}" as="k" hint-placeholder-count="14">
+<dt style="color: #cfcfcf">{{k.a}}</dt>
+<dd style="margin: 0; display: flex; gap: 4px; justify-content: flex-end">
+<sc-for list="{{k.ks}}" as="x" hint-placeholder-count="1"><kbd style="min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #3f3f3f; border-bottom-width: 2px; border-radius: 4px; background: #2a2a2a; color: #ececec; font-family: inherit; font-size: 11px">{{x}}</kbd></sc-for>
+</dd>
+</sc-for>
+</dl>
+</section>
+
+<section style="background: #232323; border: 1px solid #2f2f2f; border-radius: 6px; padding: 20px">
+<h2 style="margin: 0 0 14px; font-size: 13px; font-weight: 600; color: #ececec">Empty library</h2>
+<div style="height: 196px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border: 1.5px dashed #444444; border-radius: 6px; background: #1f1f1f; text-align: center">
+<svg aria-hidden="true" width="28" height="28" viewBox="0 0 16 16" fill="none" stroke="#9e9e9e" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8"></path><path d="M5 7l3 3 3-3"></path><path d="M2 11.5V14h12v-2.5"></path></svg>
+<span style="color: #f2f2f2; font-size: 13px; font-weight: 500">Drop photos here to import</span>
+<span style="color: #9e9e9e">JPEG and PNG. Originals stay untouched.</span>
+<button style="margin-top: 4px; height: 30px; padding: 0 14px; border: none; border-radius: 4px; background: #4aa3ff; color: #0b1a2b; font-weight: 600">Choose files</button>
+</div>
+</section>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      swatches: [
+        { name: 'Photo canvas', c: '#141414' }, { name: 'App background', c: '#1b1b1b' },
+        { name: 'Panel', c: '#232323' }, { name: 'Raised / input', c: '#2a2a2a' },
+        { name: 'Border', c: '#2f2f2f' }, { name: 'Text', c: '#cfcfcf' },
+        { name: 'Text muted', c: '#9e9e9e' }, { name: 'Accent', c: '#4aa3ff' }
+      ],
+      sliders: [
+        { label: 'Default', track: '#3d3d3d', pos: '50%', thumb: '#d6d6d6', ring: '0 0 0 2px #232323', v: '0', vc: '#9e9e9e' },
+        { label: 'Edited', track: '#3d3d3d', pos: '62%', thumb: '#d6d6d6', ring: '0 0 0 2px #232323', v: '+24', vc: '#f2f2f2' },
+        { label: 'Keyboard focus', track: '#3d3d3d', pos: '31%', thumb: '#ffffff', ring: '0 0 0 2px #232323, 0 0 0 4px #4aa3ff', v: '−38', vc: '#f2f2f2' },
+        { label: 'Temperature', track: 'linear-gradient(90deg, #4d78c9, #8a8a8a, #d4b44e)', pos: '53%', thumb: '#d6d6d6', ring: '0 0 0 2px #232323', v: '+6', vc: '#f2f2f2' },
+        { label: 'Tint', track: 'linear-gradient(90deg, #4fa865, #8a8a8a, #b956b0)', pos: '50%', thumb: '#d6d6d6', ring: '0 0 0 2px #232323', v: '0', vc: '#9e9e9e' }
+      ],
+      labels: [{ n: 'Red', c: '#d9534f' }, { n: 'Yellow', c: '#e3c84a' }, { n: 'Green', c: '#5cb85c' }, { n: 'Blue', c: '#4a7fe0' }, { n: 'Purple', c: '#9b6be0' }],
+      keys: [
+        { a: 'Library grid', ks: ['G'] }, { a: 'Develop', ks: ['D'] }, { a: 'Export', ks: ['Ctrl', 'Shift', 'E'] },
+        { a: 'Rate 1 to 5 stars', ks: ['1–5'] }, { a: 'Clear rating', ks: ['0'] },
+        { a: 'Pick / Reject / Unflag', ks: ['P', 'X', 'U'] },
+        { a: 'Before / after (hold to peek)', ks: ['\\'] }, { a: 'Zoom 1:1', ks: ['Z'] }, { a: 'Crop', ks: ['R'] },
+        { a: 'Undo', ks: ['Ctrl', 'Z'] }, { a: 'Redo', ks: ['Ctrl', 'Shift', 'Z'] },
+        { a: 'Copy settings', ks: ['Ctrl', 'Shift', 'C'] }, { a: 'Paste settings', ks: ['Ctrl', 'Shift', 'V'] },
+        { a: 'Previous / next photo', ks: ['←', '→'] }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
