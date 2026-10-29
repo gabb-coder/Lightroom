@@ -1,5 +1,7 @@
 import { computeHistogram } from '../engine/histogram';
-import { pipelineParams } from '../engine/pipeline';
+import { pipelineParams, type PipelineParams } from '../engine/pipeline';
+import { jsonEqual } from '../model/compare';
+import { displayGeometry } from '../model/crop';
 import { defaultEditSettings } from '../model/editSettings';
 import { selectShowingBefore, useDevelopStore, type LoadedPhoto } from '../state/developStore';
 import { useHistogramStore } from '../state/histogramStore';
@@ -31,6 +33,8 @@ export function attachRenderer(canvas: HTMLCanvasElement, onError: (message: str
 
   let frame = 0;
   let renderCount = 0;
+  /** What is on screen now, to skip redraws that would produce the same image. */
+  let shown: { params: PipelineParams; kind: string } | null = null;
   let loadedPhoto: LoadedPhoto | null = null;
   let disposed = false;
 
@@ -39,14 +43,20 @@ export function attachRenderer(canvas: HTMLCanvasElement, onError: (message: str
     if (disposed || !renderer.hasImage) return;
     const state = useDevelopStore.getState();
     const before = selectShowingBefore(state);
-    const params = before ? BEFORE_PARAMS : pipelineParams(state.settings);
-    renderer.draw(params, state.interacting ? 'proxy' : 'full');
+    const geometry = displayGeometry(state.settings.geometry, { before, cropping: state.cropping });
+    const params = before ? BEFORE_PARAMS : { ...pipelineParams(state.settings), geometry };
+    const kind = state.interacting ? 'proxy' : 'full';
+    // E.g. moving the crop box while cropping changes settings, not pixels.
+    if (shown && shown.kind === kind && jsonEqual(shown.params, params)) return;
+    shown = { params, kind };
+    renderer.draw(params, kind);
     const small = renderer.readPixels(params, 'histogram');
     useHistogramStore.getState().setHistogram(computeHistogram(small.data));
-    if (!before && !state.interacting && state.photo) {
+    if (!before && !state.interacting && !state.cropping && state.photo) {
       usePreviewStore.getState().setPreview({ photoId: state.photo.id, settings: state.settings, image: small });
     }
-    canvas.dataset.renderMode = state.interacting ? 'proxy' : 'full';
+    canvas.dataset.renderMode = kind;
+    canvas.dataset.cropping = String(state.cropping);
     canvas.dataset.view = before ? 'before' : 'after';
     canvas.dataset.renderCount = String(++renderCount);
   };
@@ -66,6 +76,7 @@ export function attachRenderer(canvas: HTMLCanvasElement, onError: (message: str
       const textures = await prepareTextures(photo.bitmap, renderer.maxTextureSize);
       if (disposed || loadedPhoto !== photo) return;
       renderer.setImage(textures);
+      shown = null;
       schedule();
     } catch (error) {
       // A newer photo replaced this one mid-load (its bitmap may be closed): not an error.
@@ -80,6 +91,7 @@ export function attachRenderer(canvas: HTMLCanvasElement, onError: (message: str
     else if (
       state.settings !== prev.settings ||
       state.interacting !== prev.interacting ||
+      state.cropping !== prev.cropping ||
       selectShowingBefore(state) !== selectShowingBefore(prev)
     )
       schedule();

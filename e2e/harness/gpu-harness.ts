@@ -3,8 +3,8 @@
  * known image with the WebGL2 pipeline, reads it back with readPixels and
  * compares it with the CPU reference in src/engine/.
  */
-import { pipelineParams, processRgba8 } from '../../src/engine/pipeline';
-import { defaultEditSettings, type BasicSettings } from '../../src/model/editSettings';
+import { pipelineParams, renderRgba8 } from '../../src/engine/pipeline';
+import { defaultEditSettings, type BasicSettings, type Geometry } from '../../src/model/editSettings';
 import type { RgbaImage } from '../../src/render/gl';
 import { Renderer } from '../../src/render/Renderer';
 import type { GpuCheckResult, GpuHarness } from './types';
@@ -51,19 +51,25 @@ const source = testImage();
 const renderer = Renderer.create(new OffscreenCanvas(1, 1));
 renderer.setImage({ full: source });
 
-function runGpuCheck(basic: Partial<BasicSettings>): GpuCheckResult {
+function runGpuCheck(basic: Partial<BasicSettings>, geometry: Partial<Geometry> = {}): GpuCheckResult {
   const settings = defaultEditSettings();
   settings.basic = { ...settings.basic, ...basic };
+  settings.geometry = { ...settings.geometry, ...geometry };
   const params = pipelineParams(settings);
-  const gpu = renderer.readPixels(params).data;
-  const cpu = processRgba8(source.data, params);
-  const diff = maxDiff(gpu, cpu);
+  const gpuImage = renderer.readPixels(params);
+  const cpuImage = renderRgba8(source.data, source, params);
+  const gpu = gpuImage.data;
+  const cpu = cpuImage.data;
+  const sameSize = gpuImage.width === cpuImage.width && gpuImage.height === cpuImage.height;
+  const diff = sameSize ? maxDiff(gpu, cpu) : { max: 255, at: 0 };
+  const changeSameSize = gpuImage.width === WIDTH && gpuImage.height === HEIGHT;
   return {
-    width: WIDTH,
-    height: HEIGHT,
+    width: gpuImage.width,
+    height: gpuImage.height,
+    sameSize,
     maxDiff: diff.max,
     worst: { pixel: Math.floor(diff.at / 4), channel: diff.at % 4, gpu: gpu[diff.at] ?? 0, cpu: cpu[diff.at] ?? 0 },
-    maxChangeFromSource: maxDiff(gpu, source.data).max,
+    maxChangeFromSource: changeSameSize ? maxDiff(gpu, source.data).max : 255,
   };
 }
 

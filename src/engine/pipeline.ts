@@ -4,7 +4,8 @@ import { applySaturation, applyVibrance, saturationScale, vibranceAmount } from 
 import { applyTone, toneParams, type ToneParams } from './tone';
 import { applyTreatment } from './treatment';
 import { applyWhiteBalance, whiteBalanceGains } from './whiteBalance';
-import type { EditSettings } from '../model/editSettings';
+import type { EditSettings, Geometry } from '../model/editSettings';
+import { applyGeometryRgba8, type Size } from './geometry';
 
 /**
  * Numeric parameters for every implemented stage. Both the CPU reference and
@@ -17,6 +18,8 @@ export interface PipelineParams {
   vibrance: number;
   saturationScale: number;
   bw: boolean;
+  /** Applied last, by resampling (engine/geometry.ts). */
+  geometry: Geometry;
 }
 
 export function pipelineParams(settings: EditSettings): PipelineParams {
@@ -28,6 +31,7 @@ export function pipelineParams(settings: EditSettings): PipelineParams {
     vibrance: vibranceAmount(b.vibrance),
     saturationScale: saturationScale(b.saturation),
     bw: b.treatment === 'bw',
+    geometry: settings.geometry,
   };
 }
 
@@ -63,4 +67,9 @@ export function processRgba8(src: Uint8Array | Uint8ClampedArray, p: PipelinePar
     out[i + 3] = byte(i + 3);
   }
   return out;
+}
+
+/** Full CPU reference: develop every pixel, then crop/straighten/rotate/flip. */
+export function renderRgba8(src: Uint8Array | Uint8ClampedArray, size: Size, p: PipelineParams) {
+  return applyGeometryRgba8(processRgba8(src, p), size, p.geometry);
 }

@@ -3,7 +3,8 @@
  * Plain JSON so presets, history, copy/paste and persistence can store it.
  *
  * Extends SPEC.md's type with fields the design needs: basic.treatment
- * (Color / B&W), effects.grainSize, and geometry.rotation (Rotate 90°).
+ * (Color / B&W), effects.grainSize, geometry.rotation (Rotate 90°) and
+ * geometry.aspect (the crop aspect preset, so a crop can be re-edited).
  */
 
 export interface Point {
@@ -20,6 +21,22 @@ export interface Rect {
 }
 
 export type Treatment = 'color' | 'bw';
+
+export const CROP_ASPECTS = ['original', '1:1', '4:5', '3:2', '16:9', 'custom'] as const;
+export type CropAspect = (typeof CROP_ASPECTS)[number];
+
+export interface Geometry {
+  /** Crop, normalized to the rotated/flipped (oriented) image: 0..1 on both axes. */
+  cropRect: Rect;
+  /** Straighten angle in degrees; positive turns the image clockwise. */
+  angle: number;
+  /** Clockwise quarter turns, 0..3. */
+  rotation: 0 | 1 | 2 | 3;
+  flipH: boolean;
+  flipV: boolean;
+  /** Crop aspect preset; ratios follow the crop's current orientation. */
+  aspect: CropAspect;
+}
 
 export interface BasicSettings {
   treatment: Treatment;
@@ -53,15 +70,7 @@ export interface EditSettings {
   hsl: Record<HslColor, HslAdjust>;
   detail: { sharpAmount: number; sharpRadius: number };
   effects: { vignette: number; grain: number; grainSize: number };
-  geometry: {
-    cropRect: Rect;
-    /** Straighten angle in degrees. */
-    angle: number;
-    /** Clockwise quarter turns, 0..3. */
-    rotation: 0 | 1 | 2 | 3;
-    flipH: boolean;
-    flipV: boolean;
-  };
+  geometry: Geometry;
 }
 
 function identityCurve(): Point[] {
@@ -94,6 +103,6 @@ export function defaultEditSettings(): EditSettings {
     hsl,
     detail: { sharpAmount: 40, sharpRadius: 1 },
     effects: { vignette: 0, grain: 0, grainSize: 25 },
-    geometry: { cropRect: { x: 0, y: 0, w: 1, h: 1 }, angle: 0, rotation: 0, flipH: false, flipV: false },
+    geometry: { cropRect: { x: 0, y: 0, w: 1, h: 1 }, angle: 0, rotation: 0, flipH: false, flipV: false, aspect: 'original' },
   };
 }

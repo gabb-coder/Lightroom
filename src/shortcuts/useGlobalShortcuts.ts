@@ -58,6 +58,19 @@ export function useGlobalShortcuts(): void {
         void (organize.kind === 'rating' ? setRating(targets, organize.value) : setFlag(targets, organize.value));
         return;
       }
+      const develop = useDevelopStore.getState();
+      if (event.key.toLowerCase() === 'r' && developHasPhoto()) {
+        event.preventDefault();
+        develop.setCropping(!develop.cropping);
+        return;
+      }
+      if ((event.key === 'Escape' || event.key === 'Enter') && develop.cropping) {
+        // Enter on a focused button activates it instead.
+        if (event.key === 'Enter' && (event.target as TargetLike | null)?.tagName?.toLowerCase() === 'button') return;
+        event.preventDefault();
+        develop.setCropping(false);
+        return;
+      }
       if (event.key === BEFORE_AFTER_KEY) {
         if (!developHasPhoto()) return;
         event.preventDefault();

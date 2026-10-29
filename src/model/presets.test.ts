@@ -43,7 +43,7 @@ describe('applying a preset', () => {
 
   it('keeps the current crop and rotation', () => {
     const current = defaultEditSettings();
-    current.geometry = { cropRect: { x: 0.1, y: 0, w: 0.5, h: 1 }, angle: 3, rotation: 2, flipH: true, flipV: false };
+    current.geometry = { cropRect: { x: 0.1, y: 0, w: 0.5, h: 1 }, angle: 3, rotation: 2, flipH: true, flipV: false, aspect: 'custom' };
     expect(applyPresetTo(current, byName('High contrast')).geometry).toEqual(current.geometry);
   });
 

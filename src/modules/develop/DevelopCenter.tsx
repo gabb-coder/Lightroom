@@ -1,6 +1,7 @@
 import { BeforeAfterIcon, CropIcon, PickIcon, RejectIcon, StarIcon } from '../../components/icons';
 import controls from '../../components/controls.module.css';
 import { useFileDrop } from '../../components/useFileDrop';
+import { isIdentityGeometry, outputSize } from '../../engine/geometry';
 import { COLOR_LABELS } from '../../model/organize';
 import { setColorLabel, setFlag, setRating } from '../../state/organizeActions';
 import { openImportPicker } from '../../state/importActions';
@@ -82,6 +83,8 @@ function Toolbar() {
   const hasPhoto = useDevelopStore((s) => s.photo !== null);
   const before = useDevelopStore((s) => s.before);
   const toggleBefore = useDevelopStore((s) => s.toggleBefore);
+  const cropping = useDevelopStore((s) => s.cropping);
+  const setCropping = useDevelopStore((s) => s.setCropping);
   return (
     <div className={styles.toolbar} role="toolbar" aria-label="Photo tools" data-testid="toolbar">
       <button
@@ -95,7 +98,14 @@ function Toolbar() {
         <BeforeAfterIcon />
         Before / After
       </button>
-      <button type="button" className={`${controls.button} ${styles.toolButton}`} disabled>
+      <button
+        type="button"
+        className={`${controls.button} ${styles.toolButton}`}
+        aria-pressed={cropping}
+        disabled={!hasPhoto}
+        title="Crop (R)"
+        onClick={() => setCropping(!cropping)}
+      >
         <CropIcon />
         Crop
       </button>
@@ -106,6 +116,8 @@ function Toolbar() {
 }
 
 function InfoStrip({ photo }: { photo: LoadedPhoto | null }) {
+  const geometry = useDevelopStore((s) => s.settings.geometry);
+  const out = photo && !isIdentityGeometry(geometry) ? outputSize(photo, geometry) : null;
   return (
     <div className={styles.infoStrip} data-testid="info-strip">
       {photo ? (
@@ -114,6 +126,11 @@ function InfoStrip({ photo }: { photo: LoadedPhoto | null }) {
           <span>
             {photo.width} × {photo.height}
           </span>
+          {out && (
+            <span data-testid="output-size">
+              Output {out.width} × {out.height}
+            </span>
+          )}
         </>
       ) : (
         <span>No photo open</span>

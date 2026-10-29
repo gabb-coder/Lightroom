@@ -9,14 +9,31 @@ interface PanelSectionProps {
   edited?: boolean;
   /** Buttons at the right of the header, outside the toggle (e.g. "New preset"). */
   actions?: ReactNode;
+  /** Controlled open state (optional); otherwise the section manages it. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   /** "list" uses the tighter padding of the Presets list (design). */
   variant?: 'default' | 'list';
   children?: ReactNode;
 }
 
 /** Collapsible side-panel section (design/Kit.dc.html "Panel headers"). */
-export function PanelSection({ title, defaultOpen = false, edited = false, actions, variant = 'default', children }: PanelSectionProps) {
-  const [open, setOpen] = useState(defaultOpen);
+export function PanelSection({
+  title,
+  defaultOpen = false,
+  edited = false,
+  actions,
+  variant = 'default',
+  open: controlledOpen,
+  onOpenChange,
+  children,
+}: PanelSectionProps) {
+  const [ownOpen, setOwnOpen] = useState(defaultOpen);
+  const open = controlledOpen ?? ownOpen;
+  const setOpen = (next: boolean) => {
+    setOwnOpen(next);
+    onOpenChange?.(next);
+  };
   const bodyId = useId();
 
   return (
@@ -27,7 +44,7 @@ export function PanelSection({ title, defaultOpen = false, edited = false, actio
           className={styles.header}
           aria-expanded={open}
           aria-controls={bodyId}
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => setOpen(!open)}
         >
           <ChevronIcon open={open} />
           <span className={styles.title}>{title}</span>

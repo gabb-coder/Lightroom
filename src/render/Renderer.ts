@@ -1,8 +1,9 @@
+import { geometryMatrix, isIdentityGeometry, outputSize } from '../engine/geometry';
 import type { PipelineParams } from '../engine/pipeline';
 import { createProgram, createTexture, type RgbaImage, type TextureSource } from './gl';
-import { DEVELOP_FRAGMENT_SHADER, VERTEX_SHADER } from './shaders';
+import { DEVELOP_FRAGMENT_SHADER, GEOMETRY_FRAGMENT_SHADER, VERTEX_SHADER } from './shaders';
 
-const UNIFORM_NAMES = [
+const DEVELOP_UNIFORMS = [
   'source',
   'flipY',
   'whiteBalance',
@@ -16,8 +17,9 @@ const UNIFORM_NAMES = [
   'saturationScale',
   'bw',
 ] as const;
+const GEOMETRY_UNIFORMS = ['image', 'flipY', 'outSize', 'rowX', 'rowY'] as const;
 
-type Uniforms = Record<(typeof UNIFORM_NAMES)[number], WebGLUniformLocation | null>;
+type Uniforms<K extends string> = Record<K, WebGLUniformLocation | null>;
 
 /** Which uploaded copy of the photo to render. */
 export type SourceKind = 'full' | 'proxy' | 'histogram';
@@ -28,25 +30,46 @@ interface SizedTexture {
   height: number;
 }
 
+interface Target {
+  /** Null = the canvas. */
+  framebuffer: WebGLFramebuffer | null;
+  width: number;
+  height: number;
+  /** The canvas is bottom-up; offscreen targets keep image rows top-first. */
+  flipY: boolean;
+}
+
 export type RenderCanvas = HTMLCanvasElement | OffscreenCanvas;
 
+function locate<K extends string>(gl: WebGL2RenderingContext, program: WebGLProgram, names: readonly K[]): Uniforms<K> {
+  const out = {} as Uniforms<K>;
+  for (const name of names) out[name] = gl.getUniformLocation(program, `u_${name}`);
+  return out;
+}
+
 /**
- * Runs the develop pipeline on the GPU. Holds a full-resolution texture, a
- * downscaled proxy for interactive drags and a small copy for the histogram.
+ * Runs the develop pipeline on the GPU in up to two passes: (1) per-pixel
+ * color into an intermediate RGBA8 texture at source size, (2) geometry
+ * resampling into the output. With identity geometry pass 1 renders straight
+ * to the output. Holds a full-resolution texture, a downscaled proxy for
+ * interactive drags and a small copy for the histogram.
  */
 export class Renderer {
-  private readonly program: WebGLProgram;
-  private readonly uniforms: Uniforms;
+  private readonly developProgram: WebGLProgram;
+  private readonly geometryProgram: WebGLProgram;
+  private readonly developUniforms: Uniforms<(typeof DEVELOP_UNIFORMS)[number]>;
+  private readonly geometryUniforms: Uniforms<(typeof GEOMETRY_UNIFORMS)[number]>;
   private textures: Partial<Record<SourceKind, SizedTexture>> = {};
+  private intermediate: (SizedTexture & { framebuffer: WebGLFramebuffer }) | null = null;
 
   private constructor(
     private readonly canvas: RenderCanvas,
     private readonly gl: WebGL2RenderingContext,
   ) {
-    this.program = createProgram(gl, VERTEX_SHADER, DEVELOP_FRAGMENT_SHADER);
-    const uniforms = {} as Uniforms;
-    for (const name of UNIFORM_NAMES) uniforms[name] = gl.getUniformLocation(this.program, `u_${name}`);
-    this.uniforms = uniforms;
+    this.developProgram = createProgram(gl, VERTEX_SHADER, DEVELOP_FRAGMENT_SHADER);
+    this.geometryProgram = createProgram(gl, VERTEX_SHADER, GEOMETRY_FRAGMENT_SHADER);
+    this.developUniforms = locate(gl, this.developProgram, DEVELOP_UNIFORMS);
+    this.geometryUniforms = locate(gl, this.geometryProgram, GEOMETRY_UNIFORMS);
   }
 
   /** Throws if WebGL2 is unavailable. */
@@ -83,40 +106,118 @@ export class Renderer {
     this.textures = {};
   }
 
-  /** Draws to the canvas, resizing it to the chosen source. Returns that size. */
+  /** Draws to the canvas, resizing it to the output. Returns the output size. */
   draw(params: PipelineParams, kind: SourceKind): { width: number; height: number } {
     const source = this.pickSource(kind);
-    if (this.canvas.width !== source.width) this.canvas.width = source.width;
-    if (this.canvas.height !== source.height) this.canvas.height = source.height;
-    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-    this.run(source, params, true);
-    return { width: source.width, height: source.height };
+    const out = outputSize(source, params.geometry);
+    if (this.canvas.width !== out.width) this.canvas.width = out.width;
+    if (this.canvas.height !== out.height) this.canvas.height = out.height;
+    this.render(source, params, { framebuffer: null, ...out, flipY: true });
+    return out;
   }
 
   /** Renders into an offscreen RGBA8 framebuffer and reads it back, rows top-first. */
   readPixels(params: PipelineParams, kind: SourceKind = 'full'): RgbaImage {
     const { gl } = this;
     const source = this.pickSource(kind);
-    const target = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, target);
-    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, source.width, source.height);
-    const fbo = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, target, 0);
-
-    this.run(source, params, false);
-    const data = new Uint8Array(source.width * source.height * 4);
-    gl.readPixels(0, 0, source.width, source.height, gl.RGBA, gl.UNSIGNED_BYTE, data);
-
+    const out = outputSize(source, params.geometry);
+    const target = this.createTarget(out.width, out.height);
+    this.render(source, params, { framebuffer: target.framebuffer, ...out, flipY: false });
+    const data = new Uint8Array(out.width * out.height * 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
+    gl.readPixels(0, 0, out.width, out.height, gl.RGBA, gl.UNSIGNED_BYTE, data);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.deleteFramebuffer(fbo);
-    gl.deleteTexture(target);
-    return { width: source.width, height: source.height, data };
+    gl.deleteFramebuffer(target.framebuffer);
+    gl.deleteTexture(target.texture);
+    return { width: out.width, height: out.height, data };
   }
 
   dispose(): void {
     this.clearImage();
-    this.gl.deleteProgram(this.program);
+    this.releaseIntermediate();
+    this.gl.deleteProgram(this.developProgram);
+    this.gl.deleteProgram(this.geometryProgram);
+  }
+
+  private render(source: SizedTexture, params: PipelineParams, target: Target): void {
+    if (isIdentityGeometry(params.geometry)) {
+      this.developPass(source, params, target);
+      return;
+    }
+    const intermediate = this.intermediateFor(source.width, source.height);
+    this.developPass(source, params, { framebuffer: intermediate.framebuffer, width: source.width, height: source.height, flipY: false });
+    this.geometryPass(intermediate, params, target);
+  }
+
+  private developPass(source: SizedTexture, params: PipelineParams, target: Target): void {
+    const { gl } = this;
+    const u = this.developUniforms;
+    this.bindTarget(target);
+    gl.useProgram(this.developProgram);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source.texture);
+    gl.uniform1i(u.source, 0);
+    gl.uniform1i(u.flipY, target.flipY ? 1 : 0);
+    gl.uniform3f(u.whiteBalance, ...params.whiteBalance);
+    gl.uniform1f(u.exposureGain, params.exposureGain);
+    gl.uniform1f(u.contrast, params.tone.contrast);
+    gl.uniform1f(u.highlights, params.tone.highlights);
+    gl.uniform1f(u.shadows, params.tone.shadows);
+    gl.uniform1f(u.whites, params.tone.whites);
+    gl.uniform1f(u.blacks, params.tone.blacks);
+    gl.uniform1f(u.vibrance, params.vibrance);
+    gl.uniform1f(u.saturationScale, params.saturationScale);
+    gl.uniform1i(u.bw, params.bw ? 1 : 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  private geometryPass(image: SizedTexture, params: PipelineParams, target: Target): void {
+    const { gl } = this;
+    const u = this.geometryUniforms;
+    const m = geometryMatrix(image, params.geometry, target);
+    this.bindTarget(target);
+    gl.useProgram(this.geometryProgram);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, image.texture);
+    gl.uniform1i(u.image, 0);
+    gl.uniform1i(u.flipY, target.flipY ? 1 : 0);
+    gl.uniform2i(u.outSize, target.width, target.height);
+    gl.uniform3f(u.rowX, m[0], m[1], m[2]);
+    gl.uniform3f(u.rowY, m[3], m[4], m[5]);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  private bindTarget(target: Target): void {
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, target.framebuffer);
+    this.gl.viewport(0, 0, target.width, target.height);
+  }
+
+  private createTarget(width: number, height: number): SizedTexture & { framebuffer: WebGLFramebuffer } {
+    const { gl } = this;
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
+    const framebuffer = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { texture, framebuffer, width, height };
+  }
+
+  /** Reused RGBA8 target for pass 1, recreated when the source size changes. */
+  private intermediateFor(width: number, height: number) {
+    const current = this.intermediate;
+    if (current && current.width === width && current.height === height) return current;
+    this.releaseIntermediate();
+    this.intermediate = this.createTarget(width, height);
+    return this.intermediate;
+  }
+
+  private releaseIntermediate(): void {
+    if (!this.intermediate) return;
+    this.gl.deleteFramebuffer(this.intermediate.framebuffer);
+    this.gl.deleteTexture(this.intermediate.texture);
+    this.intermediate = null;
   }
 
   private pickSource(kind: SourceKind): SizedTexture {
@@ -127,26 +228,5 @@ export class Renderer {
 
   private upload(source: TextureSource): SizedTexture {
     return { texture: createTexture(this.gl, source), width: source.width, height: source.height };
-  }
-
-  private run(source: SizedTexture, params: PipelineParams, flipY: boolean): void {
-    const { gl, uniforms } = this;
-    gl.viewport(0, 0, source.width, source.height);
-    gl.useProgram(this.program);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, source.texture);
-    gl.uniform1i(uniforms.source, 0);
-    gl.uniform1i(uniforms.flipY, flipY ? 1 : 0);
-    gl.uniform3f(uniforms.whiteBalance, ...params.whiteBalance);
-    gl.uniform1f(uniforms.exposureGain, params.exposureGain);
-    gl.uniform1f(uniforms.contrast, params.tone.contrast);
-    gl.uniform1f(uniforms.highlights, params.tone.highlights);
-    gl.uniform1f(uniforms.shadows, params.tone.shadows);
-    gl.uniform1f(uniforms.whites, params.tone.whites);
-    gl.uniform1f(uniforms.blacks, params.tone.blacks);
-    gl.uniform1f(uniforms.vibrance, params.vibrance);
-    gl.uniform1f(uniforms.saturationScale, params.saturationScale);
-    gl.uniform1i(uniforms.bw, params.bw ? 1 : 0);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 }

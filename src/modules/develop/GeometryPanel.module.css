@@ -1,0 +1,37 @@
+.aspectRow {
+  display: grid;
+  grid-template-columns: var(--slider-label-width) minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  margin-top: 8px;
+}
+
+.label {
+  color: var(--color-text);
+}
+
+.select {
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--color-border-control);
+  border-radius: 4px;
+  background: var(--color-app-bg);
+  color: var(--color-text-bright);
+}
+
+.buttons {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.buttons > button {
+  flex: 1 1 0;
+}
+
+.cropToggle {
+  width: 100%;
+  margin-top: 6px;
+  /* Clear the sticky Previous/Reset all footer when scrolled into view. */
+  scroll-margin-bottom: 64px;
+}

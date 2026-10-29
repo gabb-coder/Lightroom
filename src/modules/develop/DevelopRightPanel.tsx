@@ -1,5 +1,8 @@
 import { PanelSection } from '../../components/PanelSection';
+import { useState } from 'react';
+import { isIdentityGeometry } from '../../engine/geometry';
 import { BasicPanel } from './BasicPanel';
+import { GeometryPanel } from './GeometryPanel';
 import { Histogram } from './Histogram';
 import { isBasicEdited } from '../../model/sliders';
 import { useDevelopStore } from '../../state/developStore';
@@ -19,16 +22,32 @@ const SECTIONS = [
 
 export function DevelopRightPanel() {
   const basicEdited = useDevelopStore((s) => isBasicEdited(s.settings));
+  const geometryEdited = useDevelopStore((s) => !isIdentityGeometry(s.settings.geometry) || s.settings.geometry.aspect !== 'original');
+  const cropping = useDevelopStore((s) => s.cropping);
+  const setCropping = useDevelopStore((s) => s.setCropping);
+  const [geometryPanelOpen, setGeometryPanelOpen] = useState(false);
+  // The Crop tool (toolbar, R) shows this panel; collapsing it ends cropping.
+  const geometryOpen = geometryPanelOpen || cropping;
+  const onGeometryOpenChange = (next: boolean) => {
+    setGeometryPanelOpen(next);
+    if (!next) setCropping(false);
+  };
   const hasPhoto = useDevelopStore((s) => s.photo !== null);
   const resetAll = useDevelopStore((s) => s.resetAll);
   return (
     <aside className={`${layout.side} ${layout.right}`} aria-label="Develop panels" data-testid="right-panel">
       <Histogram />
-      {SECTIONS.map(({ title, open }) => (
-        <PanelSection key={title} title={title} defaultOpen={open} edited={title === 'Basic' && basicEdited}>
-          {title === 'Basic' ? <BasicPanel /> : null}
-        </PanelSection>
-      ))}
+      {SECTIONS.map(({ title, open }) =>
+        title === 'Crop and geometry' ? (
+          <PanelSection key={title} title={title} edited={geometryEdited} open={geometryOpen} onOpenChange={onGeometryOpenChange}>
+            <GeometryPanel />
+          </PanelSection>
+        ) : (
+          <PanelSection key={title} title={title} defaultOpen={open} edited={title === 'Basic' && basicEdited}>
+            {title === 'Basic' ? <BasicPanel /> : null}
+          </PanelSection>
+        ),
+      )}
       <div className={styles.spacer} />
       <div className={styles.footer}>
         <button type="button" className={controls.button} disabled>

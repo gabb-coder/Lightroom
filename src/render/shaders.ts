@@ -142,3 +142,44 @@ void main() {
   outColor = vec4(linearToSrgb(clamp(c, 0.0, 1.0)), src.a);
 }
 `;
+
+/**
+ * Geometry pass (engine/geometry.ts): maps each output pixel through an
+ * affine matrix to a source position and samples the developed image
+ * bilinearly with the same lerp order as sampleBilinear(). Outside the image
+ * the result is transparent; edges clamp.
+ */
+export const GEOMETRY_FRAGMENT_SHADER = /* glsl */ `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform sampler2D u_image;
+uniform bool u_flipY;
+uniform ivec2 u_outSize;
+uniform vec3 u_rowX;
+uniform vec3 u_rowY;
+
+out vec4 outColor;
+
+void main() {
+  ivec2 o = ivec2(gl_FragCoord.xy);
+  if (u_flipY) o.y = u_outSize.y - 1 - o.y;
+  vec3 p = vec3(vec2(o) + 0.5, 1.0);
+  vec2 s = vec2(dot(u_rowX, p), dot(u_rowY, p));
+  ivec2 size = textureSize(u_image, 0);
+  if (s.x < 0.0 || s.y < 0.0 || s.x > float(size.x) || s.y > float(size.y)) {
+    outColor = vec4(0.0);
+    return;
+  }
+  vec2 uv = s - 0.5;
+  vec2 i0f = floor(uv);
+  vec2 f = uv - i0f;
+  ivec2 lo = clamp(ivec2(i0f), ivec2(0), size - 1);
+  ivec2 hi = clamp(ivec2(i0f) + 1, ivec2(0), size - 1);
+  vec4 c00 = texelFetch(u_image, ivec2(lo.x, lo.y), 0);
+  vec4 c10 = texelFetch(u_image, ivec2(hi.x, lo.y), 0);
+  vec4 c01 = texelFetch(u_image, ivec2(lo.x, hi.y), 0);
+  vec4 c11 = texelFetch(u_image, ivec2(hi.x, hi.y), 0);
+  outColor = mix(mix(c00, c10, f.x), mix(c01, c11, f.x), f.y);
+}
+`;

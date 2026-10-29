@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { orientedSize, outputSize } from '../../engine/geometry';
+import { displayGeometry } from '../../model/crop';
 import { containSize } from '../../hooks/fitSize';
 import { useElementSize } from '../../hooks/useElementSize';
 import { attachRenderer } from '../../render/rendererController';
 import { selectShowingBefore, useDevelopStore, type LoadedPhoto } from '../../state/developStore';
+import { CropOverlay } from './CropOverlay';
 import styles from './PhotoCanvas.module.css';
 
 /**
@@ -15,7 +18,14 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
   const [error, setError] = useState<string | null>(null);
   const area = useElementSize(areaRef);
   const showingBefore = useDevelopStore(selectShowingBefore);
-  const fit = containSize(area, photo.width / photo.height);
+  const cropping = useDevelopStore((s) => s.cropping);
+  const geometry = useDevelopStore((s) => s.settings.geometry);
+  const shown = useMemo(
+    () => outputSize(photo, displayGeometry(geometry, { before: showingBefore, cropping })),
+    [photo, geometry, showingBefore, cropping],
+  );
+  const fit = containSize(area, shown.width / shown.height);
+  const showOverlay = cropping && !showingBefore;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -38,6 +48,7 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
             aria-label={`Edited photo: ${photo.name}`}
             data-testid="photo-canvas"
           />
+          {showOverlay && <CropOverlay oriented={orientedSize(photo, geometry.rotation)} />}
           {showingBefore && (
             <div className={styles.beforeBadge} data-testid="before-badge">
               Before

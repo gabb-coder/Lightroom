@@ -1,6 +1,16 @@
-import type { BasicSliderKey } from './editSettings';
+import type { BasicSliderKey, CropAspect } from './editSettings';
+
+/** Aspect preset names as shown in the Aspect menu (design/Develop.dc.html). */
+export const CROP_ASPECT_LABELS: Readonly<Record<CropAspect, string>> = {
+  original: 'Original',
+  '1:1': '1 : 1',
+  '4:5': '4 : 5',
+  '3:2': '3 : 2',
+  '16:9': '16 : 9',
+  custom: 'Custom',
+};
 import type { HistoryEntry } from './history';
-import { BASIC_SLIDERS, formatSliderValue } from './sliders';
+import { ANGLE_SLIDER, BASIC_SLIDERS, formatSliderValue } from './sliders';
 
 /** History key for a Basic panel control. */
 export type BasicHistoryKey = `basic.${BasicSliderKey | 'treatment'}`;
@@ -19,6 +29,8 @@ function isBasicSliderKey(key: string): key is BasicSliderKey {
 
 /** The value column of a History row, e.g. "+0.35", "−38" or "B&W". Empty for one-shot steps. */
 export function historyEntryValue(entry: HistoryEntry): string {
+  if (entry.key === 'geometry.angle') return formatSliderValue(ANGLE_SLIDER, entry.settings.geometry.angle);
+  if (entry.key === 'geometry.aspect') return CROP_ASPECT_LABELS[entry.settings.geometry.aspect];
   if (!entry.key?.startsWith('basic.')) return '';
   const field = entry.key.slice('basic.'.length);
   if (field === 'treatment') return entry.settings.basic.treatment === 'bw' ? 'B&W' : 'Color';

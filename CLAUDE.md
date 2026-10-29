@@ -85,6 +85,11 @@ component library.
   written via `state/organizeActions.ts`, not edit history.
 - Library grid is virtualized (`modules/library/gridLayout.ts` math mirrors
   the CSS); keep cell heights explicit so the math stays exact.
+- Geometry (M6): `engine/geometry.ts` maps output px -> source px (affine)
+  with manual bilinear sampling; GPU pass 2 mirrors it exactly. Identity
+  geometry is a 1-pass fast path and must stay pixel-exact. Crop editing
+  math (fit to straighten, aspect presets, handles, rotate/flip) is in
+  `model/crop.ts`; crop rect is normalized to the oriented image.
 - `src/render/shaders.ts` GLSL twin of each engine stage; `Renderer.ts` owns
   WebGL2; `rendererController.ts` is the only store->GPU bridge (rAF
   coalescing, proxy while `interacting`, full-res otherwise).

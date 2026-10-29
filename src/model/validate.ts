@@ -1,5 +1,7 @@
 import {
+  CROP_ASPECTS,
   defaultEditSettings,
+  type CropAspect,
   HSL_COLORS,
   type EditSettings,
   type HslAdjust,
@@ -91,6 +93,7 @@ export function parseEditSettings(raw: unknown): EditSettings {
       rotation: rotation === 1 || rotation === 2 || rotation === 3 ? rotation : 0,
       flipH: geometry.flipH === true,
       flipV: geometry.flipV === true,
+      aspect: CROP_ASPECTS.includes(geometry.aspect as CropAspect) ? (geometry.aspect as CropAspect) : d.geometry.aspect,
     },
   };
 }

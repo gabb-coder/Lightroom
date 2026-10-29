@@ -104,3 +104,47 @@ describe('loading a saved photo', () => {
     expect(store().settings.basic).toMatchObject({ exposure: 0.5, contrast: 0 });
   });
 });
+
+describe('geometry edits', () => {
+  beforeEach(() => store().loadPhoto({ id: 'g', name: 'g.jpg', width: 600, height: 400, bitmap: {} as ImageBitmap }));
+
+  it('a crop drag is one history step; re-editing starts from the stored crop', () => {
+    store().setCrop({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 });
+    store().setCrop({ x: 0.1, y: 0.1, w: 0.6, h: 0.7 });
+    expect(labels().at(-1)).toEqual(['Crop', '']);
+    expect(store().history.entries).toHaveLength(2);
+    expect(store().settings.geometry.cropRect).toEqual({ x: 0.1, y: 0.1, w: 0.6, h: 0.7 });
+  });
+
+  it('straightening shrinks the crop to fit, and returning to 0° restores it', () => {
+    store().setAngle(5);
+    store().setAngle(12);
+    const shrunk = store().settings.geometry.cropRect;
+    expect(shrunk.w).toBeLessThan(1);
+    expect(labels().at(-1)).toEqual(['Straighten', '+12.0°']);
+    store().setAngle(0);
+    expect(store().settings.geometry.cropRect).toEqual({ x: 0, y: 0, w: 1, h: 1 });
+    expect(store().history.entries).toHaveLength(2);
+  });
+
+  it('aspect presets, rotate and flip are recorded and undoable', () => {
+    store().setAspect('1:1');
+    const square = store().settings.geometry.cropRect;
+    expect((square.w * 600) / (square.h * 400)).toBeCloseTo(1, 9);
+    store().rotate90();
+    expect(store().settings.geometry.rotation).toBe(1);
+    store().flipHorizontal();
+    expect(labels().slice(-3).map(([l]) => l)).toEqual(['Crop aspect', 'Rotate 90°', 'Flip horizontal']);
+    store().undo();
+    store().undo();
+    expect(store().settings.geometry.rotation).toBe(0);
+    expect(store().settings.geometry.cropRect).toEqual(square);
+  });
+
+  it('the crop tool needs a photo and turns off when another photo loads', () => {
+    store().setCropping(true);
+    expect(store().cropping).toBe(true);
+    store().loadPhoto(fakePhoto('other.jpg'));
+    expect(store().cropping).toBe(false);
+  });
+});
