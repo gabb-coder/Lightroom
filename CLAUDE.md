@@ -109,6 +109,12 @@ component library.
   The catalog view can be `collection:<id>` (`visiblePhotos`); actions in
   `state/collectionActions.ts`; grid cells drag their selection onto a
   collection (`PHOTO_DRAG_TYPE`).
+- Virtual copies and snapshots (M13): a copy is a `PhotoRecord` with
+  `masterId`/`copyName`; it shares the master's original — always read
+  originals through `getOriginal()` (db.ts), never `db.originals.get(id)`.
+  `model/virtualCopy.ts`, `state/virtualCopyActions.ts`. Snapshots: DB v5
+  table `snapshots` (per photo), `state/snapshotStore.ts`; applying one is
+  `applySettings` (one history step).
 - Library grid is virtualized (`modules/library/gridLayout.ts` math mirrors
   the CSS); keep cell heights explicit so the math stays exact.
 - Geometry (M6): `engine/geometry.ts` maps output px -> source px (affine)

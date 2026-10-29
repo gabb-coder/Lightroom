@@ -1,5 +1,6 @@
-import { db } from '../db/db';
+import { db, getOriginal } from '../db/db';
 import { parseStoredHistory } from '../model/history';
+import { displayName } from '../model/virtualCopy';
 import { useAppStore } from './appStore';
 import { useDevelopStore } from './developStore';
 import { flushEdits } from './editPersistence';
@@ -16,7 +17,7 @@ export async function openPhotoInDevelop(id: string): Promise<void> {
   if (useDevelopStore.getState().photo?.id === id) return;
   const token = ++loadToken;
   await flushEdits();
-  const [record, original, edits] = await Promise.all([db.photos.get(id), db.originals.get(id), db.edits.get(id)]);
+  const [record, original, edits] = await Promise.all([db.photos.get(id), getOriginal(id), db.edits.get(id)]);
   if (token !== loadToken) return;
   if (!record || !original) return;
   const bitmap = await createImageBitmap(original.blob, { imageOrientation: 'from-image', premultiplyAlpha: 'none' });
@@ -26,7 +27,7 @@ export async function openPhotoInDevelop(id: string): Promise<void> {
   }
   useDevelopStore
     .getState()
-    .loadPhoto({ id, name: record.fileName, width: bitmap.width, height: bitmap.height, bitmap }, parseStoredHistory(edits?.history));
+    .loadPhoto({ id, name: displayName(record), width: bitmap.width, height: bitmap.height, bitmap }, parseStoredHistory(edits?.history));
 }
 
 /**

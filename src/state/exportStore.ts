@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { db } from '../db/db';
+import { db, getOriginal } from '../db/db';
 import { downloadBlob } from '../io/download';
 import {
   BUILTIN_EXPORT_PRESETS,
@@ -101,7 +101,7 @@ export function exportTargets(): string[] {
 
 /** Renders one photo in the worker and downloads it. */
 async function exportOne(photoId: string, fileName: string, onProgress: (fraction: number) => void): Promise<void> {
-  const original = await db.originals.get(photoId);
+  const original = await getOriginal(photoId);
   if (!original) throw new Error('This photo is no longer in the catalog.');
   const settings = await settingsOf(photoId);
   const result = await exportInWorker(original.blob, settings, useExportStore.getState().options, (stage) => onProgress(STAGE_PROGRESS[stage]));
@@ -114,9 +114,12 @@ async function exportOne(photoId: string, fileName: string, onProgress: (fractio
  * A photo that fails is reported and the rest still export; Cancel stops
  * the batch.
  */
+let cancelRequested = false;
+
 export async function runExport(): Promise<void> {
   const ids = exportTargets();
   if (ids.length === 0 || useExportStore.getState().job?.status === 'running') return;
+  cancelRequested = false;
   const { options, setJob } = useExportStore.getState();
   if (hideTimer) clearTimeout(hideTimer);
   closeExportDialog();
@@ -129,6 +132,8 @@ export async function runExport(): Promise<void> {
   for (let index = 0; index < total; index++) {
     const fileName = names[index] ?? '';
     const progress = (fraction: number) => setJob({ status: 'running', fileName, index, total, progress: (index + fraction) / total });
+    // Cancel pressed between two photos (no worker job to stop at that moment).
+    if (cancelRequested) return finish({ status: 'cancelled', fileName, index, total, progress: index / total });
     progress(0);
     try {
       const id = ids[index];
@@ -148,5 +153,6 @@ export async function runExport(): Promise<void> {
 }
 
 export function cancelRunningExport(): void {
+  cancelRequested = true;
   cancelExport();
 }

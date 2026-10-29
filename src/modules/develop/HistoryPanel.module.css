@@ -7,6 +7,7 @@
 }
 
 .header {
+  flex: none;
   height: var(--panel-header-height);
   display: flex;
   align-items: center;

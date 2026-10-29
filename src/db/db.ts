@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type { History } from '../model/history';
+import type { EditSettings } from '../model/editSettings';
 import { migrateHistorySharpenDefault, migrateSharpenDefault } from '../model/migrate';
 import type { ExportPreset } from '../model/exportOptions';
 import type { Preset } from '../model/presets';
@@ -37,6 +38,10 @@ export interface PhotoRecord {
   exif?: PhotoExif;
   /** Keywords (model/keywords.ts normalizes them); undefined = none. */
   keywords?: string[];
+  /** Virtual copy (M13): the photo whose stored original this one shares. */
+  masterId?: string;
+  /** Virtual copy label, e.g. "Copy 1". */
+  copyName?: string;
   rating: number;
   flag: Flag | null;
   colorLabel: ColorLabel | null;
@@ -65,6 +70,15 @@ export interface ThumbnailRecord {
   edited: Blob | null;
 }
 
+/** A named, saved state of one photo's settings (M13). */
+export interface SnapshotRecord {
+  id: string;
+  photoId: string;
+  name: string;
+  settings: EditSettings;
+  createdAt: number;
+}
+
 /** Current settings and full undo history of one photo. */
 export interface EditRecord {
   photoId: string;
@@ -82,6 +96,7 @@ export class CatalogDb extends Dexie {
   presets!: Table<Preset, string>;
   exportPresets!: Table<ExportPreset, string>;
   collections!: Table<CollectionRecord, string>;
+  snapshots!: Table<SnapshotRecord, string>;
 
   constructor(name = DB_NAME) {
     super(name);
@@ -107,8 +122,16 @@ export class CatalogDb extends Dexie {
       });
     // v4 (M12): collections (lists of photo ids).
     this.version(4).stores({ collections: 'id' });
+    // v5 (M13): snapshots per photo.
+    this.version(5).stores({ snapshots: 'id, photoId' });
   }
 }
 
 /** The app's single catalog database. All data stays on this device. */
 export const db = new CatalogDb();
+
+/** The stored original of a photo; a virtual copy reads its master's. */
+export async function getOriginal(photoId: string): Promise<OriginalRecord | undefined> {
+  const photo = await db.photos.get(photoId);
+  return db.originals.get(photo?.masterId ?? photoId);
+}

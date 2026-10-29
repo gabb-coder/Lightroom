@@ -8,6 +8,7 @@ import { startPhotoSession } from './photoSession';
 import { loadExportPresets } from './exportStore';
 import { loadSavedPresets } from './presetStore';
 import { startThumbnailUpdater } from './thumbnailUpdater';
+import { startSnapshotSync } from './snapshotStore';
 import { readUiPrefs, writeUiPrefs } from './uiPrefs';
 
 function restoreUiPrefs(): void {
@@ -41,4 +42,5 @@ export function startCatalog(): void {
   startPhotoSession();
   startEditPersistence();
   startThumbnailUpdater();
+  startSnapshotSync();
 }

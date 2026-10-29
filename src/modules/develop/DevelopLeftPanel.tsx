@@ -4,6 +4,7 @@ import { useDevelopStore } from '../../state/developStore';
 import layout from '../layout.module.css';
 import { HistoryPanel } from './HistoryPanel';
 import { PresetsPanel } from './PresetsPanel';
+import { SnapshotsPanel } from './SnapshotsPanel';
 import styles from './DevelopLeftPanel.module.css';
 
 const ZOOMS = ['Fit', 'Fill', '1:1'] as const;
@@ -56,6 +57,7 @@ export function DevelopLeftPanel() {
     >
       <Navigator />
       <PresetsPanel />
+      <SnapshotsPanel />
       <HistoryPanel />
       <CopyPaste />
     </aside>

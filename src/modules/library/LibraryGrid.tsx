@@ -6,6 +6,7 @@ import type { PhotoRecord } from '../../db/db';
 import { LabelDot, PickedBadge, RatingText, RejectedBadge } from '../../components/OrganizeBadges';
 import type { ClickModifiers } from '../../model/selection';
 import { PHOTO_DRAG_TYPE } from '../../state/collectionActions';
+import { displayName } from '../../model/virtualCopy';
 import { isMacPlatform } from '../../shortcuts/platform';
 import { useAppStore } from '../../state/appStore';
 import { useLibraryStore } from '../../state/libraryStore';
@@ -39,7 +40,7 @@ const GridCell = memo(function GridCell({ photo, number, selected, metrics, onPi
       className={styles.cell}
       style={{ height: metrics.rowHeight }}
       aria-pressed={selected}
-      aria-label={photo.fileName}
+      aria-label={displayName(photo)}
       data-testid="grid-cell"
       data-flag={photo.flag ?? 'none'}
       onClick={(e) => onPick(photo.id, { toggle: MAC ? e.metaKey : e.ctrlKey, range: e.shiftKey })}
@@ -53,6 +54,7 @@ const GridCell = memo(function GridCell({ photo, number, selected, metrics, onPi
       <span className={`num ${styles.cellHeader}`}>
         <span>{number}</span>
         <span className={styles.fileName}>{photo.fileName}</span>
+        {photo.copyName && <span className={styles.copyBadge}>{photo.copyName}</span>}
       </span>
       <span className={styles.cellThumb}>
         <PhotoThumb photo={photo} dimmed={photo.flag === 'reject'} />

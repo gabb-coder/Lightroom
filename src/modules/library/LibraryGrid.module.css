@@ -48,6 +48,8 @@
 }
 
 .fileName {
+  flex: 0 1 auto;
+  margin-left: auto;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -75,4 +77,12 @@
 
 .spacer {
   flex: 1 1 auto;
+}
+
+.copyBadge {
+  flex: none;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--color-control-on);
+  color: var(--color-text-bright);
 }

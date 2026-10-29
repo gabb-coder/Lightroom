@@ -77,3 +77,8 @@ export async function storedEditsByName(page: Page): Promise<Record<string, Stor
   }
   return out;
 }
+
+/** Number of rows in one of the catalog's object stores. */
+export async function storeCount(page: Page, store: string): Promise<number> {
+  return (await readAll(page, store)).length;
+}

@@ -242,17 +242,17 @@ test.describe('Batch export', () => {
   test('the toast counts photos while a batch runs, and Cancel stops the batch', async ({ page }) => {
     test.slow();
     await gotoLibrary(page);
-    await importViaButton(page, testFiles(3, 1600, 1200));
-    await selectAllFocusing(page, 0, 2);
+    await importViaButton(page, testFiles(6, 1600, 1200));
+    await selectAllFocusing(page, 0, 5);
     await page.getByRole('tab', { name: 'Export' }).click();
     await dialog(page).getByRole('button', { name: 'Full size JPEG' }).click();
     const downloads: Download[] = [];
     page.on('download', (d) => downloads.push(d));
-    await dialog(page).getByRole('button', { name: 'Export 3 photos' }).click();
-    await expect(page.getByTestId('export-toast')).toContainText(/Exporting [12] of 3/);
+    await dialog(page).getByRole('button', { name: 'Export 6 photos' }).click();
+    await expect(page.getByTestId('export-toast')).toContainText(/Exporting [123] of 6/);
     await page.screenshot({ path: 'test-results/screenshots/m10-batch-export-progress.png' });
     await page.getByTestId('export-toast').getByRole('button', { name: 'Cancel' }).click();
     await expect(page.getByTestId('export-toast')).toHaveAttribute('data-status', 'cancelled');
-    expect(downloads.length).toBeLessThan(3);
+    expect(downloads.length).toBeLessThan(6);
   });
 });

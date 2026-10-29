@@ -44,6 +44,7 @@ export function SettingsDialog() {
   const nothingTicked = useCopyPasteStore((s) => s.panels.length === 0);
   // Re-read when the dialog opens; the selection cannot change while it is modal.
   const sourceName = useLibraryStore((s) => s.photos.find((p) => p.id === (mode ? settingsSourceId() : null))?.fileName ?? '');
+  const sourceCopy = useLibraryStore((s) => s.photos.find((p) => p.id === (mode ? settingsSourceId() : null))?.copyName);
   const targetCount = mode === 'sync' ? syncTargets().length : 0;
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -53,10 +54,11 @@ export function SettingsDialog() {
 
   if (!mode) return null;
   const text = mode === 'copy' ? COPY : SYNC;
+  const source = sourceCopy ? `${sourceName} (${sourceCopy})` : sourceName;
   const intro =
     mode === 'copy'
-      ? `Choose what to copy from ${sourceName}.`
-      : `From ${sourceName} to ${targetCount} other selected ${targetCount === 1 ? 'photo' : 'photos'}. Each photo gets one undoable step.`;
+      ? `Choose what to copy from ${source}.`
+      : `From ${source} to ${targetCount} other selected ${targetCount === 1 ? 'photo' : 'photos'}. Each photo gets one undoable step.`;
 
   return (
     <div className={styles.scrim}>

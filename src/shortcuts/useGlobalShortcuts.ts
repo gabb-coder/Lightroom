@@ -9,6 +9,8 @@ import { neighborId, selectFilmstripList, selectLibraryList, useLibraryStore } f
 import { organizeTargets, setFlag, setRating } from '../state/organizeActions';
 import { matchOrganizeShortcut } from './organizeShortcuts';
 import { openCopyDialog, pasteSettings, useCopyPasteStore } from '../state/copyPasteStore';
+import { settingsSourceId } from '../state/settingsSync';
+import { createVirtualCopy } from '../state/virtualCopyActions';
 
 const MODULE_KEYS: Readonly<Record<string, AppModule>> = {
   g: 'library',
@@ -36,6 +38,14 @@ export function useGlobalShortcuts(): void {
       // A modal dialog (Copy / Sync settings) owns the keyboard.
       if (useCopyPasteStore.getState().dialog) return;
       const command = mac ? event.metaKey : event.ctrlKey;
+      // Ctrl/Cmd+': make a virtual copy of the focused photo and switch to it (as in Lightroom).
+      if (command && !event.shiftKey && event.key === "'" && useAppStore.getState().module !== 'export') {
+        const source = settingsSourceId();
+        if (!source) return;
+        event.preventDefault();
+        void createVirtualCopy(source).then((id) => id && useLibraryStore.getState().select(id));
+        return;
+      }
       // Ctrl/Cmd+Shift+C / V: copy and paste settings (design/Kit.dc.html).
       if (command && event.shiftKey && useAppStore.getState().module !== 'export') {
         const key = event.key.toLowerCase();

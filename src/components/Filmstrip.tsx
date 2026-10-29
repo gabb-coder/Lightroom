@@ -3,6 +3,7 @@ import type { PhotoRecord } from '../db/db';
 import { FILMSTRIP_FILTERS, type FilmstripFilter } from '../model/organize';
 import type { ClickModifiers } from '../model/selection';
 import { isMacPlatform } from '../shortcuts/platform';
+import { displayName } from '../model/virtualCopy';
 import { selectFilmstripList, useLibraryStore } from '../state/libraryStore';
 import { EditedIcon } from './EditedBadge';
 import { PhotoThumb } from './PhotoThumb';
@@ -33,7 +34,7 @@ function FilmstripItem({ photo, selected, focused, onPick }: ItemProps) {
       className={styles.item}
       aria-pressed={selected}
       aria-current={focused ? 'true' : undefined}
-      aria-label={photo.fileName}
+      aria-label={displayName(photo)}
       onClick={onClick}
     >
       <PhotoThumb photo={photo} dimmed={photo.flag === 'reject'} />

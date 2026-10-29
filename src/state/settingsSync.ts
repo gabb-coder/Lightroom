@@ -1,4 +1,4 @@
-import { db, type PhotoRecord } from '../db/db';
+import { db, getOriginal, type PhotoRecord } from '../db/db';
 import { isEdited, jsonEqual } from '../model/compare';
 import { DEFAULT_COPY_PANELS, pasteSettings, type SettingsClipboard, type SettingsPanel } from '../model/copySettings';
 import type { EditSettings } from '../model/editSettings';
@@ -7,6 +7,7 @@ import { currentSettings, parseStoredHistory, pushHistory } from '../model/histo
 import { createExportClient } from '../workers/exportClient';
 import { THUMBNAIL_LONG_EDGE, THUMBNAIL_QUALITY } from '../workers/thumbnailProtocol';
 import { useAppStore } from './appStore';
+import { displayName } from '../model/virtualCopy';
 import { useDevelopStore } from './developStore';
 import { flushEdits } from './editPersistence';
 import { useLibraryStore } from './libraryStore';
@@ -74,7 +75,7 @@ export async function copySettings(panels: readonly SettingsPanel[]): Promise<Se
   const id = settingsSourceId();
   const record = id ? await db.photos.get(id) : undefined;
   if (!id || !record) return null;
-  return { settings: structuredClone(await settingsOf(id)), panels: [...panels], from: record.fileName };
+  return { settings: structuredClone(await settingsOf(id)), panels: [...panels], from: displayName(record) };
 }
 
 /** Paste targets: the open photo in Develop, every selected photo in the Library. */
@@ -132,7 +133,7 @@ let thumbnailQueue: Promise<void> = Promise.resolve();
 /** Renders a photo's edited thumbnail from its saved settings (full pipeline, then scaled down). */
 async function renderThumbnail(id: string): Promise<void> {
   const settings = currentSettings(parseStoredHistory((await db.edits.get(id))?.history));
-  const original = await db.originals.get(id);
+  const original = await getOriginal(id);
   if (!original) return;
   const edited = isEdited(settings) ? (await thumbnailClient.run(original.blob, settings, THUMBNAIL_OPTIONS)).blob : null;
   // Skip if the photo was edited again meanwhile (its own update wins).

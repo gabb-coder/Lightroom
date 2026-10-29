@@ -1,4 +1,4 @@
-import { db } from '../db/db';
+import { db, getOriginal } from '../db/db';
 import { EXIF_SCAN_BYTES, photoExif, readExif } from '../io/exif';
 
 /**
@@ -9,7 +9,7 @@ import { EXIF_SCAN_BYTES, photoExif, readExif } from '../io/exif';
 export async function backfillExif(): Promise<void> {
   const missing = await db.photos.filter((p) => p.exif === undefined).primaryKeys();
   for (const id of missing) {
-    const original = await db.originals.get(id);
+    const original = await getOriginal(id);
     if (!original) continue;
     const exif = photoExif(readExif(await original.blob.slice(0, EXIF_SCAN_BYTES).arrayBuffer()));
     await db.photos.update(id, { exif });

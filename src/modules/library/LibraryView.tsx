@@ -12,6 +12,7 @@ import { selectLibraryList, THUMB_SIZE, useLibraryStore } from '../../state/libr
 import { LibraryFilterBar } from './LibraryFilterBar';
 import { CatalogPanel } from './CatalogPanel';
 import { CollectionsPanel } from './CollectionsPanel';
+import { createVirtualCopy, removeVirtualCopy } from '../../state/virtualCopyActions';
 import { KeywordsPanel } from './KeywordsPanel';
 import { openCopyDialog, openSyncDialog, pasteSettings, useCopyPasteStore } from '../../state/copyPasteStore';
 import layout from '../layout.module.css';
@@ -100,6 +101,30 @@ function LabelPicker() {
   );
 }
 
+/** Create a virtual copy of the focused photo, or remove the focused copy. */
+function VirtualCopyButtons() {
+  const photo = useLibraryStore((s) => s.photos.find((p) => p.id === s.selectedId) ?? null);
+  const select = useLibraryStore((s) => s.select);
+  return (
+    <div className={styles.settingsButtons}>
+      <button
+        type="button"
+        className={controls.button}
+        disabled={!photo}
+        title="A second version of this photo with its own edits; the original is shared, not copied"
+        onClick={() => photo && void createVirtualCopy(photo.id).then((id) => id && select(id))}
+      >
+        Create virtual copy
+      </button>
+      {photo?.masterId && (
+        <button type="button" className={controls.button} onClick={() => void removeVirtualCopy(photo.id)}>
+          Remove copy
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** Copy, paste and sync Develop settings across the selection (Lightroom's Library "Sync Settings"). */
 function DevelopSettingsPanel() {
   const hasPhoto = useLibraryStore((s) => s.selectedId !== null);
@@ -125,6 +150,7 @@ function DevelopSettingsPanel() {
       <button type="button" className={`${controls.button} ${styles.syncButton}`} disabled={!hasPhoto || selected < 2} onClick={openSyncDialog}>
         Sync settings…
       </button>
+      <VirtualCopyButtons />
     </section>
   );
 }
@@ -150,6 +176,7 @@ function DetailsPanel() {
   const rows: [string, string][] = photo
     ? [
         ['File name', photo.fileName],
+        ...(photo.copyName ? ([['Virtual copy', photo.copyName]] as [string, string][]) : []),
         ['Captured', formatDateTime(photo.captureDate)],
         ['Dimensions', `${photo.width} × ${photo.height}`],
         ...exifRows(photo),
