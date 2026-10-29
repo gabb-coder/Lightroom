@@ -163,6 +163,12 @@ component library.
   untrusted on restore), `state/catalogActions.ts` (backup, restore merges
   by id and never overwrites, `deletePhotos` removes every trace; a master
   takes its virtual copies). Delete key / "Remove from catalog…" asks first.
+- Compatibility (M18): `src/compat.ts` (support check → `SupportBanner`);
+  `render/exportRender.ts` is shared by the export worker and the
+  main-thread fallback (`render/mainThreadExport.ts`, used when the worker
+  can't do WebGL2, or with `?export=main`). Renderer scratch: blur target
+  is RG8; `releaseScratch()` after exports. Manual cross-browser checklist:
+  `docs/BROWSER_CHECKLIST.md` (only Chromium is automated).
 - Export (M7): `workers/export.worker.ts` runs the same `Renderer` on an
   OffscreenCanvas at full resolution (readPixels), resizes with the browser
   scaler only when asked, encodes, and copies EXIF per policy

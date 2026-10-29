@@ -174,3 +174,28 @@ test.describe('Export', () => {
     await expect(page.getByLabel('Long edge in pixels')).toHaveValue('640');
   });
 });
+
+test.describe('Export without WebGL in workers (M18)', () => {
+  test('the main-thread fallback renders the same pixels as the CPU reference', async ({ page }) => {
+    test.slow();
+    await page.goto('/?export=main');
+    await expect(page.getByTestId('develop-view')).toBeVisible();
+    await openTestPhoto(page, smallPhotoPng);
+    await slider(page, 'Exposure').focus();
+    for (let i = 0; i < 6; i++) await page.keyboard.press('ArrowRight');
+    await page.getByRole('button', { name: 'Crop and geometry' }).click();
+    await page.getByLabel('Aspect').selectOption('1:1');
+    await waitForFullRender(page);
+    await openExport(page);
+    await dialog(page).getByRole('button', { name: 'PNG, lossless' }).click();
+    const { bytes } = await exportAndDownload(page);
+    const exported = decodePng(bytes);
+    const settings = await savedSettings(page);
+    const reference = renderRgba8(makeTestPhoto(600, 360).data, { width: 600, height: 360 }, pipelineParams(settings));
+    expect({ w: exported.width, h: exported.height }).toEqual({ w: reference.width, h: reference.height });
+    let maxDiff = 0;
+    for (let i = 0; i < reference.data.length; i++) maxDiff = Math.max(maxDiff, Math.abs((reference.data[i] ?? 0) - (exported.data[i] ?? 0)));
+    console.log(`main-thread export vs CPU reference: max diff ${maxDiff}/255`);
+    expect(maxDiff).toBeLessThanOrEqual(2);
+  });
+});

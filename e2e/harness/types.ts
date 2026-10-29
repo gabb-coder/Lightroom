@@ -26,4 +26,5 @@ export interface GpuExtra {
 
 export interface GpuHarness {
   runGpuCheck: (basic: Partial<BasicSettings>, geometry?: Partial<Geometry>, extra?: GpuExtra) => GpuCheckResult;
+  scratchCheck: () => { withDetail: number; released: number; againMaxDiff: number; pixels: number };
 }

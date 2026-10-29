@@ -57,7 +57,10 @@ interface SizedTexture {
   height: number;
 }
 
-type RenderTarget = SizedTexture & { framebuffer: WebGLFramebuffer };
+type RenderTarget = SizedTexture & { framebuffer: WebGLFramebuffer; bytesPerPixel: number };
+
+/** Texture format per scratch target: the blur only needs two bytes (16-bit fixed point). */
+const SCRATCH_FORMAT: Readonly<Record<IntermediateKind, 'rgba8' | 'rg8'>> = { developed: 'rgba8', blur: 'rg8', detailed: 'rgba8' };
 
 /** Reused source-size RGBA8 targets: developed color, 16-bit blur, after detail. */
 type IntermediateKind = 'developed' | 'blur' | 'detailed';
@@ -330,16 +333,16 @@ export class Renderer {
     this.gl.viewport(0, 0, target.width, target.height);
   }
 
-  private createTarget(width: number, height: number): RenderTarget {
+  private createTarget(width: number, height: number, format: 'rgba8' | 'rg8' = 'rgba8'): RenderTarget {
     const { gl } = this;
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, format === 'rg8' ? gl.RG8 : gl.RGBA8, width, height);
     const framebuffer = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    return { texture, framebuffer, width, height };
+    return { texture, framebuffer, width, height, bytesPerPixel: format === 'rg8' ? 2 : 4 };
   }
 
   /** Reused RGBA8 target at source size, recreated when the size changes. */
@@ -347,7 +350,7 @@ export class Renderer {
     const current = this.intermediates[kind];
     if (current && current.width === size.width && current.height === size.height) return current;
     if (current) this.deleteTarget(current);
-    const created = this.createTarget(size.width, size.height);
+    const created = this.createTarget(size.width, size.height, SCRATCH_FORMAT[kind]);
     this.intermediates[kind] = created;
     return created;
   }
@@ -355,6 +358,16 @@ export class Renderer {
   private deleteTarget(t: RenderTarget): void {
     this.gl.deleteFramebuffer(t.framebuffer);
     this.gl.deleteTexture(t.texture);
+  }
+
+  /** GPU memory held by scratch images between renders, in bytes. */
+  get scratchBytes(): number {
+    return Object.values(this.intermediates).reduce((n, t) => n + t.width * t.height * t.bytesPerPixel, 0);
+  }
+
+  /** Frees the scratch images (they are recreated on the next render that needs them). */
+  releaseScratch(): void {
+    this.releaseIntermediates();
   }
 
   private releaseIntermediates(): void {

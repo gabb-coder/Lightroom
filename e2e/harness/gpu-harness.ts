@@ -84,7 +84,21 @@ function runGpuCheck(basic: Partial<BasicSettings>, geometry: Partial<Geometry> 
   };
 }
 
-const harness: GpuHarness = { runGpuCheck };
+/** Scratch memory with sharpening + grain on, then after releasing it (and a render that recreates it). */
+function scratchCheck() {
+  const settings = defaultEditSettings();
+  settings.detail.sharpAmount = 80;
+  settings.effects.grain = 30;
+  const params = pipelineParams(settings);
+  renderer.readPixels(params);
+  const withDetail = renderer.scratchBytes;
+  renderer.releaseScratch();
+  const released = renderer.scratchBytes;
+  const again = runGpuCheck({}, {}, { detail: { sharpAmount: 80 }, effects: { grain: 30 } });
+  return { withDetail, released, againMaxDiff: again.maxDiff, pixels: WIDTH * HEIGHT };
+}
+
+const harness: GpuHarness = { runGpuCheck, scratchCheck };
 Object.assign(window, harness);
 const status = document.getElementById('status');
 if (status) status.textContent = 'ready';

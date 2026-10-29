@@ -282,3 +282,15 @@ test.describe('WebGL2 pipeline matches the CPU reference', () => {
     });
   }
 });
+
+test.describe('Renderer scratch memory (M18)', () => {
+  test('sharpening needs 10 bytes per pixel of scratch (blur stored in 2), released on demand', async ({ page }) => {
+    await page.goto(`http://localhost:${DEV_PORT}/e2e/harness/gpu.html`);
+    await expect(page.locator('#status')).toHaveText('ready');
+    const r = await page.evaluate(() => (window as unknown as GpuHarness).scratchCheck());
+    // developed (4) + blur (2, was 4) + detailed (4) bytes per pixel.
+    expect(r.withDetail).toBe(r.pixels * 10);
+    expect(r.released).toBe(0);
+    expect(r.againMaxDiff).toBeLessThanOrEqual(TOLERANCE);
+  });
+});
