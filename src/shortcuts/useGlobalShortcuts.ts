@@ -32,6 +32,12 @@ export function useGlobalShortcuts(): void {
     const onKeyDown = (event: KeyboardEvent): void => {
       // Text fields keep their own shortcuts (including native Ctrl/Cmd+Z).
       if (isTextEntryTarget(event.target as TargetLike | null)) return;
+      // Ctrl/Cmd+Shift+E: Export (design/Kit.dc.html).
+      if ((mac ? event.metaKey : event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'e') {
+        event.preventDefault();
+        useAppStore.getState().setModule('export');
+        return;
+      }
       const historyAction = matchHistoryShortcut(event, mac);
       if (historyAction) {
         if (!developHasPhoto()) return;

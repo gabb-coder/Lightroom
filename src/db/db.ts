@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type { History } from '../model/history';
+import type { ExportPreset } from '../model/exportOptions';
 import type { Preset } from '../model/presets';
 
 export type Flag = 'pick' | 'reject';
@@ -61,6 +62,7 @@ export class CatalogDb extends Dexie {
   thumbnails!: Table<ThumbnailRecord, string>;
   edits!: Table<EditRecord, string>;
   presets!: Table<Preset, string>;
+  exportPresets!: Table<ExportPreset, string>;
 
   constructor(name = DB_NAME) {
     super(name);
@@ -71,6 +73,8 @@ export class CatalogDb extends Dexie {
       edits: 'photoId',
       presets: 'id',
     });
+    // v2 (M7): user export presets.
+    this.version(2).stores({ exportPresets: 'id' });
   }
 }
 

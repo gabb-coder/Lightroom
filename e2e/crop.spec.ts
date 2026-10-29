@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { canvasPixels, gotoDevelop, openTestPhoto, slider, smallPhotoPng, waitForFullRender } from './utils/develop';
 import { countDifferentPixels, meanAbsDiff, type RgbaPixels } from './utils/png';
+import { storedOriginalHash } from './utils/idb';
 
 const canvas = (page: Page) => page.getByTestId('photo-canvas');
 const geometryPanel = (page: Page) => page.getByRole('region', { name: 'Crop and geometry' });
@@ -35,27 +36,6 @@ function mirror(img: RgbaPixels): RgbaPixels {
     for (let x = 0; x < img.width; x++)
       out.set(img.data.subarray((y * img.width + x) * 4, (y * img.width + x) * 4 + 4), (y * img.width + (img.width - 1 - x)) * 4);
   return { ...img, data: out };
-}
-
-/** SHA-256 of the stored original, read straight from IndexedDB. */
-async function storedOriginalHash(page: Page): Promise<string> {
-  return page.evaluate(async () => {
-    const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const req = indexedDB.open('photo-editor');
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
-    const rows = await new Promise<{ blob: Blob }[]>((resolve, reject) => {
-      const req = db.transaction('originals').objectStore('originals').getAll();
-      req.onsuccess = () => resolve(req.result as { blob: Blob }[]);
-      req.onerror = () => reject(req.error);
-    });
-    db.close();
-    const first = rows[0];
-    if (!first) throw new Error('no original stored');
-    const digest = await crypto.subtle.digest('SHA-256', await first.blob.arrayBuffer());
-    return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
-  });
 }
 
 test.describe('Crop and geometry', () => {

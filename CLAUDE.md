@@ -90,6 +90,11 @@ component library.
   geometry is a 1-pass fast path and must stay pixel-exact. Crop editing
   math (fit to straighten, aspect presets, handles, rotate/flip) is in
   `model/crop.ts`; crop rect is normalized to the oriented image.
+- Export (M7): `workers/export.worker.ts` runs the same `Renderer` on an
+  OffscreenCanvas at full resolution (readPixels), resizes with the browser
+  scaler only when asked, encodes, and copies EXIF per policy
+  (`io/exifWrite.ts`). `state/exportStore.ts` runs jobs + the toast. The
+  Export tab is a dialog over an inert Library view. DB v2 adds exportPresets.
 - `src/render/shaders.ts` GLSL twin of each engine stage; `Renderer.ts` owns
   WebGL2; `rendererController.ts` is the only store->GPU bridge (rAF
   coalescing, proxy while `interacting`, full-res otherwise).

@@ -1,0 +1,53 @@
+.toast {
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--filmstrip-height) + 16px);
+  z-index: 10;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 6px;
+  background: var(--color-raised);
+  border: 1px solid var(--color-border-control);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  color: var(--color-text-strong);
+  font-weight: 500;
+}
+
+.cancel {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid #3f3f3f;
+  border-radius: 4px;
+  background: #2f2f2f;
+  color: var(--color-text-bright);
+}
+
+.track {
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--color-control-on);
+}
+
+.bar {
+  height: 100%;
+  background: var(--color-accent);
+  transition: width 150ms;
+}
+
+.detail {
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}

@@ -1,5 +1,6 @@
 import { TopBar } from './components/TopBar';
 import { ImportInput } from './components/ImportInput';
+import { ExportToast } from './components/ExportToast';
 import { DevelopView } from './modules/develop/DevelopView';
 import { LibraryView } from './modules/library/LibraryView';
 import { ExportView } from './modules/export/ExportView';
@@ -29,6 +30,7 @@ export function App() {
         <ModuleView module={module} />
       </div>
       <ImportInput />
+      <ExportToast />
     </div>
   );
 }

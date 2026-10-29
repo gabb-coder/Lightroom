@@ -4,6 +4,7 @@ import { APP_MODULES, useAppStore, type AppModule } from './appStore';
 import { startEditPersistence } from './editPersistence';
 import { THUMB_SIZE, useLibraryStore } from './libraryStore';
 import { startPhotoSession } from './photoSession';
+import { loadExportPresets } from './exportStore';
 import { loadSavedPresets } from './presetStore';
 import { startThumbnailUpdater } from './thumbnailUpdater';
 import { readUiPrefs, writeUiPrefs } from './uiPrefs';
@@ -30,6 +31,7 @@ export function startCatalog(): void {
     error: () => useLibraryStore.getState().setPhotos([]),
   });
   void loadSavedPresets().catch(() => undefined);
+  void loadExportPresets().catch(() => undefined);
   startPhotoSession();
   startEditPersistence();
   startThumbnailUpdater();

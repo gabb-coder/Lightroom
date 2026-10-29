@@ -1,14 +1,17 @@
+import { LibraryView } from '../library/LibraryView';
+import { ExportDialog } from './ExportDialog';
 import styles from './ExportView.module.css';
 
-/** Placeholder. M7 turns Export into the dialog from design/Export.dc.html,
-    shown over the photo grid. */
+/** Export module: the dialog over the (inert, dimmed) Library grid, as in design/Export.dc.html. */
 export function ExportView() {
   return (
-    <main className={styles.export} aria-label="Export" data-testid="export-view">
-      <div className={styles.empty}>
-        <p className={styles.title}>Nothing to export yet</p>
-        <p className={styles.hint}>Select photos in the Library to export them.</p>
+    <div className={styles.export} data-testid="export-view">
+      <div className={styles.background} aria-hidden="true" {...{ inert: '' }}>
+        <LibraryView />
       </div>
-    </main>
+      <div className={styles.scrim}>
+        <ExportDialog />
+      </div>
+    </div>
   );
 }

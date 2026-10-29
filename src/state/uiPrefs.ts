@@ -7,6 +7,8 @@ const KEY = 'photo-editor:ui';
 
 export interface UiPrefs {
   module?: string;
+  /** Last-used export settings (validated on read). */
+  exportOptions?: Record<string, unknown>;
   selectedId?: string;
   thumbSize?: number;
 }
