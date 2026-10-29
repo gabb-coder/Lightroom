@@ -169,6 +169,18 @@ component library.
   can't do WebGL2, or with `?export=main`). Renderer scratch: blur target
   is RG8; `releaseScratch()` after exports. Manual cross-browser checklist:
   `docs/BROWSER_CHECKLIST.md` (only Chromium is automated).
+- Editing aids (M20): `engine/display.ts` is a display-only pass (clipping
+  overlay on pure white/black, split Before/After by column) run by the
+  Renderer's display pass on RGBA8 textures, so GPU = CPU exactly; it is
+  skipped when off (normal path unchanged) and never reaches exports or the
+  histogram. Toggles live in `viewStore` (J, Y, histogram triangles). The
+  Renderer caches the After/Before images so moving the divider only re-runs
+  the display pass (the controller reuses the params object when unchanged).
+  WB eyedropper (W, `developStore.wbPicking`) and Auto tone (Ctrl/Cmd+U) in
+  `state/editingAids.ts`: they read the original's pixels (canvas 2D, for
+  measuring only) and apply ONE history step; math in
+  `engine/whiteBalance.ts` (`neutralizingWhiteBalance`) and
+  `engine/autoTone.ts` (per-channel tables equal to the pipeline's stages).
 - Formats (M19): import accepts JPEG/PNG/WebP/AVIF/HEIC (`io/loadPhoto.ts`
   `importTypeOf`, also by extension when the type is empty; HEIC only
   where the browser decodes it, otherwise its own message). Export

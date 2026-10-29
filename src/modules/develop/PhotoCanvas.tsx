@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from 'react';
 import { orientedSize, outputSize } from '../../engine/geometry';
 import { displayGeometry } from '../../model/crop';
+import { maskView } from '../../model/maskEdit';
+import { pickWhiteBalance } from '../../state/editingAids';
 import { containSize } from '../../hooks/fitSize';
 import { useElementSize } from '../../hooks/useElementSize';
 import { displaySize, FULL_VIEW, rectCenter, scrollForCenter, visibleRect, zoomScale } from '../../model/zoom';
@@ -9,6 +11,7 @@ import { selectShowingBefore, useDevelopStore, type LoadedPhoto } from '../../st
 import { useViewStore } from '../../state/viewStore';
 import { CropOverlay } from './CropOverlay';
 import { MaskOverlay } from './MaskOverlay';
+import { SplitDivider } from './SplitDivider';
 import styles from './PhotoCanvas.module.css';
 
 /** Pointer travel (px) below which a press counts as a click, not a pan. */
@@ -40,16 +43,17 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
   const cropping = useDevelopStore((s) => s.cropping);
   const geometry = useDevelopStore((s) => s.settings.geometry);
   const masksOpen = useDevelopStore((s) => s.masksOpen);
+  const wbPicking = useDevelopStore((s) => s.wbPicking);
+  const split = useViewStore((s) => s.split);
   const zoom = useViewStore((s) => (cropping ? 'fit' : s.zoom));
   const panToken = useViewStore((s) => s.panToken);
-  const shown = useMemo(
-    () => outputSize(photo, displayGeometry(geometry, { before: showingBefore, cropping })),
-    [photo, geometry, showingBefore, cropping],
-  );
+  const shownGeometry = useMemo(() => displayGeometry(geometry, { before: showingBefore, cropping }), [geometry, showingBefore, cropping]);
+  const shown = useMemo(() => outputSize(photo, shownGeometry), [photo, shownGeometry]);
   const display = zoom === 'fit' ? containSize(stage, shown.width / shown.height) : displaySize(shown, zoomScale(zoom, stage, shown, window.devicePixelRatio || 1));
   const pannable = display.width > stage.width + 0.5 || display.height > stage.height + 0.5;
   const showOverlay = cropping && !showingBefore;
-  const showMasks = masksOpen && !cropping && !showingBefore;
+  const showMasks = masksOpen && !cropping && !showingBefore && !wbPicking;
+  const showSplit = split && !cropping && !showingBefore;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -93,6 +97,13 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
   };
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.button === 0 && wbPicking) {
+      // Eyedropper: frame px → normalized photo point, through the shown geometry.
+      const box = e.currentTarget.getBoundingClientRect();
+      const p = maskView(photo, shownGeometry, display).fromFrame(e.clientX - box.left, e.clientY - box.top);
+      pickWhiteBalance(p.x, p.y);
+      return;
+    }
     if (e.button !== 0 || cropping || showMasks) return;
     const area = areaRef.current;
     if (!area) return;
@@ -123,7 +134,7 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
 
   const frameLeft = Math.max(0, (stage.width - display.width) / 2);
   const frameTop = Math.max(0, (stage.height - display.height) / 2);
-  const cursor = cropping || showMasks ? undefined : zoom === '1:1' ? (pannable ? 'grab' : 'zoom-out') : 'zoom-in';
+  const cursor = wbPicking ? 'crosshair' : cropping || showMasks ? undefined : zoom === '1:1' ? (pannable ? 'grab' : 'zoom-out') : 'zoom-in';
 
   return (
     <div ref={areaRef} className={styles.area} onWheel={onWheel} data-testid="photo-stage" data-zoom={zoom}>
@@ -144,6 +155,7 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
             <canvas ref={canvasRef} className={styles.canvas} role="img" aria-label={`Edited photo: ${photo.name}`} data-testid="photo-canvas" />
             {showOverlay && <CropOverlay oriented={orientedSize(photo, geometry.rotation)} />}
             {showMasks && display.width > 0 && <MaskOverlay source={photo} frame={display} />}
+            {showSplit && display.width > 0 && <SplitDivider />}
             {showingBefore && (
               <div className={styles.beforeBadge} data-testid="before-badge">
                 Before

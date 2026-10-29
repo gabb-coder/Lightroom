@@ -1,3 +1,4 @@
+import type { DisplayOptions } from '../../src/engine/display';
 import type { BasicSettings, EditSettings, Geometry } from '../../src/model/editSettings';
 
 export interface GpuCheckResult {
@@ -27,4 +28,9 @@ export interface GpuExtra {
 export interface GpuHarness {
   runGpuCheck: (basic: Partial<BasicSettings>, geometry?: Partial<Geometry>, extra?: GpuExtra) => GpuCheckResult;
   scratchCheck: () => { withDetail: number; released: number; againMaxDiff: number; pixels: number };
+  displayCheck: (
+    options: DisplayOptions,
+    basic: Partial<BasicSettings>,
+    geometry?: Partial<Geometry>,
+  ) => { maxDiff: number; width: number; height: number; shadowPixels: number; highlightPixels: number; sameAsAfter: boolean };
 }

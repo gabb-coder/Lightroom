@@ -13,6 +13,7 @@ import { settingsSourceId } from '../state/settingsSync';
 import { createVirtualCopy } from '../state/virtualCopyActions';
 import { useViewStore } from '../state/viewStore';
 import { useDeleteDialogStore } from '../state/deleteDialogStore';
+import { runAutoTone } from '../state/editingAids';
 
 const MODULE_KEYS: Readonly<Record<string, AppModule>> = {
   g: 'library',
@@ -64,6 +65,12 @@ export function useGlobalShortcuts(): void {
         useAppStore.getState().setModule('export');
         return;
       }
+      // Ctrl/Cmd+U: Auto tone (as in Lightroom).
+      if (command && !event.shiftKey && event.key.toLowerCase() === 'u' && developHasPhoto()) {
+        event.preventDefault();
+        runAutoTone();
+        return;
+      }
       const historyAction = matchHistoryShortcut(event, mac);
       if (historyAction) {
         if (!developHasPhoto()) return;
@@ -104,6 +111,28 @@ export function useGlobalShortcuts(): void {
         event.preventDefault();
         const kind = event.shiftKey ? 'radial' : 'linear';
         develop.setMaskTool(develop.maskTool === kind ? null : kind);
+        return;
+      }
+      // W: white balance eyedropper; J: clipping warnings; Y: split Before/After (as in Lightroom).
+      if (event.key.toLowerCase() === 'w' && !event.shiftKey && developHasPhoto()) {
+        event.preventDefault();
+        develop.setWbPicking(!develop.wbPicking);
+        return;
+      }
+      if (event.key.toLowerCase() === 'j' && !event.shiftKey && developHasPhoto()) {
+        event.preventDefault();
+        useViewStore.getState().toggleClipping();
+        return;
+      }
+      if (event.key.toLowerCase() === 'y' && !event.shiftKey && developHasPhoto()) {
+        event.preventDefault();
+        const view = useViewStore.getState();
+        view.setSplit(!view.split);
+        return;
+      }
+      if (event.key === 'Escape' && develop.wbPicking) {
+        event.preventDefault();
+        develop.setWbPicking(false);
         return;
       }
       if (event.key === 'Escape' && develop.maskTool) {

@@ -1,9 +1,39 @@
+import { EyedropperIcon } from '../../components/icons';
 import { SliderRow } from '../../components/SliderRow';
 import controls from '../../components/controls.module.css';
 import type { BasicSliderKey, Treatment } from '../../model/editSettings';
 import { BASIC_SLIDERS } from '../../model/sliders';
 import { useDevelopStore } from '../../state/developStore';
+import { runAutoTone } from '../../state/editingAids';
+import { modifierLabel } from '../../shortcuts/platform';
 import styles from './BasicPanel.module.css';
+
+/** White balance eyedropper (W): the next click on the photo makes that spot neutral. */
+function WbPicker({ disabled }: { disabled: boolean }) {
+  const picking = useDevelopStore((s) => s.wbPicking);
+  const setWbPicking = useDevelopStore((s) => s.setWbPicking);
+  return (
+    <button
+      type="button"
+      className={styles.groupTool}
+      aria-label="White balance picker"
+      aria-pressed={picking}
+      title="Click a spot that should be neutral gray (W)"
+      disabled={disabled}
+      onClick={() => setWbPicking(!picking)}
+    >
+      <EyedropperIcon />
+    </button>
+  );
+}
+
+function AutoToneButton({ disabled }: { disabled: boolean }) {
+  return (
+    <button type="button" className={`${styles.groupTool} ${styles.autoButton}`} title={`Auto tone (${modifierLabel()}U)`} disabled={disabled} onClick={runAutoTone}>
+      Auto
+    </button>
+  );
+}
 
 /** Groups in design order (design/Develop.dc.html). */
 const GROUPS: readonly { label: string; keys: readonly BasicSliderKey[] }[] = [
@@ -64,7 +94,11 @@ export function BasicPanel() {
       <TreatmentRow disabled={disabled} />
       {GROUPS.map((group) => (
         <div key={group.label} role="group" aria-label={group.label}>
-          <div className={`group-label ${styles.groupLabel}`}>{group.label}</div>
+          <div className={styles.groupHeader}>
+            <div className={`group-label ${styles.groupLabel}`}>{group.label}</div>
+            {group.label === 'White balance' && <WbPicker disabled={disabled} />}
+            {group.label === 'Tone' && <AutoToneButton disabled={disabled} />}
+          </div>
           {group.keys.map((key) => (
             <BasicSlider key={key} sliderKey={key} disabled={disabled} />
           ))}

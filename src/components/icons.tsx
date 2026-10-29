@@ -76,6 +76,25 @@ export function BeforeAfterIcon() {
   );
 }
 
+export function SplitViewIcon() {
+  return (
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <rect x="2" y="3" width="12" height="10" rx="1" />
+      <path d="M8 1.5v13" strokeDasharray="2 1.5" />
+      <path d="M2.5 12.5L7.5 3.5" opacity="0.5" />
+    </svg>
+  );
+}
+
+export function EyedropperIcon() {
+  return (
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10.5 2.5l3 3-1.5 1.5-3-3z" />
+      <path d="M9.5 5.5l-6 6V13h1.5l6-6" />
+    </svg>
+  );
+}
+
 export function CropIcon() {
   return (
     <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" strokeWidth="1.5" {...strokeProps}>

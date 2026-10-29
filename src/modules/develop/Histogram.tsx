@@ -1,5 +1,8 @@
-import { histogramPath, histogramPeak } from '../../engine/histogram';
+import { clipIndicatorColor, clipShares } from '../../engine/display';
+import { histogramPath, histogramPeak, type Histogram as HistogramData } from '../../engine/histogram';
+import { useDevelopStore } from '../../state/developStore';
 import { useHistogramStore } from '../../state/histogramStore';
+import { useViewStore } from '../../state/viewStore';
 import styles from './DevelopRightPanel.module.css';
 
 const W = 268;
@@ -9,6 +12,40 @@ const CHANNELS = [
   { key: 'g', color: '#5cb85c' },
   { key: 'b', color: '#4a7fe0' },
 ] as const;
+
+const CLIP_BUTTONS = {
+  shadows: { label: 'Show shadow clipping', path: 'M0 10L10 0V10Z' },
+  highlights: { label: 'Show highlight clipping', path: 'M0 0L10 10H0Z' },
+} as const;
+
+/**
+ * A clipping triangle (M20): its color shows which channels clip at that end
+ * (gray when none); pressing it paints clipped pixels on the photo. J toggles both.
+ */
+function ClipButton({ end, histogram }: { end: 'shadows' | 'highlights'; histogram: HistogramData | null }) {
+  const pressed = useViewStore((s) => (end === 'shadows' ? s.clipShadows : s.clipHighlights));
+  const toggleClip = useViewStore((s) => s.toggleClip);
+  const hasPhoto = useDevelopStore((s) => s.photo !== null);
+  const color = histogram ? clipIndicatorColor(clipShares(histogram, end)) : null;
+  const { label, path } = CLIP_BUTTONS[end];
+  return (
+    <button
+      type="button"
+      className={`${styles.clipButton} ${end === 'shadows' ? styles.clipShadows : styles.clipHighlights}`}
+      aria-label={label}
+      aria-pressed={pressed}
+      title={`${label} (J)`}
+      disabled={!hasPhoto}
+      data-clipping={color ? 'yes' : 'no'}
+      style={color ? { color } : undefined}
+      onClick={() => toggleClip(end)}
+    >
+      <svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+        <path d={path} />
+      </svg>
+    </button>
+  );
+}
 
 /** Live RGB histogram of the rendered image (design/Develop.dc.html). */
 export function Histogram() {
@@ -29,6 +66,8 @@ export function Histogram() {
               <path key={key} data-channel={key} d={histogramPath(histogram[key], peak, W, H)} fill={color} opacity={0.5} />
             ))}
         </svg>
+        <ClipButton end="shadows" histogram={histogram} />
+        <ClipButton end="highlights" histogram={histogram} />
       </div>
     </section>
   );

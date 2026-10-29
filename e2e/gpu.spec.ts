@@ -294,3 +294,27 @@ test.describe('Renderer scratch memory (M18)', () => {
     expect(r.againMaxDiff).toBeLessThanOrEqual(TOLERANCE);
   });
 });
+
+test.describe('Display pass (M20)', () => {
+  const CASES = [
+    { name: 'clipping both ends', options: { shadows: true, highlights: true, split: null }, basic: { exposure: 1.5, blacks: -60 } },
+    { name: 'highlights only', options: { shadows: false, highlights: true, split: null }, basic: { exposure: 2 } },
+    { name: 'split view', options: { shadows: false, highlights: false, split: 0.4 }, basic: { exposure: 1, temp: 40 } },
+    { name: 'split with highlight clipping, cropped and rotated', options: { shadows: false, highlights: true, split: 0.6 }, basic: { exposure: 3, blacks: -80 }, geometry: { rotation: 1, angle: 7, cropRect: { x: 0.2, y: 0.05, w: 0.8, h: 0.8 } } },
+  ] as const;
+  for (const c of CASES) {
+    test(`matches its CPU reference exactly: ${c.name}`, async ({ page }) => {
+      await page.goto(`http://localhost:${DEV_PORT}/e2e/harness/gpu.html`);
+      await expect(page.locator('#status')).toHaveText('ready');
+      const r = await page.evaluate(
+        ([options, basic, geometry]) => (window as unknown as GpuHarness).displayCheck(options, basic, geometry),
+        [c.options, c.basic, 'geometry' in c ? c.geometry : {}] as const,
+      );
+      if (process.env.LOG_GPU_DIFF) console.log(c.name, r);
+      expect(r.maxDiff).toBe(0);
+      expect(r.sameAsAfter).toBe(false); // the pass really changed something
+      if (c.options.highlights) expect(r.highlightPixels).toBeGreaterThan(0);
+      if (c.options.shadows) expect(r.shadowPixels).toBeGreaterThan(0);
+    });
+  }
+});

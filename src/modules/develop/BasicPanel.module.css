@@ -13,3 +13,43 @@
 .groupLabel {
   margin: 8px 0 2px;
 }
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Small tool in a group header: the WB eyedropper, Auto. */
+.groupTool {
+  height: 22px;
+  min-width: 26px;
+  margin-top: 6px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border-control);
+  border-radius: 3px;
+  background: var(--color-raised);
+  color: var(--color-text);
+}
+
+.groupTool:hover:not(:disabled) {
+  color: var(--color-text-strong);
+}
+
+.groupTool[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-selected-bg);
+  color: var(--color-white);
+}
+
+.groupTool:disabled {
+  opacity: 0.5;
+}
+
+.autoButton {
+  font-size: var(--font-size-control);
+}

@@ -1,10 +1,11 @@
 import { CURVE_LUT_SIZE } from '../engine/curve';
 import { geometryMatrix, isIdentityGeometry, outputSize } from '../engine/geometry';
+import { HIGHLIGHT_CLIP_RGB, isPlainDisplay, SHADOW_CLIP_RGB, type DisplayOptions } from '../engine/display';
 import { hasDetailStage, type PipelineParams } from '../engine/pipeline';
 import { sharpenKernel } from '../engine/sharpen';
 import { MAX_MASKS } from '../model/editSettings';
 import { createProgram, createTexture, type RgbaImage, type TextureSource } from './gl';
-import { BLUR_FRAGMENT_SHADER, DETAIL_FRAGMENT_SHADER, DEVELOP_FRAGMENT_SHADER, GEOMETRY_FRAGMENT_SHADER, VERTEX_SHADER } from './shaders';
+import { BLUR_FRAGMENT_SHADER, DETAIL_FRAGMENT_SHADER, DEVELOP_FRAGMENT_SHADER, DISPLAY_FRAGMENT_SHADER, GEOMETRY_FRAGMENT_SHADER, VERTEX_SHADER } from './shaders';
 
 const DEVELOP_UNIFORMS = [
   'source',
@@ -43,6 +44,16 @@ const DEVELOP_UNIFORMS = [
 const BLUR_UNIFORMS = ['image', 'taps', 'weights'] as const;
 const DETAIL_UNIFORMS = ['image', 'blur', 'taps', 'weights', 'sharpenOn', 'sharpenAmount', 'grainOn', 'grainAmount', 'grainCell', 'scale'] as const;
 const GEOMETRY_UNIFORMS = ['image', 'flipY', 'outSize', 'rowX', 'rowY', 'vignette'] as const;
+const DISPLAY_UNIFORMS = ['after', 'before', 'flipY', 'splitX', 'shadows', 'highlights', 'shadowColor', 'highlightColor'] as const;
+
+/**
+ * Display-only extras for the screen (never exports or the histogram):
+ * clipping overlay and split view. `before` renders the left of the split.
+ */
+export interface DisplayRequest {
+  options: DisplayOptions;
+  before: PipelineParams | null;
+}
 
 const ZERO8 = new Float32Array(8);
 
@@ -60,10 +71,13 @@ interface SizedTexture {
 type RenderTarget = SizedTexture & { framebuffer: WebGLFramebuffer; bytesPerPixel: number };
 
 /** Texture format per scratch target: the blur only needs two bytes (16-bit fixed point). */
-const SCRATCH_FORMAT: Readonly<Record<IntermediateKind, 'rgba8' | 'rg8'>> = { developed: 'rgba8', blur: 'rg8', detailed: 'rgba8' };
+const SCRATCH_FORMAT: Readonly<Record<IntermediateKind, 'rgba8' | 'rg8'>> = { developed: 'rgba8', blur: 'rg8', detailed: 'rgba8', shownAfter: 'rgba8', shownBefore: 'rgba8' };
 
-/** Reused source-size RGBA8 targets: developed color, 16-bit blur, after detail. */
-type IntermediateKind = 'developed' | 'blur' | 'detailed';
+/**
+ * Reused scratch targets: developed color, 16-bit blur, after detail (source
+ * size), and the finished After / Before images for the display pass (output size).
+ */
+type IntermediateKind = 'developed' | 'blur' | 'detailed' | 'shownAfter' | 'shownBefore';
 
 interface Target {
   /** Null = the canvas. */
@@ -96,12 +110,19 @@ export class Renderer {
   private readonly blurProgram: WebGLProgram;
   private readonly detailProgram: WebGLProgram;
   private readonly geometryProgram: WebGLProgram;
+  private readonly displayProgram: WebGLProgram;
   private readonly developUniforms: Uniforms<(typeof DEVELOP_UNIFORMS)[number]>;
   private readonly blurUniforms: Uniforms<(typeof BLUR_UNIFORMS)[number]>;
   private readonly detailUniforms: Uniforms<(typeof DETAIL_UNIFORMS)[number]>;
   private readonly geometryUniforms: Uniforms<(typeof GEOMETRY_UNIFORMS)[number]>;
+  private readonly displayUniforms: Uniforms<(typeof DISPLAY_UNIFORMS)[number]>;
   private textures: Partial<Record<SourceKind, SizedTexture>> = {};
   private intermediates: Partial<Record<IntermediateKind, RenderTarget>> = {};
+  /**
+   * What the shownAfter / shownBefore targets hold, so moving the split or
+   * toggling clipping only re-runs the display pass. Compared by reference.
+   */
+  private shownCache: { source: SizedTexture; after: PipelineParams; before: PipelineParams | null } | null = null;
   /** RGBA32F tone-curve table (CURVE_LUT_SIZE × 1), uploaded when curves are set. */
   private readonly curveTexture: WebGLTexture;
 
@@ -113,10 +134,12 @@ export class Renderer {
     this.blurProgram = createProgram(gl, VERTEX_SHADER, BLUR_FRAGMENT_SHADER);
     this.detailProgram = createProgram(gl, VERTEX_SHADER, DETAIL_FRAGMENT_SHADER);
     this.geometryProgram = createProgram(gl, VERTEX_SHADER, GEOMETRY_FRAGMENT_SHADER);
+    this.displayProgram = createProgram(gl, VERTEX_SHADER, DISPLAY_FRAGMENT_SHADER);
     this.developUniforms = locate(gl, this.developProgram, DEVELOP_UNIFORMS);
     this.blurUniforms = locate(gl, this.blurProgram, BLUR_UNIFORMS);
     this.detailUniforms = locate(gl, this.detailProgram, DETAIL_UNIFORMS);
     this.geometryUniforms = locate(gl, this.geometryProgram, GEOMETRY_UNIFORMS);
+    this.displayUniforms = locate(gl, this.displayProgram, DISPLAY_UNIFORMS);
     this.curveTexture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.curveTexture);
     gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, CURVE_LUT_SIZE, 1);
@@ -156,25 +179,26 @@ export class Renderer {
   clearImage(): void {
     for (const t of Object.values(this.textures)) this.gl.deleteTexture(t.texture);
     this.textures = {};
+    this.shownCache = null;
   }
 
   /** Draws to the canvas, resizing it to the output. Returns the output size. */
-  draw(params: PipelineParams, kind: SourceKind): { width: number; height: number } {
+  draw(params: PipelineParams, kind: SourceKind, display: DisplayRequest | null = null): { width: number; height: number } {
     const source = this.pickSource(kind);
     const out = outputSize(source, params.geometry);
     if (this.canvas.width !== out.width) this.canvas.width = out.width;
     if (this.canvas.height !== out.height) this.canvas.height = out.height;
-    this.render(source, params, { framebuffer: null, ...out, flipY: true });
+    this.renderShown(source, params, { framebuffer: null, ...out, flipY: true }, display);
     return out;
   }
 
   /** Renders into an offscreen RGBA8 framebuffer and reads it back, rows top-first. */
-  readPixels(params: PipelineParams, kind: SourceKind = 'full'): RgbaImage {
+  readPixels(params: PipelineParams, kind: SourceKind = 'full', display: DisplayRequest | null = null): RgbaImage {
     const { gl } = this;
     const source = this.pickSource(kind);
     const out = outputSize(source, params.geometry);
     const target = this.createTarget(out.width, out.height);
-    this.render(source, params, { framebuffer: target.framebuffer, ...out, flipY: false });
+    this.renderShown(source, params, { framebuffer: target.framebuffer, ...out, flipY: false }, display);
     const data = new Uint8Array(out.width * out.height * 4);
     gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
     gl.readPixels(0, 0, out.width, out.height, gl.RGBA, gl.UNSIGNED_BYTE, data);
@@ -187,7 +211,50 @@ export class Renderer {
     this.clearImage();
     this.releaseIntermediates();
     this.gl.deleteTexture(this.curveTexture);
-    for (const program of [this.developProgram, this.blurProgram, this.detailProgram, this.geometryProgram]) this.gl.deleteProgram(program);
+    for (const program of [this.developProgram, this.blurProgram, this.detailProgram, this.geometryProgram, this.displayProgram]) this.gl.deleteProgram(program);
+  }
+
+  /**
+   * The edited image, plus the display extras when asked: After (and Before
+   * for a split) are rendered into RGBA8 textures first, then the display
+   * pass composes them into the target. Without extras this is `render`.
+   */
+  private renderShown(source: SizedTexture, params: PipelineParams, target: Target, display: DisplayRequest | null): void {
+    if (!display || isPlainDisplay(display.options)) {
+      this.render(source, params, target);
+      return;
+    }
+    const split = display.options.split !== null && display.before ? display.options.split : null;
+    const wantBefore = split !== null ? display.before : null;
+    const cache = this.shownCache;
+    const cachedAfter = this.intermediates.shownAfter;
+    const fresh = cache !== null && cachedAfter?.width === target.width && cachedAfter.height === target.height && cache.source === source && cache.after === params;
+    const after = this.intermediateFor('shownAfter', target);
+    if (!fresh) this.render(source, params, this.offscreen(after));
+    let before: RenderTarget = after;
+    if (wantBefore) {
+      before = this.intermediateFor('shownBefore', target);
+      // Before must have the same output size (same geometry) to line up.
+      if (!fresh || cache.before !== wantBefore) this.render(source, { ...wantBefore, geometry: params.geometry }, this.offscreen(before));
+    }
+    this.shownCache = { source, after: params, before: wantBefore ?? (fresh ? cache.before : null) };
+    this.displayPass(after, before, split === null ? -1 : split * target.width, display.options, target);
+  }
+
+  private displayPass(after: RenderTarget, before: RenderTarget, splitX: number, o: DisplayOptions, target: Target): void {
+    const { gl } = this;
+    const u = this.displayUniforms;
+    this.bindTarget(target);
+    gl.useProgram(this.displayProgram);
+    this.bindTexture(0, after.texture, u.after);
+    this.bindTexture(1, before.texture, u.before);
+    gl.uniform1i(u.flipY, target.flipY ? 1 : 0);
+    gl.uniform1f(u.splitX, splitX);
+    gl.uniform1i(u.shadows, o.shadows ? 1 : 0);
+    gl.uniform1i(u.highlights, o.highlights ? 1 : 0);
+    gl.uniform3f(u.shadowColor, SHADOW_CLIP_RGB[0] / 255, SHADOW_CLIP_RGB[1] / 255, SHADOW_CLIP_RGB[2] / 255);
+    gl.uniform3f(u.highlightColor, HIGHLIGHT_CLIP_RGB[0] / 255, HIGHLIGHT_CLIP_RGB[1] / 255, HIGHLIGHT_CLIP_RGB[2] / 255);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
   private render(source: SizedTexture, params: PipelineParams, target: Target): void {
@@ -373,6 +440,7 @@ export class Renderer {
   private releaseIntermediates(): void {
     for (const t of Object.values(this.intermediates)) this.deleteTarget(t);
     this.intermediates = {};
+    this.shownCache = null;
   }
 
   private pickSource(kind: SourceKind): SizedTexture {

@@ -476,3 +476,37 @@ void main() {
   outColor = c;
 }
 `;
+
+/**
+ * Display pass (M20; engine/display.ts): Before or After per column for the
+ * split view, then the clipping overlay. Both inputs are RGBA8 textures, so
+ * the overlay sees exactly the bytes the CPU reference does.
+ */
+export const DISPLAY_FRAGMENT_SHADER = /* glsl */ `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform sampler2D u_after;
+uniform sampler2D u_before;
+uniform bool u_flipY;
+/** Split position in output pixels (columns whose center is left of it show Before); negative = no split. */
+uniform float u_splitX;
+uniform bool u_shadows;
+uniform bool u_highlights;
+uniform vec3 u_shadowColor;
+uniform vec3 u_highlightColor;
+
+out vec4 outColor;
+
+void main() {
+  ivec2 o = ivec2(gl_FragCoord.xy);
+  ivec2 size = textureSize(u_after, 0);
+  if (u_flipY) o.y = size.y - 1 - o.y;
+  bool before = float(o.x) + 0.5 < u_splitX;
+  vec4 c = before ? texelFetch(u_before, o, 0) : texelFetch(u_after, o, 0);
+  ivec3 b = ivec3(round(c.rgb * 255.0));
+  if (c.a > 0.0 && u_highlights && all(equal(b, ivec3(255)))) c.rgb = u_highlightColor;
+  else if (c.a > 0.0 && u_shadows && all(equal(b, ivec3(0)))) c.rgb = u_shadowColor;
+  outColor = c;
+}
+`;
