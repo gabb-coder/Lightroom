@@ -14,6 +14,7 @@ import { createVirtualCopy } from '../state/virtualCopyActions';
 import { useViewStore } from '../state/viewStore';
 import { useDeleteDialogStore } from '../state/deleteDialogStore';
 import { runAutoTone } from '../state/editingAids';
+import { useShortcutsHelpStore } from '../state/shortcutsHelpStore';
 
 const MODULE_KEYS: Readonly<Record<string, AppModule>> = {
   g: 'library',
@@ -39,7 +40,7 @@ export function useGlobalShortcuts(): void {
       // Text fields keep their own shortcuts (including native Ctrl/Cmd+Z).
       if (isTextEntryTarget(event.target as TargetLike | null)) return;
       // A modal dialog (Copy / Sync settings, Remove photos) owns the keyboard.
-      if (useCopyPasteStore.getState().dialog || useDeleteDialogStore.getState().ids) return;
+      if (useCopyPasteStore.getState().dialog || useDeleteDialogStore.getState().ids || useShortcutsHelpStore.getState().open) return;
       const command = mac ? event.metaKey : event.ctrlKey;
       // Ctrl/Cmd+': make a virtual copy of the focused photo and switch to it (as in Lightroom).
       if (command && !event.shiftKey && event.key === "'" && useAppStore.getState().module !== 'export') {
@@ -79,6 +80,12 @@ export function useGlobalShortcuts(): void {
         return;
       }
       if (event.ctrlKey || event.metaKey || event.altKey) return;
+      // ?: the keyboard shortcuts dialog.
+      if (event.key === '?') {
+        event.preventDefault();
+        useShortcutsHelpStore.getState().setOpen(true);
+        return;
+      }
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         if (isArrowKeyTarget(event.target as TargetLike | null)) return;
         const library = useLibraryStore.getState();

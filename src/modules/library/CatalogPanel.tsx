@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { CollectionIcon, PhotosIcon, RecentIcon } from '../../components/icons';
 import controls from '../../components/controls.module.css';
+import { CollapsibleSection } from '../../components/SectionTitle';
 import { sortCollections, type CollectionRecord } from '../../model/collections';
 import { addToCollection, createCollection, deleteCollection, PHOTO_DRAG_TYPE, draggedPhotoIds, renameCollection, showCollection } from '../../state/collectionActions';
 import { collectionView, latestBatchId, useLibraryStore, type CatalogView } from '../../state/libraryStore';
@@ -140,21 +141,24 @@ function Collections() {
   const [creating, setCreating] = useState(false);
   const [mode, setMode] = useState<Mode>({ kind: 'idle' });
   return (
-    <section aria-label="Collections">
-      <div className={`group-label ${styles.navGroup} ${styles.groupWithAction}`}>
-        Collections
+    <CollapsibleSection
+      id="library.collections"
+      title="Collections"
+      titleClassName={`group-label ${styles.navGroup} ${styles.groupWithAction}`}
+      actions={
         <button type="button" className={styles.rowAction} aria-label="New collection" onClick={() => setCreating(true)}>
           <svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
             <path d="M8 3v10M3 8h10" />
           </svg>
         </button>
-      </div>
+      }
+    >
       {creating && <NewCollection onDone={() => setCreating(false)} />}
       {collections.length === 0 && !creating && <p className={styles.collectionsEmpty}>Group photos without moving them. Use + to make a collection.</p>}
       {sortCollections(collections).map((c) => (
         <CollectionItem key={c.id} collection={c} mode={mode} setMode={setMode} />
       ))}
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -170,10 +174,11 @@ export function CatalogPanel() {
   ];
   return (
     <aside className={`${layout.side} ${layout.left} ${styles.catalog}`} aria-label="Catalog" data-testid="left-panel">
-      <div className={`group-label ${styles.navGroup}`}>Catalog</div>
-      {items.map(({ id, label, Icon, count }) => (
-        <NavItem key={id} current={view === id} label={label} count={count} icon={<Icon />} onClick={() => setView(id)} />
-      ))}
+      <CollapsibleSection id="library.catalog" title="Catalog" label="Catalog views" titleClassName={`group-label ${styles.navGroup}`}>
+        {items.map(({ id, label, Icon, count }) => (
+          <NavItem key={id} current={view === id} label={label} count={count} icon={<Icon />} onClick={() => setView(id)} />
+        ))}
+      </CollapsibleSection>
       <Collections />
       <BackupPanel />
     </aside>

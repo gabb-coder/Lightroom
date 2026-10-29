@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import controls from '../../components/controls.module.css';
+import { CollapsibleSection } from '../../components/SectionTitle';
 import { formatBytes } from '../../model/format';
 import { downloadBackup, requestPersistence, restoreBackup, storageInfo, type StorageInfo } from '../../state/catalogActions';
 import styles from './LibraryView.module.css';
@@ -51,8 +52,7 @@ export function BackupPanel() {
     });
 
   return (
-    <section className={styles.backup} aria-label="Backup">
-      <div className={`group-label ${styles.navGroup}`}>Backup</div>
+    <CollapsibleSection id="library.backup" title="Backup" className={styles.backup} titleClassName={`group-label ${styles.navGroup}`}>
       <div className={styles.backupButtons}>
         <button type="button" className={controls.button} disabled={busy !== null} onClick={backup}>
           Back up catalog
@@ -99,6 +99,6 @@ export function BackupPanel() {
           </button>
         </p>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }

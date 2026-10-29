@@ -5,7 +5,8 @@ import { canRedo, canUndo } from '../model/history';
 import { useDevelopStore } from '../state/developStore';
 import { modifierLabel } from '../shortcuts/platform';
 import { openImportPicker } from '../state/importActions';
-import { ImportIcon, LogoIcon, RedoIcon, UndoIcon } from './icons';
+import { useShortcutsHelpStore } from '../state/shortcutsHelpStore';
+import { ImportIcon, KeyboardIcon, LogoIcon, RedoIcon, UndoIcon } from './icons';
 import controls from './controls.module.css';
 import styles from './TopBar.module.css';
 
@@ -90,6 +91,15 @@ export function TopBar() {
       </nav>
       <div className={styles.actions}>
         <ModuleActions module={active} />
+        <button
+          type="button"
+          className={`${controls.iconButton} ${styles.keyboardButton}`}
+          aria-label="Keyboard shortcuts"
+          title="Keyboard shortcuts (?)"
+          onClick={() => useShortcutsHelpStore.getState().setOpen(true)}
+        >
+          <KeyboardIcon />
+        </button>
       </div>
     </header>
   );

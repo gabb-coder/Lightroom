@@ -46,6 +46,14 @@
   background: var(--color-app-bg);
 }
 
+/* Stacked layout (phones, narrow windows): the grid needs a height of its own,
+   or it would shrink to nothing between the filter bar and the status bar. */
+@media (max-width: 900px) {
+  .center {
+    min-height: min(75vh, 640px);
+  }
+}
+
 .center[data-drag-over='true'] {
   outline: 2px dashed var(--color-accent);
   outline-offset: -6px;

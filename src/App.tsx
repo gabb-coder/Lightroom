@@ -3,6 +3,7 @@ import { ImportInput } from './components/ImportInput';
 import { ExportToast } from './components/ExportToast';
 import { SettingsDialog } from './components/SettingsDialog';
 import { DeletePhotosDialog } from './components/DeletePhotosDialog';
+import { ShortcutsDialog } from './components/ShortcutsDialog';
 import { SupportBanner } from './components/SupportBanner';
 import { DevelopView } from './modules/develop/DevelopView';
 import { LibraryView } from './modules/library/LibraryView';
@@ -37,6 +38,7 @@ export function App() {
       <ExportToast />
       <SettingsDialog />
       <DeletePhotosDialog />
+      <ShortcutsDialog />
     </div>
   );
 }

@@ -169,6 +169,14 @@ component library.
   can't do WebGL2, or with `?export=main`). Renderer scratch: blur target
   is RG8; `releaseScratch()` after exports. Manual cross-browser checklist:
   `docs/BROWSER_CHECKLIST.md` (only Chromium is automated).
+- Interface (M22): every shortcut is listed in `shortcuts/shortcutList.ts`
+  (the `?` / top-bar dialog renders it; a unit test reads the handler
+  sources and fails if a handled key is missing, so add new shortcuts
+  there). Library panel sections use `CollapsibleSection` (open state in
+  `state/sectionStore.ts`, remembered in uiPrefs). Phones: below 900px the
+  columns stack (the Library grid keeps a min height), `pointer: coarse`
+  enlarges sliders/buttons/headers, the photo lets vertical swipes scroll
+  the page when nothing needs the gesture; e2e checks 390px for overflow.
 - Mask tools (M21): `BrushMask` (strokes normalized to the photo + its
   `aspect`). `engine/brush.ts` rasterizes strokes on the CPU into an 8-bit
   map (long edge 1024) that the GPU gets as an R8 texture-array layer and

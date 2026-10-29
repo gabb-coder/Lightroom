@@ -1,0 +1,32 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+}
+
+.toggle:hover {
+  color: var(--color-text-strong);
+}
+
+.toggle > svg {
+  flex: none;
+  opacity: 0.8;
+}

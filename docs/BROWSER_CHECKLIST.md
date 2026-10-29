@@ -40,6 +40,7 @@ devices come out at that size.
 8. **Export:** one photo as JPEG (resized) and as PNG (full size); open both and compare with the screen. Then a batch of 3 as one ZIP (unzip it), as separate downloads, and (Chrome/Edge) into a chosen folder twice: the second run adds `-2` names instead of replacing files.
 9. **Backup:** back up the catalog, open the app in a private window (or another browser profile), restore, compare.
 10. **Reload:** everything is still there.
-11. **Phone/tablet:** steps 2, 3, 4 and 8 with touch.
+11. **Phone/tablet:** steps 2, 3, 4 and 8 with touch. Nothing scrolls sideways; a vertical swipe on a fitted photo scrolls the page; sliders and buttons are easy to hit.
+12. **Keyboard:** `?` lists the shortcuts; try a few from each group.
 
 Note anything that differs, with the browser version, and file it.

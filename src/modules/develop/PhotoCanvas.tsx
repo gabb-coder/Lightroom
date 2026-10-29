@@ -134,6 +134,8 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
 
   const frameLeft = Math.max(0, (stage.width - display.width) / 2);
   const frameTop = Math.max(0, (stage.height - display.height) / 2);
+  // Touch (M22): a fitted photo lets a vertical swipe scroll the page (stacked phone layout); panning or a tool needs every gesture.
+  const touchAction = pannable || cropping || showMasks || wbPicking || showSplit ? 'none' : 'pan-y';
   const cursor = wbPicking ? 'crosshair' : cropping || showMasks ? undefined : zoom === '1:1' ? (pannable ? 'grab' : 'zoom-out') : 'zoom-in';
 
   return (
@@ -146,7 +148,7 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
         <div className={styles.scroller} style={{ width: Math.max(stage.width, display.width), height: Math.max(stage.height, display.height) }}>
           <div
             className={styles.frame}
-            style={{ left: frameLeft, top: frameTop, width: display.width, height: display.height, cursor }}
+            style={{ left: frameLeft, top: frameTop, width: display.width, height: display.height, cursor, touchAction }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}

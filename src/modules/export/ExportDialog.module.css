@@ -233,3 +233,15 @@
   height: 32px;
   padding: 0 16px;
 }
+
+/* Phones (M22): labels above their controls. */
+@media (max-width: 480px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 6px;
+  }
+
+  .grid > span:empty {
+    display: none;
+  }
+}

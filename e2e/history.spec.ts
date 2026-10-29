@@ -147,6 +147,8 @@ test.describe('History', () => {
   });
 
   test('History panel matches the design layout', async ({ page }) => {
+    // ~100 key presses, each a software-WebGL render: near the default timeout when the suite runs in parallel.
+    test.slow();
     await gotoDevelop(page);
     await openTestPhoto(page, smallPhotoPng);
     await nudge(page, 'Exposure', 'ArrowRight', 7);

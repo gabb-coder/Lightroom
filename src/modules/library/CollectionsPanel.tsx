@@ -1,3 +1,4 @@
+import { CollapsibleSection } from '../../components/SectionTitle';
 import { collectionsOf, sortCollections } from '../../model/collections';
 import { addToCollection, removeFromCollection, showCollection } from '../../state/collectionActions';
 import { useLibraryStore } from '../../state/libraryStore';
@@ -17,8 +18,7 @@ export function CollectionsPanel() {
   const n = ids.length;
 
   return (
-    <section className={chips.panel} aria-label="Collections of the selection">
-      <div className={chips.title}>Collections</div>
+    <CollapsibleSection id="library.selection-collections" title="Collections" label="Collections of the selection" className={chips.panel} titleClassName={chips.title}>
       {memberships.length > 0 && (
         <ul className={chips.chips} aria-label="Collections holding the selected photos">
           {memberships.map(({ collection, count }) => {
@@ -60,6 +60,6 @@ export function CollectionsPanel() {
           </option>
         ))}
       </select>
-    </section>
+    </CollapsibleSection>
   );
 }

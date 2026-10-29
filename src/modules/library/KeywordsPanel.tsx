@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { CollapsibleSection } from '../../components/SectionTitle';
 import { parseKeywords, selectionKeywords } from '../../model/keywords';
 import { useLibraryStore } from '../../state/libraryStore';
 import { addKeywordsTo, removeKeywordFrom } from '../../state/organizeActions';
@@ -25,8 +26,7 @@ export function KeywordsPanel() {
   };
 
   return (
-    <section className={styles.panel} aria-label="Keywords">
-      <div className={styles.title}>Keywords</div>
+    <CollapsibleSection id="library.keywords" title="Keywords" className={styles.panel} titleClassName={styles.title}>
       {keywords.length > 0 && (
         <ul className={styles.chips} aria-label="Keywords of the selected photos">
           {keywords.map(({ keyword, count }) => {
@@ -57,6 +57,6 @@ export function KeywordsPanel() {
           onChange={(e) => setDraft(e.target.value)}
         />
       </form>
-    </section>
+    </CollapsibleSection>
   );
 }

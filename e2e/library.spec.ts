@@ -92,7 +92,7 @@ test.describe('Library', () => {
       ...testFiles(1),
     ]);
     const metadata = page.getByRole('region', { name: 'Metadata' });
-    const row = (k: string) => metadata.locator('div', { has: page.locator('dt', { hasText: new RegExp(`^${k}$`) }) }).locator('dd');
+    const row = (k: string) => metadata.locator('dl > div', { has: page.locator('dt', { hasText: new RegExp(`^${k}$`) }) }).locator('dd');
     await cells(page).nth(0).click();
     await expect(row('Camera')).toHaveText('Canon EOS R5');
     await expect(row('Lens')).toHaveText('RF24-105mm F4 L IS USM');

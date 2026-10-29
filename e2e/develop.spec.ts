@@ -270,7 +270,8 @@ test.describe('Develop: histogram', () => {
 });
 
 test('M2 screenshot: edited photo with the full Basic panel', async ({ page }) => {
-    test.slow(); // many full renders on software WebGL
+  // ~120 full renders of a 2000 × 1200 photo on software WebGL: about 50 s alone, up to twice that with the suite in parallel.
+  test.setTimeout(180_000);
   await gotoDevelop(page);
   await openTestPhoto(page);
   const set = async (label: string, presses: number, key: 'ArrowRight' | 'ArrowLeft') => {

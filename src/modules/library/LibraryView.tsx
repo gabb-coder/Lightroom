@@ -1,5 +1,6 @@
 import { ImportIcon } from '../../components/icons';
 import { PhotoThumb } from '../../components/PhotoThumb';
+import { CollapsibleSection } from '../../components/SectionTitle';
 import controls from '../../components/controls.module.css';
 import { useFileDrop } from '../../components/useFileDrop';
 import { formatBytes, formatDateTime, formatExposure, formatFocalLength } from '../../model/format';
@@ -143,8 +144,7 @@ function DevelopSettingsPanel() {
   const selected = useLibraryStore((s) => s.selection.ids.length);
   const clipboard = useCopyPasteStore((s) => s.clipboard);
   return (
-    <section className={styles.developSettings} aria-label="Develop settings">
-      <div className={styles.metaTitle}>Develop settings</div>
+    <CollapsibleSection id="library.develop-settings" title="Develop settings" className={styles.developSettings} titleClassName={styles.metaTitle}>
       <div className={styles.settingsButtons}>
         <button type="button" className={controls.button} disabled={!hasPhoto} onClick={openCopyDialog}>
           Copy settings…
@@ -164,7 +164,7 @@ function DevelopSettingsPanel() {
       </button>
       <VirtualCopyButtons />
       <RemoveButton />
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -208,11 +208,13 @@ function DetailsPanel() {
           Edit in Develop
         </button>
       </section>
-      <section className={styles.metadata} aria-label="Metadata">
-        <div className={styles.metaTitle}>
-          Metadata
-          {selectedCount > 1 && <span className={`num ${styles.metaCount}`}>{selectedCount} selected</span>}
-        </div>
+      <CollapsibleSection
+        id="library.metadata"
+        title="Metadata"
+        className={styles.metadata}
+        titleClassName={styles.metaTitle}
+        extra={selectedCount > 1 && <span className={`num ${styles.metaCount}`}>{selectedCount} selected</span>}
+      >
         {photo ? (
           <>
             <dl className={styles.metaList}>
@@ -228,7 +230,7 @@ function DetailsPanel() {
         ) : (
           <p className={styles.metaEmpty}>No photo selected</p>
         )}
-      </section>
+      </CollapsibleSection>
       <KeywordsPanel />
       <CollectionsPanel />
       <DevelopSettingsPanel />

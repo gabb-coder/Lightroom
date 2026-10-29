@@ -20,6 +20,7 @@
   /* Lines */
   --color-border: #2f2f2f;
   --color-border-control: #3a3a3a;
+  --color-kbd-border: #3f3f3f; /* keycaps in the shortcuts dialog */
   --color-border-soft: #262626;
 
   /* Sliders */
@@ -63,4 +64,11 @@
 
   --slider-label-width: 78px;
   --slider-value-width: 48px;
+}
+
+/* Touch screens (M22): taller panel headers. */
+@media (pointer: coarse) {
+  :root {
+    --panel-header-height: 44px;
+  }
 }
