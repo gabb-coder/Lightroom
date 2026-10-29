@@ -2,6 +2,7 @@ import { CURVE_LUT_SIZE } from '../engine/curve';
 import { geometryMatrix, isIdentityGeometry, outputSize } from '../engine/geometry';
 import { hasDetailStage, type PipelineParams } from '../engine/pipeline';
 import { sharpenKernel } from '../engine/sharpen';
+import { MAX_MASKS } from '../model/editSettings';
 import { createProgram, createTexture, type RgbaImage, type TextureSource } from './gl';
 import { BLUR_FRAGMENT_SHADER, DETAIL_FRAGMENT_SHADER, DEVELOP_FRAGMENT_SHADER, GEOMETRY_FRAGMENT_SHADER, VERTEX_SHADER } from './shaders';
 
@@ -24,6 +25,14 @@ const DEVELOP_UNIFORMS = [
   'hslHue',
   'hslSat',
   'hslLum',
+  'maskCount',
+  'maskKind',
+  'maskA',
+  'maskB',
+  'maskWB',
+  'maskGain',
+  'maskTone',
+  'maskSat',
   'cgOn',
   'cgTint',
   'cgLum',
@@ -266,7 +275,23 @@ export class Renderer {
     gl.uniform1fv(u.hslSat, params.hsl?.sat ?? ZERO8);
     gl.uniform1fv(u.hslLum, params.hsl?.lum ?? ZERO8);
     this.setColorGrading(params);
+    this.setMasks(params);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  private setMasks(params: PipelineParams): void {
+    const { gl } = this;
+    const u = this.developUniforms;
+    const masks = params.masks.slice(0, MAX_MASKS);
+    gl.uniform1i(u.maskCount, masks.length);
+    if (masks.length === 0) return;
+    gl.uniform1iv(u.maskKind, masks.map((m) => (m.shape.kind === 'linear' ? 0 : 1)));
+    gl.uniform4fv(u.maskA, masks.flatMap((m) => m.shape.a));
+    gl.uniform4fv(u.maskB, masks.flatMap((m) => m.shape.b));
+    gl.uniform3fv(u.maskWB, masks.flatMap((m) => [...m.whiteBalance]));
+    gl.uniform1fv(u.maskGain, masks.map((m) => m.exposureGain));
+    gl.uniform3fv(u.maskTone, masks.flatMap((m) => [m.tone.contrast, m.tone.highlights, m.tone.shadows]));
+    gl.uniform1fv(u.maskSat, masks.map((m) => m.saturationScale));
   }
 
   private setColorGrading(params: PipelineParams): void {

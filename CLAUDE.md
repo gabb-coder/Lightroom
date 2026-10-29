@@ -143,6 +143,15 @@ component library.
   weighted by shadows/midtones/highlights curves (pivot = balance, width =
   blending). Skipped when every wheel is neutral. Wheel math:
   `model/colorWheel.ts` (hue counter-clockwise from the right).
+- Masks (M15): `settings.masks` (linear/radial, max 8) stored normalized to
+  the uploaded photo, so they follow crop/rotate/flip. `engine/masks.ts`:
+  per-pixel weight (source pixel space) and a local WB/exposure/tone/
+  saturation blended after the global tone stage; GLSL in the develop pass
+  (`MASKS_GLSL`). `processRgba8` takes the width to place masks. Editing
+  math (source ↔ frame px through the geometry matrix) in
+  `model/maskEdit.ts`; overlay `MaskOverlay.tsx` shows while the Masks panel
+  is open (`masksOpen`); M / Shift+M pick a tool. Presets and the default
+  copy panels leave masks alone (they belong to one picture).
 - Export (M7): `workers/export.worker.ts` runs the same `Renderer` on an
   OffscreenCanvas at full resolution (readPixels), resizes with the browser
   scaler only when asked, encodes, and copies EXIF per policy

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultEditSettings } from './editSettings';
+import { defaultEditSettings, defaultMaskAdjust } from './editSettings';
 import { applyPresetTo, createPreset, parsePreset, PresetParseError, SAMPLE_PRESETS, serializePreset } from './presets';
 
 const byName = (name: string) => {
@@ -89,5 +89,16 @@ describe('preset JSON', () => {
   it('clamps out-of-range values from a hand-edited file', () => {
     const json = JSON.stringify({ format: 'photo-editor-preset', version: 1, id: 'x', name: 'Hot', settings: { basic: { exposure: 50 } } });
     expect(parsePreset(json).settings.basic.exposure).toBe(5);
+  });
+});
+
+describe('presets and masks', () => {
+  it('applying a preset keeps the photo’s masks (they belong to this picture)', () => {
+    const current = defaultEditSettings();
+    current.masks = [{ id: 'm', kind: 'radial', cx: 0.5, cy: 0.5, rx: 0.2, ry: 0.2, angle: 0, feather: 50, invert: false, adjust: { ...defaultMaskAdjust(), exposure: 1 } }];
+    const preset = SAMPLE_PRESETS[0];
+    if (!preset) throw new Error('no sample');
+    expect(applyPresetTo(current, preset).masks).toEqual(current.masks);
+    expect('masks' in createPreset('x', 'X', current).settings).toBe(false);
   });
 });

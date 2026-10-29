@@ -89,6 +89,18 @@ export function useGlobalShortcuts(): void {
         return;
       }
       const develop = useDevelopStore.getState();
+      // M / Shift+M: linear / radial gradient (as in Lightroom); press again to cancel.
+      if (event.key.toLowerCase() === 'm' && developHasPhoto()) {
+        event.preventDefault();
+        const kind = event.shiftKey ? 'radial' : 'linear';
+        develop.setMaskTool(develop.maskTool === kind ? null : kind);
+        return;
+      }
+      if (event.key === 'Escape' && develop.maskTool) {
+        event.preventDefault();
+        develop.setMaskTool(null);
+        return;
+      }
       if (event.key.toLowerCase() === 'r' && developHasPhoto()) {
         event.preventDefault();
         develop.setCropping(!develop.cropping);

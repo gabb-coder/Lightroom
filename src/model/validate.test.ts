@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultEditSettings } from './editSettings';
+import { defaultEditSettings, MAX_MASKS } from './editSettings';
 import { parseEditSettings } from './validate';
 
 describe('parseEditSettings', () => {
@@ -40,5 +40,30 @@ describe('parseEditSettings', () => {
     expect(parsed.geometry.angle).toBe(45);
     expect(parsed).not.toHaveProperty('extra');
     expect(parsed.basic).not.toHaveProperty('bogus');
+  });
+});
+
+describe('masks (M15)', () => {
+  it('keeps valid masks, drops unknown kinds, caps the count and clamps values', () => {
+    const raw = {
+      masks: [
+        { id: 'a', kind: 'linear', x0: 0.1, y0: 0.1, x1: 0.1, y1: 0.1, adjust: { exposure: 9, saturation: -40, bogus: 1 } },
+        { id: 'a', kind: 'radial', cx: 0.5, cy: 0.5, rx: 0, ry: 5, feather: 300, invert: 'yes', adjust: {} },
+        { kind: 'brush' },
+        'nope',
+        ...Array.from({ length: 10 }, (_, i) => ({ id: `r${i}`, kind: 'radial' })),
+      ],
+    };
+    const masks = parseEditSettings(raw).masks;
+    expect(masks).toHaveLength(MAX_MASKS - 2); // first 8 raw entries, two of them invalid
+    const [lin, rad] = masks;
+    expect(lin).toMatchObject({ kind: 'linear', y1: 0.2 }); // start ≠ end
+    expect(lin?.adjust).toEqual({ exposure: 5, contrast: 0, highlights: 0, shadows: 0, temp: 0, tint: 0, saturation: -40 });
+    expect(rad).toMatchObject({ kind: 'radial', rx: 0.005, ry: 2, feather: 100, invert: false });
+    expect(rad?.id).not.toBe('a'); // ids stay unique
+  });
+
+  it('defaults to no masks for older settings', () => {
+    expect(parseEditSettings({}).masks).toEqual([]);
   });
 });

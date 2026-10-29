@@ -6,6 +6,7 @@ import { useElementSize } from '../../hooks/useElementSize';
 import { attachRenderer } from '../../render/rendererController';
 import { selectShowingBefore, useDevelopStore, type LoadedPhoto } from '../../state/developStore';
 import { CropOverlay } from './CropOverlay';
+import { MaskOverlay } from './MaskOverlay';
 import styles from './PhotoCanvas.module.css';
 
 /**
@@ -26,6 +27,8 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
   );
   const fit = containSize(area, shown.width / shown.height);
   const showOverlay = cropping && !showingBefore;
+  const masksOpen = useDevelopStore((s) => s.masksOpen);
+  const showMasks = masksOpen && !cropping && !showingBefore;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -49,6 +52,7 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
             data-testid="photo-canvas"
           />
           {showOverlay && <CropOverlay oriented={orientedSize(photo, geometry.rotation)} />}
+          {showMasks && fit.width > 0 && <MaskOverlay source={photo} frame={fit} />}
           {showingBefore && (
             <div className={styles.beforeBadge} data-testid="before-badge">
               Before

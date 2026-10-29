@@ -4,6 +4,7 @@ import { GRAIN_SEED } from '../engine/grain';
 import { HSL_CENTER_LIST, HSL_MAX_HUE_SHIFT, HSL_MAX_LUM } from '../engine/hsl';
 import { SHARPEN_WEIGHT_COUNT } from '../engine/sharpen';
 import { TONE_GAMMA } from '../engine/tone';
+import { MAX_MASKS } from '../model/editSettings';
 import { VIGNETTE_START } from '../engine/vignette';
 
 /**
@@ -225,6 +226,47 @@ vec3 applyVignette(vec3 c, float amount, float mask) {
 }
 `;
 
+/** engine/masks.ts: maskWeight, adjustForMask, applyMasks (up to MAX_MASKS, in order) */
+const MASKS_GLSL = /* glsl */ `
+float maskSmooth(float a, float b, float x) {
+  float t = clamp((x - a) / (b - a), 0.0, 1.0);
+  return t * t * (3.0 - 2.0 * t);
+}
+float maskWeight(int i, vec2 p, vec2 size) {
+  vec4 a = u_maskA[i];
+  if (u_maskKind[i] == 0) {
+    vec2 d = (a.zw - a.xy) * size;
+    float len2 = dot(d, d);
+    if (len2 == 0.0) return 0.0;
+    float t = dot(p - a.xy * size, d) / len2;
+    return 1.0 - maskSmooth(0.0, 1.0, t);
+  }
+  vec4 b = u_maskB[i];
+  vec2 o = p - a.xy * size;
+  float u = (o.x * b.x + o.y * b.y) / (a.z * size.x);
+  float v = (-o.x * b.y + o.y * b.x) / (a.w * size.y);
+  float r = sqrt(u * u + v * v);
+  float w = 1.0 - maskSmooth(1.0 - max(b.z, 1e-4), 1.0, r);
+  return b.w > 0.5 ? 1.0 - w : w;
+}
+vec3 adjustForMask(vec3 c, int i) {
+  vec3 out3 = c * u_maskWB[i] * u_maskGain[i];
+  vec3 t = u_maskTone[i];
+  out3 = applyTone(out3, Tone(t.x, t.y, t.z, 0.0, 0.0));
+  return applySaturation(out3, u_maskSat[i]);
+}
+vec3 applyMasks(vec3 c, vec2 p, vec2 size) {
+  for (int i = 0; i < ${MAX_MASKS}; i++) {
+    if (i >= u_maskCount) break;
+    float w = maskWeight(i, p, size);
+    if (w <= 0.0) continue;
+    vec3 adjusted = adjustForMask(c, i);
+    c = w >= 1.0 ? adjusted : mix(c, adjusted, w);
+  }
+  return c;
+}
+`;
+
 /** engine/colorGrading.ts: gradeWeights, applyColorGrading (regions: shadows, midtones, highlights, global) */
 const COLOR_GRADING_GLSL = /* glsl */ `
 float gradeSmooth(float a, float b, float x) {
@@ -278,6 +320,14 @@ uniform bool u_hslOn;
 uniform float u_hslHue[8];
 uniform float u_hslSat[8];
 uniform float u_hslLum[8];
+uniform int u_maskCount;
+uniform int u_maskKind[${MAX_MASKS}];
+uniform vec4 u_maskA[${MAX_MASKS}];
+uniform vec4 u_maskB[${MAX_MASKS}];
+uniform vec3 u_maskWB[${MAX_MASKS}];
+uniform float u_maskGain[${MAX_MASKS}];
+uniform vec3 u_maskTone[${MAX_MASKS}];
+uniform float u_maskSat[${MAX_MASKS}];
 uniform bool u_cgOn;
 uniform vec3 u_cgTint[4];
 uniform float u_cgLum[4];
@@ -293,6 +343,7 @@ ${CURVE_GLSL}
 ${HSL_GLSL}
 ${COLOR_ADJUST_GLSL}
 ${COLOR_GRADING_GLSL}
+${MASKS_GLSL}
 void main() {
   ivec2 size = textureSize(u_source, 0);
   ivec2 p = ivec2(gl_FragCoord.xy);
@@ -303,6 +354,7 @@ void main() {
   c = applyWhiteBalance(c, u_whiteBalance);
   c = applyExposure(c, u_exposureGain);
   c = applyTone(c, Tone(u_contrast, u_highlights, u_shadows, u_whites, u_blacks));
+  if (u_maskCount > 0) c = applyMasks(c, vec2(p) + 0.5, vec2(size));
   c = applyCurve(c);
   c = applyHsl(c);
   c = applyVibrance(c, u_vibrance);

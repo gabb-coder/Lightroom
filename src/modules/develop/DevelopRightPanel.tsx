@@ -6,6 +6,7 @@ import { GeometryPanel } from './GeometryPanel';
 import { ToneCurvePanel } from './ToneCurvePanel';
 import { ColorMixerPanel } from './ColorMixerPanel';
 import { ColorGradingPanel } from './ColorGradingPanel';
+import { MasksPanel } from './MasksPanel';
 import { colorGradingParams } from '../../engine/colorGrading';
 import { DetailPanel, EffectsPanel } from './DetailEffectsPanels';
 import { isIdentityCurveSet } from '../../engine/curve';
@@ -27,6 +28,7 @@ const SECTIONS = [
   { title: 'Color grading', open: false },
   { title: 'Detail', open: false },
   { title: 'Effects', open: false },
+  { title: 'Masks', open: false },
   { title: 'Crop and geometry', open: false },
 ] as const;
 
@@ -59,6 +61,9 @@ export function DevelopRightPanel() {
   const detailEdited = useDevelopStore((s) => isGroupEdited(DETAIL_SLIDERS, s.settings.detail));
   const effectsEdited = useDevelopStore((s) => isGroupEdited(EFFECTS_SLIDERS, s.settings.effects));
   const cropping = useDevelopStore((s) => s.cropping);
+  const masksEdited = useDevelopStore((s) => s.settings.masks.length > 0);
+  const masksOpen = useDevelopStore((s) => s.masksOpen);
+  const setMasksOpen = useDevelopStore((s) => s.setMasksOpen);
   const setCropping = useDevelopStore((s) => s.setCropping);
   const [geometryPanelOpen, setGeometryPanelOpen] = useState(false);
   // The Crop tool (toolbar, R) shows this panel; collapsing it ends cropping.
@@ -76,7 +81,11 @@ export function DevelopRightPanel() {
     <aside className={`${layout.side} ${layout.right}`} aria-label="Develop panels" data-testid="right-panel">
       <Histogram />
       {SECTIONS.map(({ title, open }) =>
-        title === 'Crop and geometry' ? (
+        title === 'Masks' ? (
+          <PanelSection key={title} title={title} edited={masksEdited} open={masksOpen} onOpenChange={setMasksOpen}>
+            <MasksPanel />
+          </PanelSection>
+        ) : title === 'Crop and geometry' ? (
           <PanelSection key={title} title={title} edited={geometryEdited} open={geometryOpen} onOpenChange={onGeometryOpenChange}>
             <GeometryPanel />
           </PanelSection>

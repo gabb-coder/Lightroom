@@ -30,6 +30,14 @@ export function compose(A: Affine, B: Affine): Affine {
   return [a * g + b * j, a * h + b * k, a * i + b * l + c, d * g + e * j, d * h + e * k, d * i + e * l + f];
 }
 
+/** Inverse of an affine map (identity if singular). */
+export function invertAffine(m: Affine): Affine {
+  const [a, b, c, d, e, f] = m;
+  const det = a * e - b * d;
+  if (det === 0) return IDENTITY;
+  return [e / det, -b / det, (b * f - c * e) / det, -d / det, a / det, (c * d - a * f) / det];
+}
+
 export function applyAffine(m: Affine, x: number, y: number): [number, number] {
   return [m[0] * x + m[1] * y + m[2], m[3] * x + m[4] * y + m[5]];
 }

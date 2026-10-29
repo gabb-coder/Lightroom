@@ -5,7 +5,7 @@
  * Extends SPEC.md's type with fields the design needs: basic.treatment
  * (Color / B&W), effects.grainSize, geometry.rotation (Rotate 90°) and
  * geometry.aspect (the crop aspect preset, so a crop can be re-edited), and
- * colorGrading (V2, M14; older stored settings get its defaults).
+ * colorGrading and masks (V2, M14/M15; older stored settings get defaults).
  */
 
 export interface Point {
@@ -68,6 +68,52 @@ export type GradeRegion = (typeof GRADE_REGIONS)[number];
 /** Color grading (M14): four wheels plus how the tonal ranges overlap (blending) and where they split (balance). */
 export type ColorGradingSettings = Record<GradeRegion, GradeWheel> & { blending: number; balance: number };
 
+/** Local adjustments a mask applies (M15); ranges match the Basic sliders. */
+export type MaskAdjust = { exposure: number; contrast: number; highlights: number; shadows: number; temp: number; tint: number; saturation: number };
+export type MaskAdjustKey = keyof MaskAdjust;
+
+/**
+ * A gradient mask (M15). Coordinates are normalized to the uploaded photo
+ * (0..1 of its width and height, before crop/rotate/flip), so a mask stays
+ * on the same part of the picture when the crop changes.
+ */
+export type LinearMask = {
+  id: string;
+  kind: 'linear';
+  /** Full effect at and before (x0, y0), none at and after (x1, y1). */
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  adjust: MaskAdjust;
+};
+
+export type RadialMask = {
+  id: string;
+  kind: 'radial';
+  cx: number;
+  cy: number;
+  /** Radii as fractions of the photo's width and height. */
+  rx: number;
+  ry: number;
+  /** Ellipse rotation in degrees (pixel space). */
+  angle: number;
+  /** 0–100: how much of the radius fades out. */
+  feather: number;
+  /** Adjust outside the ellipse instead of inside. */
+  invert: boolean;
+  adjust: MaskAdjust;
+};
+
+export type Mask = LinearMask | RadialMask;
+export type MaskKind = Mask['kind'];
+
+export const MAX_MASKS = 8;
+
+export function defaultMaskAdjust(): MaskAdjust {
+  return { exposure: 0, contrast: 0, highlights: 0, shadows: 0, temp: 0, tint: 0, saturation: 0 };
+}
+
 export type DetailKey = keyof DetailSettings;
 export type EffectsKey = keyof EffectsSettings;
 
@@ -86,6 +132,8 @@ export interface EditSettings {
   curve: { rgb: Point[]; r: Point[]; g: Point[]; b: Point[] };
   hsl: Record<HslColor, HslAdjust>;
   colorGrading: ColorGradingSettings;
+  /** Linear and radial gradient masks (M15), applied in order. */
+  masks: Mask[];
   detail: DetailSettings;
   effects: EffectsSettings;
   geometry: Geometry;
@@ -129,6 +177,7 @@ export function defaultEditSettings(): EditSettings {
     curve: { rgb: identityCurve(), r: identityCurve(), g: identityCurve(), b: identityCurve() },
     hsl,
     colorGrading: defaultColorGrading(),
+    masks: [],
     detail: { sharpAmount: 0, sharpRadius: 1 },
     effects: { vignette: 0, grain: 0, grainSize: 25 },
     geometry: { cropRect: { x: 0, y: 0, w: 1, h: 1 }, angle: 0, rotation: 0, flipH: false, flipV: false, aspect: 'original' },

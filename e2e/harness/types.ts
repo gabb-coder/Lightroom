@@ -20,6 +20,7 @@ export interface GpuExtra {
   detail?: Partial<EditSettings['detail']>;
   effects?: Partial<EditSettings['effects']>;
   colorGrading?: Partial<EditSettings['colorGrading']>;
+  masks?: EditSettings['masks'];
   proxy?: boolean;
 }
 

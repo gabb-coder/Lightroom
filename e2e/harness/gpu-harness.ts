@@ -65,6 +65,7 @@ function runGpuCheck(basic: Partial<BasicSettings>, geometry: Partial<Geometry> 
   if (extra.detail) settings.detail = { ...settings.detail, ...extra.detail };
   if (extra.effects) settings.effects = { ...settings.effects, ...extra.effects };
   if (extra.colorGrading) settings.colorGrading = { ...settings.colorGrading, ...extra.colorGrading };
+  if (extra.masks) settings.masks = extra.masks;
   const params = pipelineParams(settings);
   const gpuImage = extra.proxy ? proxyRenderer.readPixels(params, 'proxy') : renderer.readPixels(params);
   const cpuImage = renderRgba8(source.data, source, params, extra.proxy ? PROXY_SCALE : 1);

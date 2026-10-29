@@ -12,6 +12,7 @@ import { applyGeometryRgba8, type Size } from './geometry';
 import { grainOffset, grainParams, type GrainParams } from './grain';
 import { sharpenOffsets, sharpenParams, type SharpenParams } from './sharpen';
 import { vignetteAmount } from './vignette';
+import { applyMasks, maskParams, maskWeight, type MaskParams } from './masks';
 
 /**
  * Numeric parameters for every implemented stage. Both the CPU reference and
@@ -21,6 +22,8 @@ export interface PipelineParams {
   whiteBalance: Rgb;
   exposureGain: number;
   tone: ToneParams;
+  /** Gradient masks that change something (engine/masks.ts), in order. */
+  masks: MaskParams[];
   /** Combined tone-curve lookup table, or null when every curve is identity. */
   curveLut: Float32Array | null;
   /** Color mixer amounts, or null when all are zero. */
@@ -46,6 +49,7 @@ export function pipelineParams(settings: EditSettings): PipelineParams {
     whiteBalance: whiteBalanceGains(b.temp, b.tint),
     exposureGain: exposureGain(b.exposure),
     tone: toneParams(b),
+    masks: maskParams(settings.masks),
     curveLut: isIdentityCurveSet(settings.curve) ? null : buildCurveLut(settings.curve),
     hsl: hslParams(settings.hsl),
     vibrance: vibranceAmount(b.vibrance),
@@ -59,11 +63,12 @@ export function pipelineParams(settings: EditSettings): PipelineParams {
   };
 }
 
-/** Runs the linear-light stages, in pipeline order. */
-export function processLinear(c: Rgb, p: PipelineParams): Rgb {
+/** Runs the linear-light stages, in pipeline order. `maskWeights` are each mask's weight at this pixel. */
+export function processLinear(c: Rgb, p: PipelineParams, maskWeights: readonly number[] = []): Rgb {
   let out = applyWhiteBalance(c, p.whiteBalance);
   out = applyExposure(out, p.exposureGain);
   out = applyTone(out, p.tone);
+  out = applyMasks(out, p.masks, maskWeights);
   out = applyCurve(out, p.curveLut);
   out = applyHsl(out, p.hsl);
   out = applyVibrance(out, p.vibrance);
@@ -74,20 +79,30 @@ export function processLinear(c: Rgb, p: PipelineParams): Rgb {
 }
 
 /** Full CPU reference for one sRGB-encoded pixel with channels in [0, 1]. */
-export function processPixel(srgb: Rgb, p: PipelineParams): Rgb {
+export function processPixel(srgb: Rgb, p: PipelineParams, maskWeights: readonly number[] = []): Rgb {
   const linear = mapRgb(srgb, srgbToLinear);
-  return mapRgb(processLinear(linear, p), (v) => linearToSrgb(clamp01(v)));
+  return mapRgb(processLinear(linear, p, maskWeights), (v) => linearToSrgb(clamp01(v)));
 }
 
 /**
  * CPU reference for an RGBA8 buffer (row-major, 4 bytes per pixel). Alpha is
- * passed through. Used by tests to check the GPU output.
+ * passed through. `width` places gradient masks (one row if omitted). Used by
+ * tests to check the GPU output.
  */
-export function processRgba8(src: Uint8Array | Uint8ClampedArray, p: PipelineParams): Uint8ClampedArray {
+export function processRgba8(src: Uint8Array | Uint8ClampedArray, p: PipelineParams, width = src.length / 4): Uint8ClampedArray {
   const out = new Uint8ClampedArray(src.length);
   const byte = (i: number) => src[i] ?? 0;
+  const height = src.length / 4 / width;
+  const weights = p.masks.map(() => 0);
   for (let i = 0; i < src.length; i += 4) {
-    const rgb = processPixel([byte(i) / 255, byte(i + 1) / 255, byte(i + 2) / 255], p);
+    if (p.masks.length) {
+      // Masks need the pixel's position (centers at +0.5, source pixels).
+      const n = i / 4;
+      const x = (n % width) + 0.5;
+      const y = Math.floor(n / width) + 0.5;
+      p.masks.forEach((m, k) => (weights[k] = maskWeight(m.shape, x, y, width, height)));
+    }
+    const rgb = processPixel([byte(i) / 255, byte(i + 1) / 255, byte(i + 2) / 255], p, weights);
     out[i] = Math.round(rgb[0] * 255);
     out[i + 1] = Math.round(rgb[1] * 255);
     out[i + 2] = Math.round(rgb[2] * 255);
@@ -125,6 +140,6 @@ export function applyDetailRgba8(data: Uint8Array | Uint8ClampedArray, size: Siz
 
 /** Full CPU reference: develop every pixel, detail, then crop/straighten/rotate/flip and vignette. */
 export function renderRgba8(src: Uint8Array | Uint8ClampedArray, size: Size, p: PipelineParams, scale = 1) {
-  const detailed = applyDetailRgba8(processRgba8(src, p), size, p, scale);
+  const detailed = applyDetailRgba8(processRgba8(src, p, size.width), size, p, scale);
   return applyGeometryRgba8(detailed, size, p.geometry, p.vignette);
 }

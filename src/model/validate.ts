@@ -12,8 +12,24 @@ import {
   type ColorGradingSettings,
   type GradeRegion,
   type GradeWheel,
+  defaultMaskAdjust,
+  MAX_MASKS,
+  type Mask,
+  type MaskAdjust,
 } from './editSettings';
-import { ANGLE_SLIDER, BASIC_SLIDERS, DETAIL_SLIDERS, EFFECTS_SLIDERS, gradeSliderDef, GRADING_SLIDERS, HSL_RANGE, snapSliderValue, type SliderDef } from './sliders';
+import {
+  ANGLE_SLIDER,
+  BASIC_SLIDERS,
+  DETAIL_SLIDERS,
+  EFFECTS_SLIDERS,
+  gradeSliderDef,
+  GRADING_SLIDERS,
+  HSL_RANGE,
+  MASK_FEATHER_SLIDER,
+  maskSliderDef,
+  snapSliderValue,
+  type SliderDef,
+} from './sliders';
 
 /**
  * Turns untrusted JSON (a preset file, a database row) into valid
@@ -81,6 +97,47 @@ function colorGrading(raw: unknown, fallback: ColorGradingSettings): ColorGradin
   return { ...wheels, ...sliderGroup(GRADING_SLIDERS, src, { blending: fallback.blending, balance: fallback.balance }) };
 }
 
+function maskAdjust(raw: unknown): MaskAdjust {
+  const src = isObject(raw) ? raw : {};
+  const d = defaultMaskAdjust();
+  const out = { ...d };
+  for (const key of Object.keys(d) as (keyof MaskAdjust)[]) out[key] = sliderValue(maskSliderDef(key), src[key], d[key]);
+  return out;
+}
+
+/** Masks with valid geometry; ids are kept when they are non-empty strings and unique. */
+function masks(raw: unknown): Mask[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Mask[] = [];
+  const ids = new Set<string>();
+  for (const m of raw.slice(0, MAX_MASKS)) {
+    if (!isObject(m)) continue;
+    const id = typeof m.id === 'string' && m.id && !ids.has(m.id) ? m.id : `mask-${out.length + 1}-${ids.size}`;
+    ids.add(id);
+    const coord = (v: unknown, fallback: number) => clampNumber(v, -1, 2, fallback);
+    if (m.kind === 'linear') {
+      const mask: Mask = { id, kind: 'linear', x0: coord(m.x0, 0.5), y0: coord(m.y0, 0.2), x1: coord(m.x1, 0.5), y1: coord(m.y1, 0.6), adjust: maskAdjust(m.adjust) };
+      // Start and end must differ, or the gradient has no direction.
+      if (mask.x0 === mask.x1 && mask.y0 === mask.y1) mask.y1 = mask.y0 + 0.1;
+      out.push(mask);
+    } else if (m.kind === 'radial') {
+      out.push({
+        id,
+        kind: 'radial',
+        cx: coord(m.cx, 0.5),
+        cy: coord(m.cy, 0.5),
+        rx: clampNumber(m.rx, 0.005, 2, 0.25),
+        ry: clampNumber(m.ry, 0.005, 2, 0.25),
+        angle: clampNumber(m.angle, -180, 180, 0),
+        feather: sliderValue(MASK_FEATHER_SLIDER, m.feather, MASK_FEATHER_SLIDER.defaultValue),
+        invert: m.invert === true,
+        adjust: maskAdjust(m.adjust),
+      });
+    }
+  }
+  return out;
+}
+
 export function parseEditSettings(raw: unknown): EditSettings {
   const d = defaultEditSettings();
   const src = isObject(raw) ? raw : {};
@@ -103,6 +160,7 @@ export function parseEditSettings(raw: unknown): EditSettings {
     },
     hsl: Object.fromEntries(HSL_COLORS.map((c) => [c, hslAdjust(hsl[c])])) as EditSettings['hsl'],
     colorGrading: colorGrading(src.colorGrading, d.colorGrading),
+    masks: masks(src.masks),
     detail: sliderGroup(DETAIL_SLIDERS, src.detail, d.detail),
     effects: sliderGroup(EFFECTS_SLIDERS, src.effects, d.effects),
     geometry: {

@@ -230,3 +230,40 @@ describe('applying whole settings (paste, sync, Previous)', () => {
     expect(store().previousPhotoId).toBe(before);
   });
 });
+
+describe('masks (M15)', () => {
+  beforeEach(() => store().loadPhoto(fakePhoto('m.jpg')));
+  const radial = (id: string) => ({ id, kind: 'radial' as const, cx: 0.5, cy: 0.5, rx: 0.2, ry: 0.2, angle: 0, feather: 50, invert: false, adjust: { exposure: 0, contrast: 0, highlights: 0, shadows: 0, temp: 0, tint: 0, saturation: 0 } });
+
+  it('drawing a mask is one step however many updates it takes, and selects it', () => {
+    store().putMask(radial('a'), 'masks.a.draw');
+    store().putMask({ ...radial('a'), rx: 0.3 }, 'masks.a.draw');
+    expect(labels().slice(1)).toEqual([['New radial gradient', '']]);
+    expect(store().selectedMaskId).toBe('a');
+    expect(store().settings.masks[0]).toMatchObject({ rx: 0.3 });
+  });
+
+  it('slider edits merge per mask and property; shape drags merge per key; delete is a step', () => {
+    store().putMask(radial('a'), 'masks.a.draw');
+    store().setMaskAdjust('a', 'exposure', 0.5);
+    store().setMaskAdjust('a', 'exposure', 1);
+    store().updateMask('a', { cx: 0.4 }, 'Radial gradient', 'masks.a.shape');
+    store().updateMask('a', { cx: 0.3 }, 'Radial gradient', 'masks.a.shape');
+    store().removeMask('a');
+    expect(labels().slice(1)).toEqual([
+      ['New radial gradient', ''],
+      ['Mask exposure', '+1.00'],
+      ['Radial gradient', ''],
+      ['Delete mask', ''],
+    ]);
+    expect(store().selectedMaskId).toBeNull();
+    store().undo();
+    expect(store().settings.masks[0]).toMatchObject({ cx: 0.3, adjust: { exposure: 1 } });
+  });
+
+  it('the crop tool cancels drawing a mask', () => {
+    store().setMaskTool('linear');
+    store().setCropping(true);
+    expect(store().maskTool).toBeNull();
+  });
+});

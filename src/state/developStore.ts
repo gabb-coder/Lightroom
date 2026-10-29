@@ -7,6 +7,10 @@ import {
   type CropAspect,
   type DetailKey,
   type GradeRegion,
+  type Mask,
+  type MaskAdjustKey,
+  type MaskKind,
+  MAX_MASKS,
   type GradeWheel,
   type EffectsKey,
   type HslColor,
@@ -30,7 +34,7 @@ import { basicHistoryKey, basicHistoryLabel } from '../model/historyDisplay';
 import { applyPresetTo, type Preset } from '../model/presets';
 import { jsonEqual } from '../model/compare';
 import type { CurveChannel } from '../model/curveEdit';
-import { DETAIL_SLIDERS, EFFECTS_SLIDERS, GRADE_REGION_LABELS, gradeSliderDef, GRADING_SLIDERS, hslSliderDef, type HslProp } from '../model/sliders';
+import { DETAIL_SLIDERS, EFFECTS_SLIDERS, GRADE_REGION_LABELS, gradeSliderDef, GRADING_SLIDERS, hslSliderDef, maskSliderDef, type HslProp } from '../model/sliders';
 
 /** A decoded photo ready to render. The original file is never modified. */
 export interface LoadedPhoto {
@@ -57,6 +61,12 @@ interface DevelopState {
   peeking: boolean;
   /** Crop tool active: the canvas shows the whole (straightened) image with the crop overlay. */
   cropping: boolean;
+  /** Mask being edited on the canvas (its handles show), or null. */
+  selectedMaskId: string | null;
+  /** Drawing a new mask: the next drag on the canvas places it. */
+  maskTool: MaskKind | null;
+  /** The Masks panel is open: mask pins and handles show on the canvas. */
+  masksOpen: boolean;
   /** Shows a photo with its saved history (or a fresh one). Closes the previous bitmap. */
   loadPhoto: (photo: LoadedPhoto, history?: History) => void;
   setBasic: (key: BasicSliderKey, value: number) => void;
@@ -68,6 +78,15 @@ interface DevelopState {
   /** Changes one grading wheel; `prop` names the control for history ('wheel' = a drag on the wheel). */
   setGradeWheel: (region: GradeRegion, patch: Partial<GradeWheel>, prop: 'wheel' | keyof GradeWheel) => void;
   setGradeParam: (key: 'blending' | 'balance', value: number) => void;
+  /** Adds (or, with the same `drawKey` while drawing, updates) a mask as one history step, and selects it. */
+  putMask: (mask: Mask, drawKey: string) => void;
+  /** Changes a mask; `key` merges a drag into one step. */
+  updateMask: (id: string, patch: Partial<Mask>, label: string, key: string | null) => void;
+  setMaskAdjust: (id: string, prop: MaskAdjustKey, value: number) => void;
+  removeMask: (id: string) => void;
+  selectMask: (id: string | null) => void;
+  setMaskTool: (tool: MaskKind | null) => void;
+  setMasksOpen: (open: boolean) => void;
   setEffect: (key: EffectsKey, value: number) => void;
   applyPreset: (preset: Preset) => void;
   /** Replaces all settings as one history step (paste, sync, Previous); no step if nothing changes. */
@@ -140,11 +159,14 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
   before: false,
   peeking: false,
   cropping: false,
+  selectedMaskId: null,
+  maskTool: null,
+  masksOpen: false,
   loadPhoto: (photo, history) =>
     set((s) => {
       if (s.photo && s.photo.bitmap !== photo.bitmap) s.photo.bitmap.close?.();
       const previousPhotoId = s.photo && s.photo.id !== photo.id ? s.photo.id : s.previousPhotoId;
-      return { photo, previousPhotoId, ...initialEditState(history), interacting: false, before: false, peeking: false, cropping: false };
+      return { photo, previousPhotoId, ...initialEditState(history), interacting: false, before: false, peeking: false, cropping: false, selectedMaskId: null, maskTool: null };
     }),
   setBasic: (key, value) =>
     set((s) => {
@@ -175,6 +197,40 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
       const settings = { ...s.settings, detail: { ...s.settings.detail, [key]: value } };
       return commit(s.history, { label: DETAIL_SLIDERS[key].historyLabel ?? DETAIL_SLIDERS[key].label, key: `detail.${key}`, settings });
     }),
+  putMask: (mask, drawKey) =>
+    set((s) => {
+      const exists = s.settings.masks.some((m) => m.id === mask.id);
+      if (!exists && s.settings.masks.length >= MAX_MASKS) return s;
+      const masks = exists ? s.settings.masks.map((m) => (m.id === mask.id ? mask : m)) : [...s.settings.masks, mask];
+      const label = mask.kind === 'linear' ? 'New linear gradient' : 'New radial gradient';
+      return { ...commit(s.history, { label, key: drawKey, settings: { ...s.settings, masks } }), selectedMaskId: mask.id };
+    }),
+  updateMask: (id, patch, label, key) =>
+    set((s) => {
+      const current = s.settings.masks.find((m) => m.id === id);
+      if (!current) return s;
+      const next = { ...current, ...patch } as Mask;
+      if (jsonEqual(next, current)) return s;
+      const masks = s.settings.masks.map((m) => (m.id === id ? next : m));
+      return commit(s.history, { label, key, settings: { ...s.settings, masks } });
+    }),
+  setMaskAdjust: (id, prop, value) =>
+    set((s) => {
+      const current = s.settings.masks.find((m) => m.id === id);
+      if (!current || current.adjust[prop] === value) return s;
+      const masks = s.settings.masks.map((m) => (m.id === id ? { ...m, adjust: { ...m.adjust, [prop]: value } } : m));
+      return commit(s.history, { label: maskSliderDef(prop).historyLabel ?? 'Mask', key: `masks.${id}.${prop}`, settings: { ...s.settings, masks } });
+    }),
+  removeMask: (id) =>
+    set((s) => {
+      if (!s.settings.masks.some((m) => m.id === id)) return s;
+      const settings = { ...s.settings, masks: s.settings.masks.filter((m) => m.id !== id) };
+      return { ...commit(s.history, { label: 'Delete mask', key: null, settings }), selectedMaskId: s.selectedMaskId === id ? null : s.selectedMaskId };
+    }),
+  selectMask: (selectedMaskId) => set({ selectedMaskId }),
+  setMaskTool: (maskTool) =>
+    set((s) => (s.photo || !maskTool ? { maskTool, cropping: maskTool ? false : s.cropping, masksOpen: maskTool ? true : s.masksOpen } : s)),
+  setMasksOpen: (masksOpen) => set(() => (masksOpen ? { masksOpen } : { masksOpen, maskTool: null, selectedMaskId: null })),
   setGradeWheel: (region, patch, prop) =>
     set((s) => {
       const wheel = { ...s.settings.colorGrading[region], ...patch };
@@ -204,7 +260,7 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
   redo: () => set((s) => moveTo(redo(s.history))),
   goToHistory: (index) => set((s) => moveTo(goToHistory(s.history, index))),
   setInteracting: (interacting) => set({ interacting }),
-  setCropping: (cropping) => set((s) => (s.photo || !cropping ? { cropping } : s)),
+  setCropping: (cropping) => set((s) => (s.photo || !cropping ? { cropping, maskTool: cropping ? null : s.maskTool } : s)),
   setCrop: (rect) =>
     set((s) => {
       const c = s.settings.geometry.cropRect;

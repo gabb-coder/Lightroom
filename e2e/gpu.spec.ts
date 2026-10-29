@@ -133,6 +133,68 @@ const GRADING_CASES: Record<string, [Partial<BasicSettings>, GpuExtra]> = {
   ],
 };
 
+const ADJ = { exposure: 0, contrast: 0, highlights: 0, shadows: 0, temp: 0, tint: 0, saturation: 0 };
+/** Gradient masks (M15): each kind, every local adjustment, several masks, with geometry and a proxy. */
+const MASK_CASES: Record<string, [Partial<BasicSettings>, Partial<Geometry>, GpuExtra]> = {
+  'mask: linear exposure +1.5': [{}, {}, { masks: [{ id: 'a', kind: 'linear', x0: 0.2, y0: 0.1, x1: 0.7, y1: 0.8, adjust: { ...ADJ, exposure: 1.5 } }] }],
+  'mask: linear, every adjustment': [
+    {},
+    {},
+    { masks: [{ id: 'a', kind: 'linear', x0: 1, y0: 0.5, x1: 0, y1: 0.4, adjust: { exposure: -0.8, contrast: 60, highlights: -70, shadows: 80, temp: 50, tint: -40, saturation: -60 } }] },
+  ],
+  'mask: radial, rotated, feather 30': [
+    {},
+    {},
+    { masks: [{ id: 'r', kind: 'radial', cx: 0.4, cy: 0.55, rx: 0.3, ry: 0.15, angle: 35, feather: 30, invert: false, adjust: { ...ADJ, exposure: 1, saturation: 50 } }] },
+  ],
+  'mask: radial inverted, hard edge': [
+    {},
+    {},
+    { masks: [{ id: 'r', kind: 'radial', cx: 0.5, cy: 0.5, rx: 0.35, ry: 0.35, angle: 0, feather: 0, invert: true, adjust: { ...ADJ, exposure: -2, temp: -60 } }] },
+  ],
+  'mask: three masks overlapping + global edits': [
+    { exposure: 0.4, contrast: 20, treatment: 'color' },
+    {},
+    {
+      masks: [
+        { id: 'a', kind: 'linear', x0: 0.5, y0: 0, x1: 0.5, y1: 0.6, adjust: { ...ADJ, exposure: -1, highlights: -50 } },
+        { id: 'b', kind: 'radial', cx: 0.3, cy: 0.7, rx: 0.4, ry: 0.3, angle: -20, feather: 80, invert: false, adjust: { ...ADJ, shadows: 70, tint: 30 } },
+        { id: 'c', kind: 'radial', cx: 0.8, cy: 0.3, rx: 0.2, ry: 0.4, angle: 0, feather: 50, invert: true, adjust: { ...ADJ, saturation: -100 } },
+      ],
+    },
+  ],
+  'mask: with crop and rotation (masks follow the photo)': [
+    {},
+    { rotation: 1, flipH: true, cropRect: { x: 0.1, y: 0.1, w: 0.8, h: 0.75 } },
+    { masks: [{ id: 'a', kind: 'linear', x0: 0.1, y0: 0.5, x1: 0.6, y1: 0.5, adjust: { ...ADJ, exposure: 1.2 } }] },
+  ],
+  'mask: proxy at half size': [
+    {},
+    {},
+    {
+      proxy: true,
+      masks: [{ id: 'r', kind: 'radial', cx: 0.45, cy: 0.5, rx: 0.3, ry: 0.25, angle: 10, feather: 60, invert: false, adjust: { ...ADJ, exposure: 1, contrast: 40 } }],
+    },
+  ],
+};
+
+test.describe('WebGL2 gradient masks match the CPU reference', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(`http://localhost:${DEV_PORT}/e2e/harness/gpu.html`);
+    await expect(page.locator('#status')).toHaveText('ready');
+  });
+
+  test('all mask cases', async ({ page }) => {
+    for (const [name, [basic, geometry, extra]] of Object.entries(MASK_CASES)) {
+      const result = await page.evaluate(([b, g, e]) => (window as unknown as GpuHarness).runGpuCheck(b, g, e), [basic, geometry, extra] as const);
+      if (process.env.LOG_GPU_DIFF) console.log(`${name}: maxDiff=${result.maxDiff}`);
+      expect(result.sameSize, name).toBe(true);
+      expect(result.maxDiff, `${name}: ${JSON.stringify(result.worst)}`).toBeLessThanOrEqual(TOLERANCE);
+      if (Object.keys(geometry).length === 0) expect(result.maxChangeFromSource, `${name} changes the image`).toBeGreaterThan(TOLERANCE);
+    }
+  });
+});
+
 test.describe('WebGL2 color grading matches the CPU reference', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(`http://localhost:${DEV_PORT}/e2e/harness/gpu.html`);

@@ -11,7 +11,7 @@ export const CROP_ASPECT_LABELS: Readonly<Record<CropAspect, string>> = {
 };
 import type { HistoryEntry } from './history';
 import { GRADE_REGIONS, HSL_COLORS, type GradeRegion, type HslColor } from './editSettings';
-import { ANGLE_SLIDER, BASIC_SLIDERS, DETAIL_SLIDERS, EFFECTS_SLIDERS, formatSliderValue, gradeSliderDef, GRADING_SLIDERS, hslSliderDef, type HslProp, type SliderDef } from './sliders';
+import { ANGLE_SLIDER, BASIC_SLIDERS, DETAIL_SLIDERS, EFFECTS_SLIDERS, formatSliderValue, gradeSliderDef, GRADING_SLIDERS, hslSliderDef, MASK_FEATHER_SLIDER, maskSliderDef, type HslProp, type SliderDef } from './sliders';
 
 /** History key for a Basic panel control. */
 export type BasicHistoryKey = `basic.${BasicSliderKey | 'treatment'}`;
@@ -26,6 +26,15 @@ export function basicHistoryLabel(key: BasicSliderKey | 'treatment'): string {
 
 function isBasicSliderKey(key: string): key is BasicSliderKey {
   return key in BASIC_SLIDERS;
+}
+
+/** A mask slider's value ("+0.50"); empty for shape drags and new masks. */
+function maskValue(entry: HistoryEntry, id: string, prop: string): string {
+  const m = entry.settings.masks.find((x) => x.id === id);
+  if (!m) return '';
+  if (prop === 'feather' && m.kind === 'radial') return formatSliderValue(MASK_FEATHER_SLIDER, m.feather);
+  if (prop in m.adjust) return formatSliderValue(maskSliderDef(prop), m.adjust[prop as keyof typeof m.adjust]);
+  return '';
 }
 
 /** "210° 40" for a wheel drag, the slider's text otherwise. */
@@ -56,6 +65,8 @@ export function historyEntryValue(entry: HistoryEntry): string {
     const prop = hsl[2] as HslProp;
     return formatSliderValue(hslSliderDef(color, prop), entry.settings.hsl[color][prop]);
   }
+  const mask = /^masks\.([^.]+)\.(\w+)$/.exec(entry.key ?? '');
+  if (mask) return maskValue(entry, mask[1] ?? '', mask[2] ?? '');
   const grade = /^colorGrading\.(\w+)(?:\.(\w+))?$/.exec(entry.key ?? '');
   if (grade) return gradeValue(entry, grade[1] ?? '', grade[2]);
   const group = /^(detail|effects)\.(\w+)$/.exec(entry.key ?? '');

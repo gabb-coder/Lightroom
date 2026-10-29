@@ -1,0 +1,150 @@
+import { applyAffine, geometryMatrix, invertAffine, outputSize, type Size } from '../engine/geometry';
+import { defaultMaskAdjust, type Geometry, type LinearMask, type Mask, type RadialMask } from './editSettings';
+
+/**
+ * Mask editing math (M15). Masks are stored normalized to the uploaded photo
+ * (source); the overlay works in frame pixels (the displayed, cropped and
+ * rotated image at its on-screen size). Source → frame is a similarity
+ * (rotation, flips and one uniform scale), so lengths and right angles carry
+ * over; everything here converts through source pixels.
+ */
+
+export interface Point2 {
+  x: number;
+  y: number;
+}
+
+export interface MaskView {
+  /** Source (normalized) → frame pixels. */
+  toFrame: (u: number, v: number) => Point2;
+  /** Frame pixels → source (normalized). */
+  fromFrame: (x: number, y: number) => Point2;
+  /** Source pixels per frame pixel. */
+  scale: number;
+  source: Size;
+  frame: Size;
+}
+
+/** A view for a photo of `source` size shown with `geometry` in a frame of `frame` CSS pixels. */
+export function maskView(source: Size, geometry: Geometry, frame: Size): MaskView {
+  const out = outputSize(source, geometry);
+  const toSource = geometryMatrix(source, geometry, out); // output px → source px
+  const toOutput = invertAffine(toSource);
+  const sx = frame.width / out.width;
+  const sy = frame.height / out.height;
+  const scale = Math.hypot(toSource[0], toSource[3]) / sx;
+  return {
+    toFrame: (u, v) => {
+      const [ox, oy] = applyAffine(toOutput, u * source.width, v * source.height);
+      return { x: ox * sx, y: oy * sy };
+    },
+    fromFrame: (x, y) => {
+      const [px, py] = applyAffine(toSource, x / sx, y / sy);
+      return { x: px / source.width, y: py / source.height };
+    },
+    scale,
+    source,
+    frame,
+  };
+}
+
+export const MIN_DRAG_PX = 4;
+
+/** A new linear gradient: full effect at `from`, none at `to` (frame px). A click makes a default one. */
+export function createLinearMask(id: string, view: MaskView, from: Point2, to: Point2): LinearMask {
+  const end = Math.hypot(to.x - from.x, to.y - from.y) < MIN_DRAG_PX ? { x: from.x, y: from.y + view.frame.height * 0.25 } : to;
+  const a = view.fromFrame(from.x, from.y);
+  const b = view.fromFrame(end.x, end.y);
+  return { id, kind: 'linear', x0: a.x, y0: a.y, x1: b.x, y1: b.y, adjust: defaultMaskAdjust() };
+}
+
+/** A new radial gradient centered at `center` reaching `edge` (frame px); a circle on screen. */
+export function createRadialMask(id: string, view: MaskView, center: Point2, edge: Point2): RadialMask {
+  const dragged = Math.hypot(edge.x - center.x, edge.y - center.y);
+  const radiusFrame = dragged < MIN_DRAG_PX ? Math.min(view.frame.width, view.frame.height) * 0.2 : dragged;
+  const radiusPx = radiusFrame * view.scale;
+  const c = view.fromFrame(center.x, center.y);
+  return {
+    id,
+    kind: 'radial',
+    cx: c.x,
+    cy: c.y,
+    rx: radiusPx / view.source.width,
+    ry: radiusPx / view.source.height,
+    angle: 0,
+    feather: 50,
+    invert: false,
+    adjust: defaultMaskAdjust(),
+  };
+}
+
+/** Moves a mask by a frame-pixel offset from where the drag started (`start`). */
+export function moveMask<M extends Mask>(start: M, view: MaskView, dx: number, dy: number): M {
+  const shift = (u: number, v: number) => {
+    const p = view.toFrame(u, v);
+    return view.fromFrame(p.x + dx, p.y + dy);
+  };
+  if (start.kind === 'linear') {
+    const a = shift(start.x0, start.y0);
+    const b = shift(start.x1, start.y1);
+    return { ...start, x0: a.x, y0: a.y, x1: b.x, y1: b.y };
+  }
+  const c = shift(start.cx, start.cy);
+  return { ...start, cx: c.x, cy: c.y };
+}
+
+/** Sets a linear gradient's start or end point (frame px); keeps the two points apart. */
+export function setLinearPoint(m: LinearMask, view: MaskView, which: 'start' | 'end', p: Point2): LinearMask {
+  const other = view.toFrame(which === 'start' ? m.x1 : m.x0, which === 'start' ? m.y1 : m.y0);
+  if (Math.hypot(p.x - other.x, p.y - other.y) < MIN_DRAG_PX) return m;
+  const q = view.fromFrame(p.x, p.y);
+  return which === 'start' ? { ...m, x0: q.x, y0: q.y } : { ...m, x1: q.x, y1: q.y };
+}
+
+/** Ellipse axis directions in source pixels (unit vectors) for a radial mask. */
+function axes(m: RadialMask): { ax: Point2; ay: Point2 } {
+  const t = (m.angle * Math.PI) / 180;
+  return { ax: { x: Math.cos(t), y: Math.sin(t) }, ay: { x: -Math.sin(t), y: Math.cos(t) } };
+}
+
+/** The four handle positions (end of each semi-axis) and the center, in frame px. */
+export function radialHandles(m: RadialMask, view: MaskView): { center: Point2; xPlus: Point2; xMinus: Point2; yPlus: Point2; yMinus: Point2 } {
+  const { width: W, height: H } = view.source;
+  const { ax, ay } = axes(m);
+  const cxPx = m.cx * W;
+  const cyPx = m.cy * H;
+  const at = (dx: number, dy: number) => view.toFrame((cxPx + dx) / W, (cyPx + dy) / H);
+  const rxPx = m.rx * W;
+  const ryPx = m.ry * H;
+  return {
+    center: at(0, 0),
+    xPlus: at(ax.x * rxPx, ax.y * rxPx),
+    xMinus: at(-ax.x * rxPx, -ax.y * rxPx),
+    yPlus: at(ay.x * ryPx, ay.y * ryPx),
+    yMinus: at(-ay.x * ryPx, -ay.y * ryPx),
+  };
+}
+
+/** Resizes one axis of a radial mask so its edge passes through `p` (frame px); Shift-style `uniform` keeps it round. */
+export function resizeRadial(m: RadialMask, view: MaskView, axis: 'x' | 'y', p: Point2, uniform = false): RadialMask {
+  const { width: W, height: H } = view.source;
+  const q = view.fromFrame(p.x, p.y);
+  const d = { x: q.x * W - m.cx * W, y: q.y * H - m.cy * H };
+  const { ax, ay } = axes(m);
+  const dir = axis === 'x' ? ax : ay;
+  const lengthPx = Math.max(2, Math.abs(d.x * dir.x + d.y * dir.y));
+  if (uniform) return { ...m, rx: lengthPx / W, ry: lengthPx / H };
+  return axis === 'x' ? { ...m, rx: lengthPx / W } : { ...m, ry: lengthPx / H };
+}
+
+/** Display names per kind and order: "Linear gradient 1", "Radial gradient 1"… */
+export function maskNames(masks: readonly Mask[]): Map<string, string> {
+  const counts = { linear: 0, radial: 0 };
+  const names = new Map<string, string>();
+  for (const m of masks) {
+    counts[m.kind]++;
+    names.set(m.id, `${m.kind === 'linear' ? 'Linear' : 'Radial'} gradient ${counts[m.kind]}`);
+  }
+  return names;
+}
+

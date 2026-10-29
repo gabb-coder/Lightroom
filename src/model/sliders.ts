@@ -75,6 +75,25 @@ export const GRADING_SLIDERS = {
 } as const satisfies Record<string, SliderDef>;
 
 
+/** Mask adjustment sliders (M15): Basic ranges, mask-specific accessible names. */
+const MASK_LABELS: Readonly<Record<string, string>> = {
+  exposure: 'Exposure',
+  contrast: 'Contrast',
+  highlights: 'Highlights',
+  shadows: 'Shadows',
+  temp: 'Temp',
+  tint: 'Tint',
+  saturation: 'Saturation',
+};
+
+export function maskSliderDef(key: keyof typeof MASK_LABELS): SliderDef {
+  const base = BASIC_SLIDERS[key as BasicSliderKey];
+  const label = MASK_LABELS[key] ?? key;
+  return { ...base, id: `mask-${key}`, label, historyLabel: `Mask ${label.toLowerCase()}`, ariaLabel: `Mask ${label.toLowerCase()}` };
+}
+
+export const MASK_FEATHER_SLIDER: SliderDef = { ...unipolar('mask-feather', 'Feather', 0, 100, 1, 50, 'uint', 'Mask feather'), ariaLabel: 'Mask feather' };
+
 export const ANGLE_SLIDER: SliderDef = bipolar('angle', 'Straighten', -45, 45, 0.1, 'deg');
 
 /** Color mixer hue / saturation / luminance offsets. */
