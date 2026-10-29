@@ -85,6 +85,25 @@
   pointer-events: none;
 }
 
+/* In the enlarged preview the watermark can be dragged. */
+.movable {
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  outline: 1px dashed var(--color-scrim);
+  outline-offset: 2px;
+}
+
+.movable:hover,
+.movable:focus-visible {
+  outline: 1px dashed var(--color-text-strong);
+}
+
+.movable:active {
+  cursor: grabbing;
+}
+
 /* The small preview is a button that enlarges it. */
 .previewButton {
   position: relative;
@@ -138,6 +157,7 @@
 
 .zoomFrame {
   position: relative;
+  cursor: default;
   overflow: hidden;
   border-radius: 2px;
   background: var(--color-app-bg);

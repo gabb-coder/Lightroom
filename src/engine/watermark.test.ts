@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { applyWatermark, compositeLogo, resampleWeights, resizeLogo, textShadowColor, watermarkRect, WATERMARK_POSITIONS } from './watermark';
+import {
+  applyWatermark,
+  compositeLogo,
+  placementFractions,
+  resampleWeights,
+  resizeLogo,
+  snapPlacement,
+  textShadowColor,
+  watermarkFractionsAt,
+  watermarkRect,
+  WATERMARK_POSITIONS,
+} from './watermark';
 
 const IMAGE = { width: 1000, height: 600 };
 const LOGO = { width: 200, height: 100 };
@@ -25,6 +36,43 @@ describe('watermark placement', () => {
       const r = at(p);
       expect(r.x).toBeGreaterThanOrEqual(30);
       expect(r.y + r.height).toBeLessThanOrEqual(570);
+    }
+  });
+
+  it('places a dragged (custom) logo by fractions of the room between the margins', () => {
+    const at = (x: number, y: number) => watermarkRect(IMAGE, LOGO, { position: 'custom', size: 15, inset: 5, x, y });
+    // Room: 1000 − 60 − 150 = 790 across, 600 − 60 − 75 = 465 down.
+    expect(at(0, 0)).toEqual({ x: 30, y: 30, width: 150, height: 75 });
+    expect(at(1, 1)).toEqual(watermarkRect(IMAGE, LOGO, { position: 'bottom-right', size: 15, inset: 5 }));
+    expect(at(0.25, 0.6)).toMatchObject({ x: 30 + Math.round(790 * 0.25), y: 30 + Math.round(465 * 0.6) });
+    // Never past the margins.
+    expect(at(-2, 3)).toEqual(at(0, 1));
+    // The grid positions are the fractions 0, ½ and 1, pixel for pixel.
+    for (const position of WATERMARK_POSITIONS) {
+      const f = placementFractions({ position, size: 15, inset: 5 });
+      expect(at(f.x, f.y)).toEqual(watermarkRect(IMAGE, LOGO, { position, size: 15, inset: 5 }));
+    }
+  });
+
+  it('finds the fractions for a dragged corner, kept inside the margins', () => {
+    const p = { position: 'custom' as const, size: 15, inset: 5 };
+    const f = watermarkFractionsAt(IMAGE, LOGO, p, 30 + 790 * 0.4, 30 + 465 * 0.75);
+    expect(f.x).toBeCloseTo(0.4, 9);
+    expect(f.y).toBeCloseTo(0.75, 9);
+    expect(watermarkRect(IMAGE, LOGO, { ...p, ...f })).toMatchObject({ x: 30 + 316, y: 30 + Math.round(348.75) });
+    expect(watermarkFractionsAt(IMAGE, LOGO, p, -500, 5000)).toEqual({ x: 0, y: 1 });
+    // A logo as wide as the room has nowhere to go across: it stays centered.
+    expect(watermarkFractionsAt(IMAGE, LOGO, { ...p, size: 100 }, 400, 0).x).toBe(0.5);
+  });
+
+  it('snaps near the grid onto it, and names the position when both axes snap', () => {
+    expect(snapPlacement(0.99, 0.015, 0.02)).toEqual({ position: 'top-right', x: 1, y: 0 });
+    expect(snapPlacement(0.51, 0.49, 0.02)).toEqual({ position: 'center', x: 0.5, y: 0.5 });
+    expect(snapPlacement(0.3, 0.995, 0.02)).toEqual({ position: 'custom', x: 0.3, y: 1 });
+    expect(snapPlacement(1.4, -0.2, 0)).toEqual({ position: 'top-right', x: 1, y: 0 });
+    for (const position of WATERMARK_POSITIONS) {
+      const f = placementFractions({ position, size: 1, inset: 0 });
+      expect(snapPlacement(f.x, f.y, 0).position).toBe(position);
     }
   });
 
