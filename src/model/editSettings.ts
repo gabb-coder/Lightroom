@@ -4,7 +4,8 @@
  *
  * Extends SPEC.md's type with fields the design needs: basic.treatment
  * (Color / B&W), effects.grainSize, geometry.rotation (Rotate 90°) and
- * geometry.aspect (the crop aspect preset, so a crop can be re-edited).
+ * geometry.aspect (the crop aspect preset, so a crop can be re-edited), and
+ * colorGrading (V2, M14; older stored settings get its defaults).
  */
 
 export interface Point {
@@ -58,6 +59,15 @@ export type BasicSliderKey = Exclude<keyof BasicSettings, 'treatment'>;
 export type DetailSettings = { sharpAmount: number; sharpRadius: number };
 export type EffectsSettings = { vignette: number; grain: number; grainSize: number };
 
+/** One color grading wheel (M14): hue in degrees, saturation 0–100, luminance −100–100. */
+export type GradeWheel = { hue: number; sat: number; lum: number };
+
+export const GRADE_REGIONS = ['shadows', 'midtones', 'highlights', 'global'] as const;
+export type GradeRegion = (typeof GRADE_REGIONS)[number];
+
+/** Color grading (M14): four wheels plus how the tonal ranges overlap (blending) and where they split (balance). */
+export type ColorGradingSettings = Record<GradeRegion, GradeWheel> & { blending: number; balance: number };
+
 export type DetailKey = keyof DetailSettings;
 export type EffectsKey = keyof EffectsSettings;
 
@@ -75,9 +85,15 @@ export interface EditSettings {
   basic: BasicSettings;
   curve: { rgb: Point[]; r: Point[]; g: Point[]; b: Point[] };
   hsl: Record<HslColor, HslAdjust>;
+  colorGrading: ColorGradingSettings;
   detail: DetailSettings;
   effects: EffectsSettings;
   geometry: Geometry;
+}
+
+export function defaultColorGrading(): ColorGradingSettings {
+  const wheel = (): GradeWheel => ({ hue: 0, sat: 0, lum: 0 });
+  return { shadows: wheel(), midtones: wheel(), highlights: wheel(), global: wheel(), blending: 50, balance: 0 };
 }
 
 function identityCurve(): Point[] {
@@ -112,6 +128,7 @@ export function defaultEditSettings(): EditSettings {
     },
     curve: { rgb: identityCurve(), r: identityCurve(), g: identityCurve(), b: identityCurve() },
     hsl,
+    colorGrading: defaultColorGrading(),
     detail: { sharpAmount: 0, sharpRadius: 1 },
     effects: { vignette: 0, grain: 0, grainSize: 25 },
     geometry: { cropRect: { x: 0, y: 0, w: 1, h: 1 }, angle: 0, rotation: 0, flipH: false, flipV: false, aspect: 'original' },

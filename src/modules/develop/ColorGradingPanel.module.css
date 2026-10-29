@@ -1,0 +1,61 @@
+/* Two classes: wins over the shared segmented/segment styles. */
+.tabs.tabs {
+  margin: 2px 0 10px;
+}
+
+.tabs .tab {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 4px;
+  font-size: var(--font-size-group);
+}
+
+.tabDot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.wheelBox {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.wheel {
+  position: relative;
+  flex: none;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.wheel:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.wheel[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.puck {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--color-white), 0 1px 4px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.groupLabel {
+  margin: 8px 0 2px;
+}

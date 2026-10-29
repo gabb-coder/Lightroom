@@ -1,6 +1,6 @@
 import { HSL_COLORS, type BasicSliderKey, type EditSettings, type HslColor } from './editSettings';
 
-export type SliderFormat = 'ev' | 'int' | 'uint' | 'dec' | 'deg';
+export type SliderFormat = 'ev' | 'int' | 'uint' | 'dec' | 'deg' | 'hue';
 
 export interface SliderDef {
   id: string;
@@ -16,6 +16,8 @@ export interface SliderDef {
   track: string;
   /** Name in the History panel, when it differs from the label (design: "Temperature"). */
   historyLabel?: string;
+  /** Accessible name when the short label repeats another panel's ("Shadows saturation" vs "Saturation"). */
+  ariaLabel?: string;
 }
 
 const PLAIN_TRACK = '#3d3d3d';
@@ -54,6 +56,25 @@ export const EFFECTS_SLIDERS = {
   grainSize: unipolar('grainSize', 'Size', 0, 100, 1, 25, 'uint', 'Grain size'),
 } as const satisfies Record<string, SliderDef>;
 
+/** Color grading (M14). The hue track is the color wheel unrolled. */
+export const HUE_TRACK = 'linear-gradient(90deg, #e0524d, #e3c84a, #5bb35b, #48b8b0, #4a7fe0, #b956b0, #e0524d)';
+
+export const GRADE_REGION_LABELS = { shadows: 'Shadows', midtones: 'Midtones', highlights: 'Highlights', global: 'Global' } as const;
+
+export function gradeSliderDef(region: keyof typeof GRADE_REGION_LABELS, prop: 'hue' | 'sat' | 'lum'): SliderDef {
+  const name = GRADE_REGION_LABELS[region];
+  if (prop === 'hue') return { ...unipolar(`grade-${region}-hue`, 'Hue', 0, 359, 1, 0, 'hue', `${name} hue`), track: HUE_TRACK, ariaLabel: `${name} hue` };
+  if (prop === 'sat') return { ...unipolar(`grade-${region}-sat`, 'Saturation', 0, 100, 1, 0, 'uint', `${name} saturation`), ariaLabel: `${name} saturation` };
+  const lum = bipolar(`grade-${region}-lum`, 'Luminance', -100, 100, 1, 'int', 'linear-gradient(90deg, #202020, #eeeeee)');
+  return { ...lum, historyLabel: `${name} luminance`, ariaLabel: `${name} luminance` };
+}
+
+export const GRADING_SLIDERS = {
+  blending: unipolar('grade-blending', 'Blending', 0, 100, 1, 50, 'uint', 'Grading blending'),
+  balance: { ...bipolar('grade-balance', 'Balance', -100, 100, 1, 'int'), historyLabel: 'Grading balance' },
+} as const satisfies Record<string, SliderDef>;
+
+
 export const ANGLE_SLIDER: SliderDef = bipolar('angle', 'Straighten', -45, 45, 0.1, 'deg');
 
 /** Color mixer hue / saturation / luminance offsets. */
@@ -82,6 +103,8 @@ export function formatSliderValue(def: SliderDef, v: number): string {
       return v.toFixed(1);
     case 'uint':
       return String(Math.round(v));
+    case 'hue':
+      return `${Math.round(v)}°`;
   }
 }
 

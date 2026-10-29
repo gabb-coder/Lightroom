@@ -113,6 +113,42 @@ const DETAIL_CASES: Record<string, [Partial<BasicSettings>, Partial<Geometry>, G
   'proxy: grain 60 at half size': [{}, {}, { effects: { grain: 60, grainSize: 10 }, proxy: true }],
 };
 
+/** Color grading (M14): each region, blending/balance extremes, with B&W and other edits. */
+const GRADING_CASES: Record<string, [Partial<BasicSettings>, GpuExtra]> = {
+  'grading: shadows teal': [{}, { colorGrading: { shadows: { hue: 190, sat: 80, lum: 0 } } }],
+  'grading: midtones magenta, lum +60': [{}, { colorGrading: { midtones: { hue: 310, sat: 100, lum: 60 } } }],
+  'grading: highlights orange, lum -80': [{}, { colorGrading: { highlights: { hue: 35, sat: 90, lum: -80 } } }],
+  'grading: global green +100 lum': [{}, { colorGrading: { global: { hue: 120, sat: 50, lum: 100 } } }],
+  'grading: split tone, blending 0, balance +100': [
+    {},
+    { colorGrading: { shadows: { hue: 220, sat: 70, lum: -20 }, highlights: { hue: 45, sat: 70, lum: 20 }, blending: 0, balance: 100 } },
+  ],
+  'grading: split tone, blending 100, balance -100': [
+    {},
+    { colorGrading: { shadows: { hue: 220, sat: 70, lum: -20 }, highlights: { hue: 45, sat: 70, lum: 20 }, blending: 100, balance: -100 } },
+  ],
+  'grading: B&W split tone + contrast': [
+    { treatment: 'bw', contrast: 30, exposure: 0.5 },
+    { colorGrading: { shadows: { hue: 200, sat: 60, lum: 0 }, highlights: { hue: 30, sat: 50, lum: 0 } } },
+  ],
+};
+
+test.describe('WebGL2 color grading matches the CPU reference', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(`http://localhost:${DEV_PORT}/e2e/harness/gpu.html`);
+    await expect(page.locator('#status')).toHaveText('ready');
+  });
+
+  test('all color grading cases', async ({ page }) => {
+    for (const [name, [basic, extra]] of Object.entries(GRADING_CASES)) {
+      const result = await page.evaluate(([b, e]) => (window as unknown as GpuHarness).runGpuCheck(b, {}, e), [basic, extra] as const);
+      if (process.env.LOG_GPU_DIFF) console.log(`${name}: maxDiff=${result.maxDiff}`);
+      expect(result.maxDiff, `${name}: ${JSON.stringify(result.worst)}`).toBeLessThanOrEqual(TOLERANCE);
+      expect(result.maxChangeFromSource, `${name} changes the image`).toBeGreaterThan(TOLERANCE);
+    }
+  });
+});
+
 test.describe('WebGL2 detail and effects passes match the CPU reference', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(`http://localhost:${DEV_PORT}/e2e/harness/gpu.html`);

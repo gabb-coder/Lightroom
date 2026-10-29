@@ -6,6 +6,8 @@ import {
   type BasicSliderKey,
   type CropAspect,
   type DetailKey,
+  type GradeRegion,
+  type GradeWheel,
   type EffectsKey,
   type HslColor,
   type Point,
@@ -28,7 +30,7 @@ import { basicHistoryKey, basicHistoryLabel } from '../model/historyDisplay';
 import { applyPresetTo, type Preset } from '../model/presets';
 import { jsonEqual } from '../model/compare';
 import type { CurveChannel } from '../model/curveEdit';
-import { DETAIL_SLIDERS, EFFECTS_SLIDERS, hslSliderDef, type HslProp } from '../model/sliders';
+import { DETAIL_SLIDERS, EFFECTS_SLIDERS, GRADE_REGION_LABELS, gradeSliderDef, GRADING_SLIDERS, hslSliderDef, type HslProp } from '../model/sliders';
 
 /** A decoded photo ready to render. The original file is never modified. */
 export interface LoadedPhoto {
@@ -63,6 +65,9 @@ interface DevelopState {
   setCurve: (channel: CurveChannel, points: Point[], merge?: boolean) => void;
   setHsl: (color: HslColor, prop: HslProp, value: number) => void;
   setDetail: (key: DetailKey, value: number) => void;
+  /** Changes one grading wheel; `prop` names the control for history ('wheel' = a drag on the wheel). */
+  setGradeWheel: (region: GradeRegion, patch: Partial<GradeWheel>, prop: 'wheel' | keyof GradeWheel) => void;
+  setGradeParam: (key: 'blending' | 'balance', value: number) => void;
   setEffect: (key: EffectsKey, value: number) => void;
   applyPreset: (preset: Preset) => void;
   /** Replaces all settings as one history step (paste, sync, Previous); no step if nothing changes. */
@@ -169,6 +174,20 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
       if (s.settings.detail[key] === value) return s;
       const settings = { ...s.settings, detail: { ...s.settings.detail, [key]: value } };
       return commit(s.history, { label: DETAIL_SLIDERS[key].historyLabel ?? DETAIL_SLIDERS[key].label, key: `detail.${key}`, settings });
+    }),
+  setGradeWheel: (region, patch, prop) =>
+    set((s) => {
+      const wheel = { ...s.settings.colorGrading[region], ...patch };
+      if (jsonEqual(wheel, s.settings.colorGrading[region])) return s;
+      const settings = { ...s.settings, colorGrading: { ...s.settings.colorGrading, [region]: wheel } };
+      const label = prop === 'wheel' ? `${GRADE_REGION_LABELS[region]} color` : (gradeSliderDef(region, prop).historyLabel ?? 'Color grading');
+      return commit(s.history, { label, key: `colorGrading.${region}.${prop}`, settings });
+    }),
+  setGradeParam: (key, value) =>
+    set((s) => {
+      if (s.settings.colorGrading[key] === value) return s;
+      const settings = { ...s.settings, colorGrading: { ...s.settings.colorGrading, [key]: value } };
+      return commit(s.history, { label: GRADING_SLIDERS[key].historyLabel ?? key, key: `colorGrading.${key}`, settings });
     }),
   setEffect: (key, value) =>
     set((s) => {

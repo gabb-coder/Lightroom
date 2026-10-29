@@ -1,4 +1,5 @@
 import { clamp01, linearToSrgb, mapRgb, srgbToLinear, type Rgb } from './color';
+import { applyColorGrading, colorGradingParams, type ColorGradingParams } from './colorGrading';
 import { applyCurve, buildCurveLut, isIdentityCurveSet } from './curve';
 import { applyExposure, exposureGain } from './exposure';
 import { applyHsl, hslParams, type HslParams } from './hsl';
@@ -27,6 +28,8 @@ export interface PipelineParams {
   vibrance: number;
   saturationScale: number;
   bw: boolean;
+  /** Color grading wheels (engine/colorGrading.ts), or null when neutral. */
+  colorGrading: ColorGradingParams | null;
   /** Detail: unsharp mask on luminance (engine/sharpen.ts), or null when off. */
   sharpen: SharpenParams | null;
   /** Effects: film grain (engine/grain.ts), or null when off. */
@@ -48,6 +51,7 @@ export function pipelineParams(settings: EditSettings): PipelineParams {
     vibrance: vibranceAmount(b.vibrance),
     saturationScale: saturationScale(b.saturation),
     bw: b.treatment === 'bw',
+    colorGrading: colorGradingParams(settings.colorGrading),
     sharpen: sharpenParams(settings.detail),
     grain: grainParams(settings.effects),
     geometry: settings.geometry,
@@ -65,6 +69,7 @@ export function processLinear(c: Rgb, p: PipelineParams): Rgb {
   out = applyVibrance(out, p.vibrance);
   out = applySaturation(out, p.saturationScale);
   out = applyTreatment(out, p.bw);
+  out = applyColorGrading(out, p.colorGrading);
   return out;
 }
 

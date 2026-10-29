@@ -51,7 +51,7 @@ test.describe('Copy and paste settings', () => {
     await expect(dialog(page)).toContainText('Copy settings');
     await expect(dialog(page)).toContainText('Choose what to copy from IMG_0418.png.');
     const boxes = dialog(page).getByRole('checkbox');
-    await expect(boxes).toHaveCount(6);
+    await expect(boxes).toHaveCount(7);
     // Default: everything except crop and geometry.
     await expect(dialog(page).getByRole('checkbox', { name: 'Crop and geometry' })).not.toBeChecked();
     await expect(dialog(page).getByRole('checkbox', { name: 'Basic' })).toBeChecked();

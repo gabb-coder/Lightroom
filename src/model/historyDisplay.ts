@@ -10,8 +10,8 @@ export const CROP_ASPECT_LABELS: Readonly<Record<CropAspect, string>> = {
   custom: 'Custom',
 };
 import type { HistoryEntry } from './history';
-import { HSL_COLORS, type HslColor } from './editSettings';
-import { ANGLE_SLIDER, BASIC_SLIDERS, DETAIL_SLIDERS, EFFECTS_SLIDERS, formatSliderValue, hslSliderDef, type HslProp, type SliderDef } from './sliders';
+import { GRADE_REGIONS, HSL_COLORS, type GradeRegion, type HslColor } from './editSettings';
+import { ANGLE_SLIDER, BASIC_SLIDERS, DETAIL_SLIDERS, EFFECTS_SLIDERS, formatSliderValue, gradeSliderDef, GRADING_SLIDERS, hslSliderDef, type HslProp, type SliderDef } from './sliders';
 
 /** History key for a Basic panel control. */
 export type BasicHistoryKey = `basic.${BasicSliderKey | 'treatment'}`;
@@ -26,6 +26,18 @@ export function basicHistoryLabel(key: BasicSliderKey | 'treatment'): string {
 
 function isBasicSliderKey(key: string): key is BasicSliderKey {
   return key in BASIC_SLIDERS;
+}
+
+/** "210° 40" for a wheel drag, the slider's text otherwise. */
+function gradeValue(entry: HistoryEntry, first: string, prop: string | undefined): string {
+  const g = entry.settings.colorGrading;
+  if (first === 'blending' || first === 'balance') return formatSliderValue(GRADING_SLIDERS[first], g[first]);
+  if (!GRADE_REGIONS.includes(first as GradeRegion)) return '';
+  const region = first as GradeRegion;
+  const w = g[region];
+  if (prop === 'wheel') return `${Math.round(w.hue)}° ${Math.round(w.sat)}`;
+  if (prop === 'hue' || prop === 'sat' || prop === 'lum') return formatSliderValue(gradeSliderDef(region, prop), w[prop]);
+  return '';
 }
 
 function groupSliderValue(defs: Readonly<Record<string, SliderDef>>, values: object, field: string): string {
@@ -44,6 +56,8 @@ export function historyEntryValue(entry: HistoryEntry): string {
     const prop = hsl[2] as HslProp;
     return formatSliderValue(hslSliderDef(color, prop), entry.settings.hsl[color][prop]);
   }
+  const grade = /^colorGrading\.(\w+)(?:\.(\w+))?$/.exec(entry.key ?? '');
+  if (grade) return gradeValue(entry, grade[1] ?? '', grade[2]);
   const group = /^(detail|effects)\.(\w+)$/.exec(entry.key ?? '');
   if (group) return groupSliderValue(group[1] === 'detail' ? DETAIL_SLIDERS : EFFECTS_SLIDERS, group[1] === 'detail' ? entry.settings.detail : entry.settings.effects, group[2] ?? '');
   if (!entry.key?.startsWith('basic.')) return '';

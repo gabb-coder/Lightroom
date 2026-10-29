@@ -8,8 +8,12 @@ import {
   type Point,
   type Rect,
   type Treatment,
+  GRADE_REGIONS,
+  type ColorGradingSettings,
+  type GradeRegion,
+  type GradeWheel,
 } from './editSettings';
-import { ANGLE_SLIDER, BASIC_SLIDERS, DETAIL_SLIDERS, EFFECTS_SLIDERS, HSL_RANGE, snapSliderValue, type SliderDef } from './sliders';
+import { ANGLE_SLIDER, BASIC_SLIDERS, DETAIL_SLIDERS, EFFECTS_SLIDERS, gradeSliderDef, GRADING_SLIDERS, HSL_RANGE, snapSliderValue, type SliderDef } from './sliders';
 
 /**
  * Turns untrusted JSON (a preset file, a database row) into valid
@@ -64,6 +68,19 @@ function hslAdjust(raw: unknown): HslAdjust {
   return { hue: v(src.hue), sat: v(src.sat), lum: v(src.lum) };
 }
 
+function gradeWheel(region: GradeRegion, raw: unknown): GradeWheel {
+  const src = isObject(raw) ? raw : {};
+  // Hue wraps (360 → 0) rather than clamping.
+  const hue = finite(src.hue) ? ((Math.round(src.hue) % 360) + 360) % 360 : 0;
+  return { hue, sat: sliderValue(gradeSliderDef(region, 'sat'), src.sat, 0), lum: sliderValue(gradeSliderDef(region, 'lum'), src.lum, 0) };
+}
+
+function colorGrading(raw: unknown, fallback: ColorGradingSettings): ColorGradingSettings {
+  const src = isObject(raw) ? raw : {};
+  const wheels = Object.fromEntries(GRADE_REGIONS.map((r) => [r, gradeWheel(r, src[r])])) as Record<GradeRegion, GradeWheel>;
+  return { ...wheels, ...sliderGroup(GRADING_SLIDERS, src, { blending: fallback.blending, balance: fallback.balance }) };
+}
+
 export function parseEditSettings(raw: unknown): EditSettings {
   const d = defaultEditSettings();
   const src = isObject(raw) ? raw : {};
@@ -85,6 +102,7 @@ export function parseEditSettings(raw: unknown): EditSettings {
       b: points(curve.b, d.curve.b),
     },
     hsl: Object.fromEntries(HSL_COLORS.map((c) => [c, hslAdjust(hsl[c])])) as EditSettings['hsl'],
+    colorGrading: colorGrading(src.colorGrading, d.colorGrading),
     detail: sliderGroup(DETAIL_SLIDERS, src.detail, d.detail),
     effects: sliderGroup(EFFECTS_SLIDERS, src.effects, d.effects),
     geometry: {

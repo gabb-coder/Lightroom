@@ -5,6 +5,8 @@ import { BasicPanel } from './BasicPanel';
 import { GeometryPanel } from './GeometryPanel';
 import { ToneCurvePanel } from './ToneCurvePanel';
 import { ColorMixerPanel } from './ColorMixerPanel';
+import { ColorGradingPanel } from './ColorGradingPanel';
+import { colorGradingParams } from '../../engine/colorGrading';
 import { DetailPanel, EffectsPanel } from './DetailEffectsPanels';
 import { isIdentityCurveSet } from '../../engine/curve';
 import { hslParams } from '../../engine/hsl';
@@ -22,17 +24,19 @@ const SECTIONS = [
   { title: 'Basic', open: true },
   { title: 'Tone curve', open: false },
   { title: 'Color mixer', open: false },
+  { title: 'Color grading', open: false },
   { title: 'Detail', open: false },
   { title: 'Effects', open: false },
   { title: 'Crop and geometry', open: false },
 ] as const;
 
-type EditedFlags = { basicEdited: boolean; curveEdited: boolean; mixerEdited: boolean; detailEdited: boolean; effectsEdited: boolean };
+type EditedFlags = { basicEdited: boolean; curveEdited: boolean; mixerEdited: boolean; gradingEdited: boolean; detailEdited: boolean; effectsEdited: boolean };
 
 const EDITED_FLAGS: Partial<Record<string, (f: EditedFlags) => boolean>> = {
   Basic: (f) => f.basicEdited,
   'Tone curve': (f) => f.curveEdited,
   'Color mixer': (f) => f.mixerEdited,
+  'Color grading': (f) => f.gradingEdited,
   Detail: (f) => f.detailEdited,
   Effects: (f) => f.effectsEdited,
 };
@@ -41,6 +45,7 @@ const PANEL_BODIES: Partial<Record<string, () => React.ReactNode>> = {
   Basic: () => <BasicPanel />,
   'Tone curve': () => <ToneCurvePanel />,
   'Color mixer': () => <ColorMixerPanel />,
+  'Color grading': () => <ColorGradingPanel />,
   Detail: () => <DetailPanel />,
   Effects: () => <EffectsPanel />,
 };
@@ -50,6 +55,7 @@ export function DevelopRightPanel() {
   const geometryEdited = useDevelopStore((s) => !isIdentityGeometry(s.settings.geometry) || s.settings.geometry.aspect !== 'original');
   const curveEdited = useDevelopStore((s) => !isIdentityCurveSet(s.settings.curve));
   const mixerEdited = useDevelopStore((s) => hslParams(s.settings.hsl) !== null);
+  const gradingEdited = useDevelopStore((s) => colorGradingParams(s.settings.colorGrading) !== null || s.settings.colorGrading.blending !== 50 || s.settings.colorGrading.balance !== 0);
   const detailEdited = useDevelopStore((s) => isGroupEdited(DETAIL_SLIDERS, s.settings.detail));
   const effectsEdited = useDevelopStore((s) => isGroupEdited(EFFECTS_SLIDERS, s.settings.effects));
   const cropping = useDevelopStore((s) => s.cropping);
@@ -75,7 +81,7 @@ export function DevelopRightPanel() {
             <GeometryPanel />
           </PanelSection>
         ) : (
-          <PanelSection key={title} title={title} defaultOpen={open} edited={EDITED_FLAGS[title]?.({ basicEdited, curveEdited, mixerEdited, detailEdited, effectsEdited }) ?? false}>
+          <PanelSection key={title} title={title} defaultOpen={open} edited={EDITED_FLAGS[title]?.({ basicEdited, curveEdited, mixerEdited, gradingEdited, detailEdited, effectsEdited }) ?? false}>
             {PANEL_BODIES[title]?.() ?? null}
           </PanelSection>
         ),

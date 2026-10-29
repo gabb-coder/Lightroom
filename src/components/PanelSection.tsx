@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useId, useRef, useState, type ReactNode } from 'react';
 import { ChevronIcon } from './icons';
 import styles from './PanelSection.module.css';
 
@@ -35,16 +35,23 @@ export function PanelSection({
     onOpenChange?.(next);
   };
   const bodyId = useId();
+  const sectionRef = useRef<HTMLElement>(null);
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    // Opening a section near the bottom of a scrolling panel brings its contents into view.
+    if (next) requestAnimationFrame(() => sectionRef.current?.scrollIntoView({ block: 'nearest' }));
+  };
 
   return (
-    <section className={styles.section} aria-label={title}>
+    <section ref={sectionRef} className={styles.section} aria-label={title}>
       <div className={styles.headerRow}>
         <button
           type="button"
           className={styles.header}
           aria-expanded={open}
           aria-controls={bodyId}
-          onClick={() => setOpen(!open)}
+          onClick={toggle}
         >
           <ChevronIcon open={open} />
           <span className={styles.title}>{title}</span>

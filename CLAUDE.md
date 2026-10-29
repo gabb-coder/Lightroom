@@ -138,6 +138,11 @@ component library.
   geometry + vignette; with nothing after color, develop renders straight to
   the output (pixel-exact fast path). Sharpening defaults to 0 (design shows
   40); catalog v3 migrates the old stored default (`model/migrate.ts`).
+- Color grading (M14): `engine/colorGrading.ts` runs after B&W (so it
+  split-tones monochrome); zero-luma tint + gray offset on encoded values,
+  weighted by shadows/midtones/highlights curves (pivot = balance, width =
+  blending). Skipped when every wheel is neutral. Wheel math:
+  `model/colorWheel.ts` (hue counter-clockwise from the right).
 - Export (M7): `workers/export.worker.ts` runs the same `Renderer` on an
   OffscreenCanvas at full resolution (readPixels), resizes with the browser
   scaler only when asked, encodes, and copies EXIF per policy

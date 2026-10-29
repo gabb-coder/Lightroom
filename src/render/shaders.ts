@@ -225,6 +225,25 @@ vec3 applyVignette(vec3 c, float amount, float mask) {
 }
 `;
 
+/** engine/colorGrading.ts: gradeWeights, applyColorGrading (regions: shadows, midtones, highlights, global) */
+const COLOR_GRADING_GLSL = /* glsl */ `
+float gradeSmooth(float a, float b, float x) {
+  float t = clamp((x - a) / (b - a), 0.0, 1.0);
+  return t * t * (3.0 - 2.0 * t);
+}
+vec3 applyColorGrading(vec3 c) {
+  if (!u_cgOn) return c;
+  vec3 e = linearToSrgb(clamp(c, 0.0, 1.0));
+  float y = luminance(e);
+  float wh = gradeSmooth(u_cgPivot - u_cgWidth, u_cgPivot + u_cgWidth, y);
+  float wm = 1.0 - gradeSmooth(0.0, u_cgMidWidth, abs(y - u_cgPivot));
+  float ws = 1.0 - wh;
+  vec3 tint = u_cgTint[3] + ws * u_cgTint[0] + wm * u_cgTint[1] + wh * u_cgTint[2];
+  float lum = u_cgLum[3] + ws * u_cgLum[0] + wm * u_cgLum[1] + wh * u_cgLum[2];
+  return srgbToLinear(clamp(e + tint + lum, 0.0, 1.0));
+}
+`;
+
 export const VERTEX_SHADER = /* glsl */ `#version 300 es
 // Fullscreen triangle from gl_VertexID; no vertex buffers needed.
 void main() {
@@ -259,6 +278,12 @@ uniform bool u_hslOn;
 uniform float u_hslHue[8];
 uniform float u_hslSat[8];
 uniform float u_hslLum[8];
+uniform bool u_cgOn;
+uniform vec3 u_cgTint[4];
+uniform float u_cgLum[4];
+uniform float u_cgPivot;
+uniform float u_cgWidth;
+uniform float u_cgMidWidth;
 
 out vec4 outColor;
 ${COLOR_GLSL}
@@ -267,6 +292,7 @@ ${TONE_GLSL}
 ${CURVE_GLSL}
 ${HSL_GLSL}
 ${COLOR_ADJUST_GLSL}
+${COLOR_GRADING_GLSL}
 void main() {
   ivec2 size = textureSize(u_source, 0);
   ivec2 p = ivec2(gl_FragCoord.xy);
@@ -282,6 +308,7 @@ void main() {
   c = applyVibrance(c, u_vibrance);
   c = applySaturation(c, u_saturationScale);
   c = applyTreatment(c, u_bw);
+  c = applyColorGrading(c);
   outColor = vec4(linearToSrgb(clamp(c, 0.0, 1.0)), src.a);
 }
 `;

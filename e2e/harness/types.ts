@@ -19,6 +19,7 @@ export interface GpuExtra {
   hsl?: Partial<EditSettings['hsl']>;
   detail?: Partial<EditSettings['detail']>;
   effects?: Partial<EditSettings['effects']>;
+  colorGrading?: Partial<EditSettings['colorGrading']>;
   proxy?: boolean;
 }
 

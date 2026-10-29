@@ -8,20 +8,21 @@ import type { EditSettings, Geometry } from './editSettings';
  * exactly those panels on the target photo.
  */
 
-export type SettingsPanel = 'basic' | 'curve' | 'hsl' | 'detail' | 'effects' | 'geometry';
+export type SettingsPanel = 'basic' | 'curve' | 'hsl' | 'colorGrading' | 'detail' | 'effects' | 'geometry';
 
 /** Panels in design order, with their Develop panel titles. */
 export const SETTINGS_PANELS: readonly { id: SettingsPanel; label: string }[] = [
   { id: 'basic', label: 'Basic' },
   { id: 'curve', label: 'Tone curve' },
   { id: 'hsl', label: 'Color mixer' },
+  { id: 'colorGrading', label: 'Color grading' },
   { id: 'detail', label: 'Detail' },
   { id: 'effects', label: 'Effects' },
   { id: 'geometry', label: 'Crop and geometry' },
 ];
 
 /** Everything except crop and geometry, like Lightroom: a crop rarely fits another photo. */
-export const DEFAULT_COPY_PANELS: readonly SettingsPanel[] = ['basic', 'curve', 'hsl', 'detail', 'effects'];
+export const DEFAULT_COPY_PANELS: readonly SettingsPanel[] = ['basic', 'curve', 'hsl', 'colorGrading', 'detail', 'effects'];
 
 /** Settings taken from one photo, to paste onto others. */
 export interface SettingsClipboard {

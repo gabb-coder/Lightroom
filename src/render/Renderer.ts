@@ -24,6 +24,12 @@ const DEVELOP_UNIFORMS = [
   'hslHue',
   'hslSat',
   'hslLum',
+  'cgOn',
+  'cgTint',
+  'cgLum',
+  'cgPivot',
+  'cgWidth',
+  'cgMidWidth',
 ] as const;
 const BLUR_UNIFORMS = ['image', 'taps', 'weights'] as const;
 const DETAIL_UNIFORMS = ['image', 'blur', 'taps', 'weights', 'sharpenOn', 'sharpenAmount', 'grainOn', 'grainAmount', 'grainCell', 'scale'] as const;
@@ -259,7 +265,22 @@ export class Renderer {
     gl.uniform1fv(u.hslHue, params.hsl?.hue ?? ZERO8);
     gl.uniform1fv(u.hslSat, params.hsl?.sat ?? ZERO8);
     gl.uniform1fv(u.hslLum, params.hsl?.lum ?? ZERO8);
+    this.setColorGrading(params);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  private setColorGrading(params: PipelineParams): void {
+    const { gl } = this;
+    const u = this.developUniforms;
+    const cg = params.colorGrading;
+    gl.uniform1i(u.cgOn, cg ? 1 : 0);
+    if (!cg) return;
+    const regions = [cg.shadows, cg.midtones, cg.highlights, cg.global];
+    gl.uniform3fv(u.cgTint, regions.flatMap((r) => [...r.tint]));
+    gl.uniform1fv(u.cgLum, regions.map((r) => r.lum));
+    gl.uniform1f(u.cgPivot, cg.pivot);
+    gl.uniform1f(u.cgWidth, cg.width);
+    gl.uniform1f(u.cgMidWidth, cg.midWidth);
   }
 
   private geometryPass(image: SizedTexture, params: PipelineParams, target: Target): void {

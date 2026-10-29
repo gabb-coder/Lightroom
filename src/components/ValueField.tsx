@@ -36,7 +36,7 @@ export function ValueField({ def, value, disabled, onCommit }: ValueFieldProps) 
         className={`num ${styles.valueInput}`}
         type="text"
         inputMode="decimal"
-        aria-label={`${def.label} value`}
+        aria-label={`${def.ariaLabel ?? def.label} value`}
         value={draft}
         autoFocus
         onFocus={(e) => e.currentTarget.select()}
@@ -53,7 +53,7 @@ export function ValueField({ def, value, disabled, onCommit }: ValueFieldProps) 
       className={`num ${styles.value}`}
       data-edited={edited}
       disabled={disabled}
-      aria-label={`${def.label} value ${text}, click to type`}
+      aria-label={`${def.ariaLabel ?? def.label} value ${text}, click to type`}
       data-testid={`value-${def.id}`}
       onClick={() => setDraft(text)}
     >

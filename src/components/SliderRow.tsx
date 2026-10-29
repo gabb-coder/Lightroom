@@ -55,7 +55,8 @@ export function SliderRow({ def, value, disabled = false, onChange, onDragStart,
   return (
     <div className={styles.row} data-testid={`slider-${def.id}`}>
       <label
-        htmlFor={inputId}
+        // With an explicit accessible name the short label stays visual only.
+        htmlFor={def.ariaLabel ? undefined : inputId}
         className={styles.label}
         data-disabled={disabled}
         title="Drag to adjust, double-click to reset"
@@ -75,6 +76,7 @@ export function SliderRow({ def, value, disabled = false, onChange, onDragStart,
           max={def.max}
           step={def.step}
           value={value}
+          aria-label={def.ariaLabel}
           aria-valuetext={formatSliderValue(def, value)}
           disabled={disabled}
           onChange={handleChange}
