@@ -76,3 +76,25 @@ describe('library store', () => {
     expect(store().selectedId).toBeNull();
   });
 });
+
+describe('collection views (M12)', () => {
+  const trip = { id: 't', name: 'Trip', photoIds: ['d', 'a', 'gone'], createdAt: 0 };
+
+  it('shows only member photos that still exist', () => {
+    expect(visiblePhotos(photos, 'collection:t', [trip]).map((p) => p.id)).toEqual(['a', 'd']);
+    expect(visiblePhotos(photos, 'collection:missing', [trip])).toEqual([]);
+  });
+
+  it('keeps the selection while a new collection is on its way, and falls back to all photos when one is deleted', () => {
+    const store = useLibraryStore.getState();
+    store.setPhotos(photos);
+    store.setCollections([]);
+    store.select('a');
+    store.setView('collection:t');
+    expect(useLibraryStore.getState().selection.ids).toEqual(['a']);
+    store.setCollections([trip]);
+    expect(useLibraryStore.getState().selection.ids).toEqual(['a']);
+    store.setCollections([]);
+    expect(useLibraryStore.getState().view).toBe('all');
+  });
+});

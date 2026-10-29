@@ -1,10 +1,11 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type UIEvent, type DragEvent } from 'react';
 import { EditedIcon } from '../../components/EditedBadge';
 import { PhotoThumb } from '../../components/PhotoThumb';
 import { useElementSize } from '../../hooks/useElementSize';
 import type { PhotoRecord } from '../../db/db';
 import { LabelDot, PickedBadge, RatingText, RejectedBadge } from '../../components/OrganizeBadges';
 import type { ClickModifiers } from '../../model/selection';
+import { PHOTO_DRAG_TYPE } from '../../state/collectionActions';
 import { isMacPlatform } from '../../shortcuts/platform';
 import { useAppStore } from '../../state/appStore';
 import { useLibraryStore } from '../../state/libraryStore';
@@ -21,6 +22,14 @@ interface CellProps {
 
 const MAC = isMacPlatform();
 
+/** Dragging a selected photo drags the whole selection; an unselected one drags just itself (onto a collection). */
+function startPhotoDrag(e: DragEvent, id: string): void {
+  const { selection } = useLibraryStore.getState();
+  const ids = selection.ids.includes(id) ? selection.ids : [id];
+  e.dataTransfer.setData(PHOTO_DRAG_TYPE, JSON.stringify(ids));
+  e.dataTransfer.effectAllowed = 'copy';
+}
+
 const GridCell = memo(function GridCell({ photo, number, selected, metrics, onPick }: CellProps) {
   const select = useLibraryStore((s) => s.select);
   const setModule = useAppStore((s) => s.setModule);
@@ -34,6 +43,8 @@ const GridCell = memo(function GridCell({ photo, number, selected, metrics, onPi
       data-testid="grid-cell"
       data-flag={photo.flag ?? 'none'}
       onClick={(e) => onPick(photo.id, { toggle: MAC ? e.metaKey : e.ctrlKey, range: e.shiftKey })}
+      draggable
+      onDragStart={(e) => startPhotoDrag(e, photo.id)}
       onDoubleClick={() => {
         select(photo.id);
         setModule('develop');

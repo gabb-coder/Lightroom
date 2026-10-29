@@ -125,3 +125,12 @@ export function RecentIcon() {
     </svg>
   );
 }
+
+export function CollectionIcon() {
+  return (
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
+      <rect x="2" y="5" width="12" height="9" rx="1" />
+      <path d="M4 3h8M6 1.5h4" strokeLinecap="round" />
+    </svg>
+  );
+}

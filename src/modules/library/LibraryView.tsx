@@ -1,4 +1,4 @@
-import { ImportIcon, PhotosIcon, RecentIcon } from '../../components/icons';
+import { ImportIcon } from '../../components/icons';
 import { PhotoThumb } from '../../components/PhotoThumb';
 import controls from '../../components/controls.module.css';
 import { useFileDrop } from '../../components/useFileDrop';
@@ -8,42 +8,15 @@ import { useAppStore } from '../../state/appStore';
 import { openImportPicker } from '../../state/importActions';
 import { COLOR_LABELS, labelInfo } from '../../model/organize';
 import { setColorLabel } from '../../state/organizeActions';
-import { latestBatchId, selectLibraryList, THUMB_SIZE, useLibraryStore, type CatalogView } from '../../state/libraryStore';
+import { selectLibraryList, THUMB_SIZE, useLibraryStore } from '../../state/libraryStore';
 import { LibraryFilterBar } from './LibraryFilterBar';
+import { CatalogPanel } from './CatalogPanel';
+import { CollectionsPanel } from './CollectionsPanel';
 import { KeywordsPanel } from './KeywordsPanel';
 import { openCopyDialog, openSyncDialog, pasteSettings, useCopyPasteStore } from '../../state/copyPasteStore';
 import layout from '../layout.module.css';
 import { LibraryGrid } from './LibraryGrid';
 import styles from './LibraryView.module.css';
-
-function CatalogPanel() {
-  const photos = useLibraryStore((s) => s.photos);
-  const view = useLibraryStore((s) => s.view);
-  const setView = useLibraryStore((s) => s.setView);
-  const batch = latestBatchId(photos);
-  const items: { id: CatalogView; label: string; Icon: () => React.JSX.Element; count: number }[] = [
-    { id: 'all', label: 'All photographs', Icon: PhotosIcon, count: photos.length },
-    { id: 'previous', label: 'Previous import', Icon: RecentIcon, count: photos.filter((p) => p.batchId === batch).length },
-  ];
-  return (
-    <aside className={`${layout.side} ${layout.left} ${styles.catalog}`} aria-label="Catalog" data-testid="left-panel">
-      <div className={`group-label ${styles.navGroup}`}>Catalog</div>
-      {items.map(({ id, label, Icon, count }) => (
-        <button
-          key={id}
-          type="button"
-          className={styles.navItem}
-          aria-current={view === id ? 'page' : undefined}
-          onClick={() => setView(id)}
-        >
-          <Icon />
-          <span className={styles.navLabel}>{label}</span>
-          <span className={`num ${styles.navCount}`}>{count}</span>
-        </button>
-      ))}
-    </aside>
-  );
-}
 
 /** Empty-library drop zone (design/Kit.dc.html "Empty library"). */
 function DropZone() {
@@ -217,6 +190,7 @@ function DetailsPanel() {
         )}
       </section>
       <KeywordsPanel />
+      <CollectionsPanel />
       <DevelopSettingsPanel />
     </aside>
   );

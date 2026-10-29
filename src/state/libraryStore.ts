@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { PhotoRecord } from '../db/db';
+import type { CollectionRecord } from '../model/collections';
 import {
   EMPTY_FILTER,
   filmstripFilter,
@@ -11,13 +12,23 @@ import {
 } from '../model/organize';
 import { clickSelection, EMPTY_SELECTION, pruneSelection, selectOnly, type ClickModifiers, type Selection } from '../model/selection';
 
-export type CatalogView = 'all' | 'previous';
+/** "All photographs", "Previous import", or a collection (`collection:<id>`). */
+export type CatalogView = 'all' | 'previous' | `collection:${string}`;
+
+export const collectionView = (id: string): CatalogView => `collection:${id}`;
+
+/** The collection id a view shows, or null. */
+export function viewCollectionId(view: CatalogView): string | null {
+  return view.startsWith('collection:') ? view.slice('collection:'.length) : null;
+}
 
 export const THUMB_SIZE = { min: 140, max: 320, step: 10, default: 190 } as const;
 
 interface LibraryState {
   /** All photos in import order, kept in sync with the database. */
   photos: readonly PhotoRecord[];
+  /** All collections, kept in sync with the database. */
+  collections: readonly CollectionRecord[];
   /** False until the catalog has been read once. */
   loaded: boolean;
   selection: Selection;
@@ -33,6 +44,7 @@ interface LibraryState {
   /** Last import problem (skipped or unreadable files). */
   importMessage: string | null;
   setPhotos: (photos: readonly PhotoRecord[]) => void;
+  setCollections: (collections: readonly CollectionRecord[]) => void;
   /** Selects exactly one photo (or none). */
   select: (id: string | null) => void;
   /** Grid click with Ctrl/Cmd (toggle) and Shift (range) in the order shown. */
@@ -52,14 +64,19 @@ export function latestBatchId(photos: readonly PhotoRecord[]): string | null {
   return photos.length ? (photos[photos.length - 1]?.batchId ?? null) : null;
 }
 
-/** Photos of the current catalog view ("All photographs" / "Previous import"). */
-export function visiblePhotos(photos: readonly PhotoRecord[], view: CatalogView): readonly PhotoRecord[] {
+/** Photos of the current catalog view ("All photographs", "Previous import" or a collection). */
+export function visiblePhotos(photos: readonly PhotoRecord[], view: CatalogView, collections: readonly CollectionRecord[] = []): readonly PhotoRecord[] {
   if (view === 'all') return photos;
+  const collectionId = viewCollectionId(view);
+  if (collectionId !== null) {
+    const members = new Set(collections.find((c) => c.id === collectionId)?.photoIds ?? []);
+    return photos.filter((p) => members.has(p.id));
+  }
   const batch = latestBatchId(photos);
   return photos.filter((p) => p.batchId === batch);
 }
 
-type ListInputs = Pick<LibraryState, 'photos' | 'view' | 'filter' | 'sort'>;
+type ListInputs = Pick<LibraryState, 'photos' | 'view' | 'filter' | 'sort' | 'collections'>;
 
 /** Caches the last result so selectors return a stable array until an input changes. */
 function memoLast<S, R>(inputs: (s: S) => readonly unknown[], compute: (s: S) => R): (s: S) => R {
@@ -77,8 +94,8 @@ function memoLast<S, R>(inputs: (s: S) => readonly unknown[], compute: (s: S) =>
 
 /** The grid: catalog view, then filters, then sort. */
 export const selectLibraryList = memoLast(
-  (s: ListInputs) => [s.photos, s.view, s.filter, s.sort],
-  (s) => sortPhotos(filterPhotos(visiblePhotos(s.photos, s.view), s.filter), s.sort),
+  (s: ListInputs) => [s.photos, s.view, s.filter, s.sort, s.collections],
+  (s) => sortPhotos(filterPhotos(visiblePhotos(s.photos, s.view, s.collections), s.filter), s.sort),
 );
 
 /** The Develop filmstrip: the grid list narrowed by the filmstrip's quick filter. */
@@ -92,11 +109,15 @@ const withSelection = (selection: Selection) => ({ selection, selectedId: select
 /** Keeps the selection to photos still shown after a filter/view change. */
 function pruned(s: LibraryState, patch: Partial<LibraryState>) {
   const next = { ...s, ...patch };
+  // A just-created collection reaches the store after its view is shown: keep the selection until it does.
+  const collectionId = viewCollectionId(next.view);
+  if (collectionId !== null && !next.collections.some((c) => c.id === collectionId)) return patch;
   return { ...patch, ...withSelection(pruneSelection(s.selection, selectLibraryList(next).map((p) => p.id))) };
 }
 
 export const useLibraryStore = create<LibraryState>()((set) => ({
   photos: [],
+  collections: [],
   loaded: false,
   selection: EMPTY_SELECTION,
   selectedId: null,
@@ -112,6 +133,13 @@ export const useLibraryStore = create<LibraryState>()((set) => ({
       // Drop selected photos that no longer exist (not ones merely filtered out).
       const selection = pruneSelection(s.selection, photos.map((p) => p.id));
       return { photos, loaded: true, ...withSelection(selection) };
+    }),
+  setCollections: (collections) =>
+    set((s) => {
+      // A deleted collection's view falls back to all photographs.
+      const id = viewCollectionId(s.view);
+      const view = id !== null && !collections.some((c) => c.id === id) ? 'all' : s.view;
+      return pruned(s, { collections, view });
     }),
   select: (id) => set(withSelection(id ? selectOnly(id) : EMPTY_SELECTION)),
   clickPhoto: (id, mods, order) => set((s) => withSelection(clickSelection(s.selection, order, id, mods))),

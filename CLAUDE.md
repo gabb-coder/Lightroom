@@ -104,6 +104,11 @@ component library.
   (`model/organize.ts`). Keywords live on `PhotoRecord.keywords`
   (`model/keywords.ts` normalizes, case-insensitive). The filter-bar row
   must stay one line at 1440px (e2e checks it). V2 plan: `docs/V2_PLAN.md`.
+- Collections (M12): `model/collections.ts`, DB v4 table `collections`
+  (rows list photo ids; nothing about a collection ever deletes a photo).
+  The catalog view can be `collection:<id>` (`visiblePhotos`); actions in
+  `state/collectionActions.ts`; grid cells drag their selection onto a
+  collection (`PHOTO_DRAG_TYPE`).
 - Library grid is virtualized (`modules/library/gridLayout.ts` math mirrors
   the CSS); keep cell heights explicit so the math stays exact.
 - Geometry (M6): `engine/geometry.ts` maps output px -> source px (affine)

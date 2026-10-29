@@ -3,6 +3,7 @@ import type { History } from '../model/history';
 import { migrateHistorySharpenDefault, migrateSharpenDefault } from '../model/migrate';
 import type { ExportPreset } from '../model/exportOptions';
 import type { Preset } from '../model/presets';
+import type { CollectionRecord } from '../model/collections';
 
 export type Flag = 'pick' | 'reject';
 
@@ -80,6 +81,7 @@ export class CatalogDb extends Dexie {
   edits!: Table<EditRecord, string>;
   presets!: Table<Preset, string>;
   exportPresets!: Table<ExportPreset, string>;
+  collections!: Table<CollectionRecord, string>;
 
   constructor(name = DB_NAME) {
     super(name);
@@ -103,6 +105,8 @@ export class CatalogDb extends Dexie {
           p.settings = migrateSharpenDefault(p.settings);
         });
       });
+    // v4 (M12): collections (lists of photo ids).
+    this.version(4).stores({ collections: 'id' });
   }
 }
 

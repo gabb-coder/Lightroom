@@ -31,6 +31,10 @@ export function startCatalog(): void {
     next: (photos) => useLibraryStore.getState().setPhotos(photos),
     error: () => useLibraryStore.getState().setPhotos([]),
   });
+  liveQuery(() => db.collections.toArray()).subscribe({
+    next: (collections) => useLibraryStore.getState().setCollections(collections),
+    error: () => useLibraryStore.getState().setCollections([]),
+  });
   void loadSavedPresets().catch(() => undefined);
   void loadExportPresets().catch(() => undefined);
   void backfillExif().catch(() => undefined);
