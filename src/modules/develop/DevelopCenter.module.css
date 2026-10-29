@@ -114,3 +114,21 @@
 .flag:disabled {
   opacity: 0.5;
 }
+
+.labelButton {
+  width: 14px;
+  height: 14px;
+  margin: 0 3px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  align-self: center;
+}
+
+.labelButton[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--color-canvas), 0 0 0 4px var(--color-white);
+}
+
+.labelButton:disabled {
+  opacity: 0.35;
+}

@@ -78,6 +78,11 @@ component library.
   debounced edit persistence (`flushEdits()`), edited-thumbnail updater.
 - `src/workers/thumbnail.worker.ts` decode + EXIF date + JPEG thumbnails, and
   JPEG-encodes rendered previews for edited thumbnails.
+- Organize (M5): `model/organize.ts` (filter/sort/filmstrip filter, pure),
+  `model/selection.ts` (click/toggle/range). Lists come from memoized
+  selectors `selectLibraryList` / `selectFilmstripList` — never build a new
+  array inside a zustand selector. Ratings/flags/labels are catalog data
+  written via `state/organizeActions.ts`, not edit history.
 - Library grid is virtualized (`modules/library/gridLayout.ts` math mirrors
   the CSS); keep cell heights explicit so the math stays exact.
 - `src/render/shaders.ts` GLSL twin of each engine stage; `Renderer.ts` owns

@@ -5,7 +5,10 @@ import { useFileDrop } from '../../components/useFileDrop';
 import { formatBytes, formatDateTime } from '../../model/format';
 import { useAppStore } from '../../state/appStore';
 import { openImportPicker } from '../../state/importActions';
-import { latestBatchId, THUMB_SIZE, useLibraryStore, visiblePhotos, type CatalogView } from '../../state/libraryStore';
+import { COLOR_LABELS, labelInfo } from '../../model/organize';
+import { setColorLabel } from '../../state/organizeActions';
+import { latestBatchId, selectLibraryList, THUMB_SIZE, useLibraryStore, type CatalogView } from '../../state/libraryStore';
+import { LibraryFilterBar } from './LibraryFilterBar';
 import layout from '../layout.module.css';
 import { LibraryGrid } from './LibraryGrid';
 import styles from './LibraryView.module.css';
@@ -56,7 +59,7 @@ function DropZone() {
 }
 
 function StatusBar({ shown, total }: { shown: number; total: number }) {
-  const selected = useLibraryStore((s) => (s.selectedId ? 1 : 0));
+  const selected = useLibraryStore((s) => s.selection.ids.length);
   const importing = useLibraryStore((s) => s.importing);
   const message = useLibraryStore((s) => s.importMessage);
   const thumbSize = useLibraryStore((s) => s.thumbSize);
@@ -93,8 +96,31 @@ function StatusBar({ shown, total }: { shown: number; total: number }) {
   );
 }
 
+/** Sets the color label of every selected photo (click the current label to clear it). */
+function LabelPicker() {
+  const ids = useLibraryStore((s) => s.selection.ids);
+  const current = useLibraryStore((s) => s.photos.find((p) => p.id === s.selectedId)?.colorLabel ?? null);
+  return (
+    <div className={styles.labelPicker} role="group" aria-label="Set color label">
+      {COLOR_LABELS.map((l) => (
+        <button
+          key={l.id}
+          type="button"
+          className={styles.labelSwatch}
+          style={{ background: l.color }}
+          aria-label={`${l.name} label`}
+          aria-pressed={current === l.id}
+          disabled={ids.length === 0}
+          onClick={() => void setColorLabel(ids, current === l.id ? null : l.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
 function DetailsPanel() {
   const photo = useLibraryStore((s) => s.photos.find((p) => p.id === s.selectedId) ?? null);
+  const selectedCount = useLibraryStore((s) => s.selection.ids.length);
   const setModule = useAppStore((s) => s.setModule);
   const rows: [string, string][] = photo
     ? [
@@ -102,6 +128,9 @@ function DetailsPanel() {
         ['Captured', formatDateTime(photo.captureDate)],
         ['Dimensions', `${photo.width} × ${photo.height}`],
         ['File size', formatBytes(photo.size)],
+        ['Rating', photo.rating ? `${photo.rating} of 5` : 'None'],
+        ['Flag', photo.flag === 'pick' ? 'Picked' : photo.flag === 'reject' ? 'Rejected' : 'None'],
+        ['Label', photo.colorLabel ? (labelInfo(photo.colorLabel)?.name ?? photo.colorLabel) : 'None'],
         ['Imported', formatDateTime(photo.importedAt)],
       ]
     : [];
@@ -114,16 +143,22 @@ function DetailsPanel() {
         </button>
       </section>
       <section className={styles.metadata} aria-label="Metadata">
-        <div className={styles.metaTitle}>Metadata</div>
+        <div className={styles.metaTitle}>
+          Metadata
+          {selectedCount > 1 && <span className={`num ${styles.metaCount}`}>{selectedCount} selected</span>}
+        </div>
         {photo ? (
-          <dl className={styles.metaList}>
-            {rows.map(([k, v]) => (
-              <div key={k} className={styles.metaRow}>
-                <dt>{k}</dt>
-                <dd className="num">{v}</dd>
-              </div>
-            ))}
-          </dl>
+          <>
+            <dl className={styles.metaList}>
+              {rows.map(([k, v]) => (
+                <div key={k} className={styles.metaRow}>
+                  <dt>{k}</dt>
+                  <dd className="num">{v}</dd>
+                </div>
+              ))}
+            </dl>
+            <LabelPicker />
+          </>
         ) : (
           <p className={styles.metaEmpty}>No photo selected</p>
         )}
@@ -132,11 +167,22 @@ function DetailsPanel() {
   );
 }
 
+function NoMatches() {
+  const clearFilter = useLibraryStore((s) => s.clearFilter);
+  return (
+    <div className={styles.noMatches} data-testid="no-matches">
+      <span className={styles.noMatchesTitle}>No photos match these filters</span>
+      <button type="button" className={controls.button} onClick={clearFilter}>
+        Clear filters
+      </button>
+    </div>
+  );
+}
+
 export function LibraryView() {
   const all = useLibraryStore((s) => s.photos);
   const loaded = useLibraryStore((s) => s.loaded);
-  const view = useLibraryStore((s) => s.view);
-  const photos = visiblePhotos(all, view);
+  const photos = useLibraryStore(selectLibraryList);
   const { dragOver, handlers } = useFileDrop();
 
   return (
@@ -148,7 +194,10 @@ export function LibraryView() {
             <DropZone />
           </div>
         ) : (
-          <LibraryGrid photos={photos} />
+          <>
+            <LibraryFilterBar />
+            {photos.length === 0 && loaded ? <NoMatches /> : <LibraryGrid photos={photos} />}
+          </>
         )}
         <StatusBar shown={photos.length} total={all.length} />
       </main>

@@ -1,33 +1,10 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { canvasPixels, slider, waitForFullRender } from './utils/develop';
 import { withExifDate } from './utils/jpeg';
-import { countDifferentPixels, encodePng, makeTestPhoto } from './utils/png';
+import { countDifferentPixels } from './utils/png';
+import { cells, gotoLibrary, importViaButton, testFiles } from './utils/library';
 
-function testFiles(count: number, width = 240, height = 160) {
-  return Array.from({ length: count }, (_, i) => {
-    const photo = makeTestPhoto(width, height);
-    // Shift each photo's colors so thumbnails differ.
-    for (let p = 0; p < photo.data.length; p += 4) photo.data[p] = ((photo.data[p] ?? 0) + i * 37) % 256;
-    return { name: `IMG_${String(418 + i).padStart(4, '0')}.png`, mimeType: 'image/png', buffer: encodePng(photo) };
-  });
-}
 
-async function gotoLibrary(page: Page) {
-  await page.goto('/');
-  await page.getByRole('tab', { name: 'Library' }).click();
-  await expect(page.getByTestId('library-view')).toBeVisible();
-}
-
-/** Imports through the top-bar button and waits until the library holds `total` photos. */
-async function importViaButton(page: Page, files: ReturnType<typeof testFiles>, total = files.length) {
-  const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Import', exact: true }).click();
-  await (await chooser).setFiles(files);
-  await expect(page.getByTestId('status-bar')).toContainText(`of ${total} photos`);
-  await expect(page.getByTestId('status-bar')).not.toContainText('Importing');
-}
-
-const cells = (page: Page) => page.getByTestId('grid-cell');
 
 test.describe('Library', () => {
   test('imports several photos with the Import button and shows them in the grid', async ({ page }) => {

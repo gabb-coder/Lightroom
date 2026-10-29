@@ -3,6 +3,9 @@ import { EditedIcon } from '../../components/EditedBadge';
 import { PhotoThumb } from '../../components/PhotoThumb';
 import { useElementSize } from '../../hooks/useElementSize';
 import type { PhotoRecord } from '../../db/db';
+import { LabelDot, PickedBadge, RatingText, RejectedBadge } from '../../components/OrganizeBadges';
+import type { ClickModifiers } from '../../model/selection';
+import { isMacPlatform } from '../../shortcuts/platform';
 import { useAppStore } from '../../state/appStore';
 import { useLibraryStore } from '../../state/libraryStore';
 import { GRID_GAP, GRID_PADDING, gridMetrics, rowTop, visibleRows, type GridMetrics } from './gridLayout';
@@ -13,9 +16,12 @@ interface CellProps {
   number: number;
   selected: boolean;
   metrics: GridMetrics;
+  onPick: (id: string, mods: ClickModifiers) => void;
 }
 
-const GridCell = memo(function GridCell({ photo, number, selected, metrics }: CellProps) {
+const MAC = isMacPlatform();
+
+const GridCell = memo(function GridCell({ photo, number, selected, metrics, onPick }: CellProps) {
   const select = useLibraryStore((s) => s.select);
   const setModule = useAppStore((s) => s.setModule);
   return (
@@ -26,7 +32,8 @@ const GridCell = memo(function GridCell({ photo, number, selected, metrics }: Ce
       aria-pressed={selected}
       aria-label={photo.fileName}
       data-testid="grid-cell"
-      onClick={() => select(photo.id)}
+      data-flag={photo.flag ?? 'none'}
+      onClick={(e) => onPick(photo.id, { toggle: MAC ? e.metaKey : e.ctrlKey, range: e.shiftKey })}
       onDoubleClick={() => {
         select(photo.id);
         setModule('develop');
@@ -40,11 +47,12 @@ const GridCell = memo(function GridCell({ photo, number, selected, metrics }: Ce
         <PhotoThumb photo={photo} dimmed={photo.flag === 'reject'} />
       </span>
       <span className={styles.cellFooter}>
-        <span className={styles.rating} aria-label={photo.rating ? `${photo.rating} star rating` : 'No rating'}>
-          {photo.rating ? '★'.repeat(photo.rating) : '·  ·  ·'}
-        </span>
+        <RatingText rating={photo.rating} className={styles.rating} />
         <span className={styles.spacer} />
         {photo.edited && <EditedIcon />}
+        {photo.flag === 'pick' && <PickedBadge />}
+        {photo.flag === 'reject' && <RejectedBadge />}
+        {photo.colorLabel && <LabelDot label={photo.colorLabel} />}
       </span>
     </button>
   );
@@ -59,6 +67,11 @@ export function LibraryGrid({ photos }: { photos: readonly PhotoRecord[] }) {
   const size = useElementSize(scrollRef);
   const cellMin = useLibraryStore((s) => s.thumbSize);
   const selectedId = useLibraryStore((s) => s.selectedId);
+  const selection = useLibraryStore((s) => s.selection);
+  const clickPhoto = useLibraryStore((s) => s.clickPhoto);
+  const order = useMemo(() => photos.map((p) => p.id), [photos]);
+  const selectedIds = useMemo(() => new Set(selection.ids), [selection]);
+  const onPick = useCallback((id: string, mods: ClickModifiers) => clickPhoto(id, mods, order), [clickPhoto, order]);
   const contentWidth = Math.max(0, size.width - GRID_PADDING * 2);
   const metrics = useMemo(() => gridMetrics(contentWidth, cellMin), [contentWidth, cellMin]);
   const [scrollTop, setScrollTop] = useState(0);
@@ -108,8 +121,9 @@ export function LibraryGrid({ photos }: { photos: readonly PhotoRecord[] }) {
             key={photo.id}
             photo={photo}
             number={row * metrics.columns + i + 1}
-            selected={photo.id === selectedId}
+            selected={selectedIds.has(photo.id)}
             metrics={metrics}
+            onPick={onPick}
           />
         ))}
       </div>,

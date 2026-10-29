@@ -5,7 +5,9 @@ import { createBeforeAfterKeys } from './beforeAfterKeys';
 import { matchHistoryShortcut } from './historyShortcuts';
 import { isMacPlatform } from './platform';
 import { isArrowKeyTarget, isTextEntryTarget, type TargetLike } from './isTextEntryTarget';
-import { neighborId, useLibraryStore, visiblePhotos } from '../state/libraryStore';
+import { neighborId, selectFilmstripList, selectLibraryList, useLibraryStore } from '../state/libraryStore';
+import { organizeTargets, setFlag, setRating } from '../state/organizeActions';
+import { matchOrganizeShortcut } from './organizeShortcuts';
 
 const MODULE_KEYS: Readonly<Record<string, AppModule>> = {
   g: 'library',
@@ -40,11 +42,20 @@ export function useGlobalShortcuts(): void {
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         if (isArrowKeyTarget(event.target as TargetLike | null)) return;
-        const { photos, view, selectedId, select } = useLibraryStore.getState();
-        const next = neighborId(visiblePhotos(photos, view), selectedId, event.key === 'ArrowLeft' ? -1 : 1);
+        const library = useLibraryStore.getState();
+        const list = useAppStore.getState().module === 'develop' ? selectFilmstripList(library) : selectLibraryList(library);
+        const next = neighborId(list, library.selectedId, event.key === 'ArrowLeft' ? -1 : 1);
         if (!next) return;
         event.preventDefault();
-        select(next);
+        library.select(next);
+        return;
+      }
+      const organize = matchOrganizeShortcut(event.key);
+      if (organize) {
+        const targets = organizeTargets();
+        if (targets.length === 0) return;
+        event.preventDefault();
+        void (organize.kind === 'rating' ? setRating(targets, organize.value) : setFlag(targets, organize.value));
         return;
       }
       if (event.key === BEFORE_AFTER_KEY) {

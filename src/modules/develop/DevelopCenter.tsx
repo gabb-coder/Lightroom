@@ -1,6 +1,8 @@
 import { BeforeAfterIcon, CropIcon, PickIcon, RejectIcon, StarIcon } from '../../components/icons';
 import controls from '../../components/controls.module.css';
 import { useFileDrop } from '../../components/useFileDrop';
+import { COLOR_LABELS } from '../../model/organize';
+import { setColorLabel, setFlag, setRating } from '../../state/organizeActions';
 import { openImportPicker } from '../../state/importActions';
 import { useLibraryStore } from '../../state/libraryStore';
 import { useDevelopStore, type LoadedPhoto } from '../../state/developStore';
@@ -9,6 +11,72 @@ import layout from '../layout.module.css';
 import styles from './DevelopCenter.module.css';
 
 const STARS = [1, 2, 3, 4, 5] as const;
+
+/** Rating, flag and color label of the open photo (catalog data, not edit history). */
+function OrganizeControls() {
+  const photoId = useDevelopStore((s) => s.photo?.id ?? null);
+  const record = useLibraryStore((s) => (photoId ? s.photos.find((p) => p.id === photoId) : undefined));
+  const disabled = !record;
+  const ids = photoId ? [photoId] : [];
+  const rating = record?.rating ?? 0;
+  const flag = record?.flag ?? null;
+  const label = record?.colorLabel ?? null;
+  return (
+    <>
+      <div className={styles.group} role="group" aria-label="Rating">
+        {STARS.map((n) => (
+          <button
+            key={n}
+            type="button"
+            className={styles.star}
+            aria-label={`Rate ${n} star${n > 1 ? 's' : ''}`}
+            aria-pressed={rating === n}
+            disabled={disabled}
+            onClick={() => void setRating(ids, rating === n ? 0 : n)}
+          >
+            <StarIcon filled={n <= rating} />
+          </button>
+        ))}
+      </div>
+      <div className={styles.group} role="group" aria-label="Flag">
+        <button
+          type="button"
+          className={styles.flag}
+          aria-label="Pick"
+          aria-pressed={flag === 'pick'}
+          disabled={disabled}
+          onClick={() => void setFlag(ids, flag === 'pick' ? null : 'pick')}
+        >
+          <PickIcon />
+        </button>
+        <button
+          type="button"
+          className={styles.flag}
+          aria-label="Reject"
+          aria-pressed={flag === 'reject'}
+          disabled={disabled}
+          onClick={() => void setFlag(ids, flag === 'reject' ? null : 'reject')}
+        >
+          <RejectIcon />
+        </button>
+      </div>
+      <div className={styles.group} role="group" aria-label="Color label">
+        {COLOR_LABELS.map((l) => (
+          <button
+            key={l.id}
+            type="button"
+            className={styles.labelButton}
+            style={{ background: l.color }}
+            aria-label={`${l.name} label`}
+            aria-pressed={label === l.id}
+            disabled={disabled}
+            onClick={() => void setColorLabel(ids, label === l.id ? null : l.id)}
+          />
+        ))}
+      </div>
+    </>
+  );
+}
 
 function Toolbar() {
   const hasPhoto = useDevelopStore((s) => s.photo !== null);
@@ -32,21 +100,7 @@ function Toolbar() {
         Crop
       </button>
       <div className={styles.spacer} />
-      <div className={styles.group} role="group" aria-label="Rating">
-        {STARS.map((n) => (
-          <button key={n} type="button" className={styles.star} aria-label={`Rate ${n} star${n > 1 ? 's' : ''}`} disabled>
-            <StarIcon filled={false} />
-          </button>
-        ))}
-      </div>
-      <div className={styles.group} role="group" aria-label="Flag">
-        <button type="button" className={styles.flag} aria-label="Pick" aria-pressed={false} disabled>
-          <PickIcon />
-        </button>
-        <button type="button" className={styles.flag} aria-label="Reject" aria-pressed={false} disabled>
-          <RejectIcon />
-        </button>
-      </div>
+      <OrganizeControls />
     </div>
   );
 }

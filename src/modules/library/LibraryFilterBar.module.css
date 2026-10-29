@@ -1,0 +1,85 @@
+.bar {
+  flex: none;
+  min-height: 44px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-filter-bar);
+}
+
+/* Specificity above the shared segmented/segment styles. */
+.bar .flags {
+  background: var(--color-chrome);
+}
+
+.bar .flagButton {
+  height: 24px;
+  padding: 0 10px;
+  font-size: var(--font-size-control);
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fieldLabel {
+  color: var(--color-muted);
+}
+
+.select {
+  height: 26px;
+  padding: 0 4px;
+  border: 1px solid var(--color-border-control);
+  border-radius: 4px;
+  background: var(--color-chrome);
+  color: var(--color-text-bright);
+}
+
+.labelButton {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+}
+
+.labelButton[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--color-filter-bar), 0 0 0 4px var(--color-white);
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  width: 160px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border-control);
+  border-radius: 4px;
+  background: var(--color-chrome);
+}
+
+.search:focus-within {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.searchInput {
+  /* Don't let the input's intrinsic width (~20ch) widen the box. */
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-bright);
+  outline: none;
+}
