@@ -98,6 +98,12 @@ component library.
   selectors `selectLibraryList` / `selectFilmstripList` — never build a new
   array inside a zustand selector. Ratings/flags/labels are catalog data
   written via `state/organizeActions.ts`, not edit history.
+- Metadata filters and keywords (M11): `LibraryFilter` also has camera,
+  lens, ISO range, capture-date range (local days) and keyword; search
+  words must each match the file name, camera, lens or a keyword
+  (`model/organize.ts`). Keywords live on `PhotoRecord.keywords`
+  (`model/keywords.ts` normalizes, case-insensitive). The filter-bar row
+  must stay one line at 1440px (e2e checks it). V2 plan: `docs/V2_PLAN.md`.
 - Library grid is virtualized (`modules/library/gridLayout.ts` math mirrors
   the CSS); keep cell heights explicit so the math stays exact.
 - Geometry (M6): `engine/geometry.ts` maps output px -> source px (affine)

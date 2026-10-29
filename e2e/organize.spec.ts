@@ -43,7 +43,7 @@ test.describe('Organize: Library', () => {
   test('shortcuts do nothing while typing in the search field', async ({ page }) => {
     await gotoLibrary(page);
     await importViaButton(page, testFiles(3));
-    const search = page.getByPlaceholder('Search file name');
+    const search = page.getByLabel('Search photos');
     await search.pressSequentially('4x'); // would rate 4 and reject if shortcuts fired
     await expect(search).toHaveValue('4x');
     await search.fill('');
@@ -85,15 +85,15 @@ test.describe('Organize: Library', () => {
     await expect(statusBar(page)).toContainText('1 of 6 photos');
     await page.screenshot({ path: 'test-results/screenshots/m5-filters.png' });
 
-    await page.getByPlaceholder('Search file name').fill('0418');
+    await page.getByLabel('Search photos').fill('0418');
     await expect(page.getByTestId('no-matches')).toBeVisible();
     await page.getByRole('button', { name: 'Clear filters' }).click();
     await expect.poll(() => gridNames(page)).toHaveLength(6);
-    await expect(page.getByPlaceholder('Search file name')).toHaveValue('');
+    await expect(page.getByLabel('Search photos')).toHaveValue('');
 
-    await page.getByPlaceholder('Search file name').fill('img_042');
+    await page.getByLabel('Search photos').fill('img_042');
     await expect.poll(() => gridNames(page)).toEqual(['IMG_0420.png', 'IMG_0421.png', 'IMG_0422.png', 'IMG_0423.png']);
-    await page.getByPlaceholder('Search file name').fill('');
+    await page.getByLabel('Search photos').fill('');
     await page.getByLabel('Sort', { exact: true }).selectOption('rating');
     await expect.poll(() => gridNames(page)).toEqual(['IMG_0418.png', 'IMG_0423.png', 'IMG_0419.png', 'IMG_0420.png', 'IMG_0421.png', 'IMG_0422.png']);
   });

@@ -45,6 +45,8 @@ export function withExif(jpeg: Uint8Array, tags: { ifd0: Record<number, ExifTagV
   const entry = (tag: number, value: ExifTagValue): Buffer => {
     if (typeof value === 'string') {
       const bytes = Buffer.from(`${value}\0`, 'ascii');
+      // Up to 4 bytes are stored in the entry itself (TIFF 6.0).
+      if (bytes.length <= 4) return Buffer.concat([u16(tag), u16(2), u32(bytes.length), Buffer.concat([bytes, Buffer.alloc(4 - bytes.length)])]);
       const at = dataOffset;
       data.push(bytes);
       dataOffset += bytes.length;

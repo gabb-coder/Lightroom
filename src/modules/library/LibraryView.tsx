@@ -10,6 +10,7 @@ import { COLOR_LABELS, labelInfo } from '../../model/organize';
 import { setColorLabel } from '../../state/organizeActions';
 import { latestBatchId, selectLibraryList, THUMB_SIZE, useLibraryStore, type CatalogView } from '../../state/libraryStore';
 import { LibraryFilterBar } from './LibraryFilterBar';
+import { KeywordsPanel } from './KeywordsPanel';
 import { openCopyDialog, openSyncDialog, pasteSettings, useCopyPasteStore } from '../../state/copyPasteStore';
 import layout from '../layout.module.css';
 import { LibraryGrid } from './LibraryGrid';
@@ -215,6 +216,7 @@ function DetailsPanel() {
           <p className={styles.metaEmpty}>No photo selected</p>
         )}
       </section>
+      <KeywordsPanel />
       <DevelopSettingsPanel />
     </aside>
   );

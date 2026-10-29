@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PhotoRecord } from '../db/db';
-import { EMPTY_FILTER, filmstripFilter, filterPhotos, isFilterActive, sortPhotos, type LibraryFilter } from './organize';
+import { allKeywords, distinctValues, EMPTY_FILTER, filmstripFilter, filterPhotos, isFilterActive, metadataFilterCount, sortPhotos, type LibraryFilter } from './organize';
 
 let seq = 0;
 function photo(p: Partial<PhotoRecord> & { id: string }): PhotoRecord {
@@ -94,5 +94,58 @@ describe('filmstrip quick filter', () => {
     expect(ids(filmstripFilter(catalog, 'rated3'))).toEqual(['a', 'b', 'c', 'f']);
     expect(ids(filmstripFilter(catalog, 'edited'))).toEqual(['e']);
     expect(filmstripFilter(catalog, 'all')).toBe(catalog);
+  });
+});
+
+describe('metadata filters and search (M11)', () => {
+  const exif = (camera: string | null, lens: string | null, iso: number | null) => ({ camera, lens, iso, exposureTime: null, fNumber: null, focalLength: null });
+  const day = (y: number, m: number, d: number, h = 12) => new Date(y, m - 1, d, h).getTime();
+  const shots = [
+    photo({ id: 'r5', fileName: 'A.jpg', exif: exif('Canon EOS R5', 'RF24-105mm F4 L IS USM', 100), captureDate: day(2023, 6, 14), keywords: ['Beach', 'Family'] }),
+    photo({ id: 'r5b', fileName: 'B.jpg', exif: exif('Canon EOS R5', 'RF50mm F1.8 STM', 3200), captureDate: day(2023, 6, 15, 23), keywords: ['night'] }),
+    photo({ id: 'z6', fileName: 'C.jpg', exif: exif('NIKON Z 6', null, 800), captureDate: day(2023, 6, 16, 0) }),
+    photo({ id: 'png', fileName: 'beach.png', captureDate: day(2024, 1, 1) }),
+  ];
+  const run2 = (f: Partial<LibraryFilter>) => ids(filterPhotos(shots, { ...EMPTY_FILTER, ...f }));
+
+  it('camera and lens match exactly', () => {
+    expect(run2({ camera: 'Canon EOS R5' })).toEqual(['r5', 'r5b']);
+    expect(run2({ lens: 'RF50mm F1.8 STM' })).toEqual(['r5b']);
+  });
+
+  it('ISO range is inclusive and excludes photos without ISO', () => {
+    expect(run2({ isoMin: 800 })).toEqual(['r5b', 'z6']);
+    expect(run2({ isoMax: 800 })).toEqual(['r5', 'z6']);
+    expect(run2({ isoMin: 100, isoMax: 100 })).toEqual(['r5']);
+  });
+
+  it('capture date range covers whole local days', () => {
+    expect(run2({ dateFrom: '2023-06-15', dateTo: '2023-06-15' })).toEqual(['r5b']);
+    expect(run2({ dateFrom: '2023-06-15' })).toEqual(['r5b', 'z6', 'png']);
+    expect(run2({ dateTo: '2023-06-15' })).toEqual(['r5', 'r5b']);
+  });
+
+  it('keyword filter is exact and case-insensitive', () => {
+    expect(run2({ keyword: 'beach' })).toEqual(['r5']);
+    expect(run2({ keyword: 'bea' })).toEqual([]);
+  });
+
+  it('search matches file name, camera, lens and keywords; every word must match', () => {
+    expect(run2({ search: 'beach' })).toEqual(['r5', 'png']); // keyword, file name
+    expect(run2({ search: 'nikon' })).toEqual(['z6']);
+    expect(run2({ search: 'rf50' })).toEqual(['r5b']);
+    expect(run2({ search: 'canon night' })).toEqual(['r5b']);
+    expect(run2({ search: '  CANON   family ' })).toEqual(['r5']);
+  });
+
+  it('combines with the other filters (AND) and counts as active', () => {
+    expect(run2({ camera: 'Canon EOS R5', isoMin: 1000, search: 'night' })).toEqual(['r5b']);
+    expect(metadataFilterCount({ ...EMPTY_FILTER, camera: 'x', isoMax: 5 })).toBe(2);
+    expect(isFilterActive({ ...EMPTY_FILTER, keyword: 'x' })).toBe(true);
+  });
+
+  it('lists distinct cameras and keywords for the menus', () => {
+    expect(distinctValues(shots, (p) => p.exif?.camera)).toEqual(['Canon EOS R5', 'NIKON Z 6']);
+    expect(allKeywords([...shots, photo({ id: 'x', keywords: ['beach'] })])).toEqual(['Beach', 'Family', 'night']);
   });
 });

@@ -34,6 +34,8 @@ export interface PhotoRecord {
   captureDateFromExif: boolean;
   /** Undefined only for photos imported before EXIF fields were read (state/exifBackfill.ts fills them). */
   exif?: PhotoExif;
+  /** Keywords (model/keywords.ts normalizes them); undefined = none. */
+  keywords?: string[];
   rating: number;
   flag: Flag | null;
   colorLabel: ColorLabel | null;

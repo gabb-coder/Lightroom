@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import controls from '../../components/controls.module.css';
-import { COLOR_LABELS, type FlagFilter, type SortKey } from '../../model/organize';
+import { COLOR_LABELS, metadataFilterCount, type FlagFilter, type SortKey } from '../../model/organize';
+import { MetadataFilters } from './MetadataFilters';
 import { useLibraryStore } from '../../state/libraryStore';
 import styles from './LibraryFilterBar.module.css';
 
@@ -35,8 +37,30 @@ function SearchIcon() {
   );
 }
 
-/** Library filter bar (design/Library.dc.html): flag, rating, label, search, sort. */
+/**
+ * Library filter bar (design/Library.dc.html): flag, rating, label, search,
+ * sort; "Metadata" opens a second row of metadata filters (M11).
+ */
 export function LibraryFilterBar() {
+  const filter = useLibraryStore((s) => s.filter);
+  const [metadataOpen, setMetadataOpen] = useState(false);
+  const metadataCount = metadataFilterCount(filter);
+
+  return (
+    <>
+      <FilterRow metadataOpen={metadataOpen} metadataCount={metadataCount} onToggleMetadata={() => setMetadataOpen(!metadataOpen)} />
+      {metadataOpen && <MetadataFilters />}
+    </>
+  );
+}
+
+interface FilterRowProps {
+  metadataOpen: boolean;
+  metadataCount: number;
+  onToggleMetadata: () => void;
+}
+
+function FilterRow({ metadataOpen, metadataCount, onToggleMetadata }: FilterRowProps) {
   const filter = useLibraryStore((s) => s.filter);
   const sort = useLibraryStore((s) => s.sort);
   const setFilter = useLibraryStore((s) => s.setFilter);
@@ -83,6 +107,20 @@ export function LibraryFilterBar() {
           />
         ))}
       </div>
+      <button
+        type="button"
+        className={`${controls.iconButton} ${styles.metaToggle}`}
+        aria-expanded={metadataOpen}
+        aria-controls="metadata-filters"
+        aria-label={metadataCount > 0 ? `Metadata filters, ${metadataCount} active` : 'Metadata filters'}
+        title="Metadata filters: camera, lens, ISO, date, keyword"
+        onClick={onToggleMetadata}
+      >
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <path d="M2 4h12M4.5 8h7M7 12h2" />
+        </svg>
+        {metadataCount > 0 && <span className={`num ${styles.metaCount}`}>{metadataCount}</span>}
+      </button>
       <div className={styles.spacer} />
       <label className={styles.search}>
         <SearchIcon />
@@ -90,7 +128,7 @@ export function LibraryFilterBar() {
         <input
           type="search"
           className={styles.searchInput}
-          placeholder="Search file name"
+          placeholder="Search"
           value={filter.search}
           onChange={(e) => setFilter({ search: e.target.value })}
         />

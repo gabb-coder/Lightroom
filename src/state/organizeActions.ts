@@ -1,3 +1,4 @@
+import { addKeywords, removeKeyword } from '../model/keywords';
 import { db, type ColorLabel, type Flag } from '../db/db';
 import { useAppStore } from './appStore';
 import { useDevelopStore } from './developStore';
@@ -27,4 +28,20 @@ export async function setFlag(ids: readonly string[], flag: Flag | null): Promis
 
 export async function setColorLabel(ids: readonly string[], colorLabel: ColorLabel | null): Promise<void> {
   if (ids.length) await db.photos.where('id').anyOf([...ids]).modify({ colorLabel });
+}
+
+/** Adds keywords to every given photo (existing spellings win). */
+export async function addKeywordsTo(ids: readonly string[], keywords: readonly string[]): Promise<void> {
+  if (!ids.length || !keywords.length) return;
+  await db.photos.where('id').anyOf([...ids]).modify((p) => {
+    p.keywords = addKeywords(p.keywords, keywords);
+  });
+}
+
+/** Removes a keyword (case-insensitively) from every given photo. */
+export async function removeKeywordFrom(ids: readonly string[], keyword: string): Promise<void> {
+  if (!ids.length) return;
+  await db.photos.where('id').anyOf([...ids]).modify((p) => {
+    p.keywords = removeKeyword(p.keywords, keyword);
+  });
 }
