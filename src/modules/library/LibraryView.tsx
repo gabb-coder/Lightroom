@@ -13,6 +13,7 @@ import { LibraryFilterBar } from './LibraryFilterBar';
 import { CatalogPanel } from './CatalogPanel';
 import { CollectionsPanel } from './CollectionsPanel';
 import { createVirtualCopy, removeVirtualCopy } from '../../state/virtualCopyActions';
+import { useDeleteDialogStore } from '../../state/deleteDialogStore';
 import { KeywordsPanel } from './KeywordsPanel';
 import { openCopyDialog, openSyncDialog, pasteSettings, useCopyPasteStore } from '../../state/copyPasteStore';
 import layout from '../layout.module.css';
@@ -125,6 +126,17 @@ function VirtualCopyButtons() {
   );
 }
 
+/** "Remove from catalog…" for the selection (also the Delete key). */
+function RemoveButton() {
+  const ids = useLibraryStore((s) => s.selection.ids);
+  const open = useDeleteDialogStore((s) => s.open);
+  return (
+    <button type="button" className={`${controls.button} ${styles.removeButton}`} disabled={ids.length === 0} onClick={() => open(ids)}>
+      Remove {ids.length > 1 ? `${ids.length} photos` : 'photo'} from catalog…
+    </button>
+  );
+}
+
 /** Copy, paste and sync Develop settings across the selection (Lightroom's Library "Sync Settings"). */
 function DevelopSettingsPanel() {
   const hasPhoto = useLibraryStore((s) => s.selectedId !== null);
@@ -151,6 +163,7 @@ function DevelopSettingsPanel() {
         Sync settings…
       </button>
       <VirtualCopyButtons />
+      <RemoveButton />
     </section>
   );
 }

@@ -69,6 +69,8 @@ interface DevelopState {
   masksOpen: boolean;
   /** Shows a photo with its saved history (or a fresh one). Closes the previous bitmap. */
   loadPhoto: (photo: LoadedPhoto, history?: History) => void;
+  /** Closes the open photo (e.g. it was deleted from the catalog). */
+  closePhoto: () => void;
   setBasic: (key: BasicSliderKey, value: number) => void;
   setTreatment: (treatment: Treatment) => void;
   /** Sets one channel's curve; `merge` lets a drag of the same channel be one history step. */
@@ -167,6 +169,11 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
       if (s.photo && s.photo.bitmap !== photo.bitmap) s.photo.bitmap.close?.();
       const previousPhotoId = s.photo && s.photo.id !== photo.id ? s.photo.id : s.previousPhotoId;
       return { photo, previousPhotoId, ...initialEditState(history), interacting: false, before: false, peeking: false, cropping: false, selectedMaskId: null, maskTool: null };
+    }),
+  closePhoto: () =>
+    set((s) => {
+      s.photo?.bitmap.close?.();
+      return { photo: null, ...initialEditState(), interacting: false, before: false, peeking: false, cropping: false, selectedMaskId: null, maskTool: null };
     }),
   setBasic: (key, value) =>
     set((s) => {

@@ -15,6 +15,7 @@
   --color-dialog-border: #353535;
   --color-dialog-divider: #333333;
   --color-scrim: rgba(0, 0, 0, 0.62);
+  --color-danger: #c9423c; /* destructive confirm buttons */
 
   /* Lines */
   --color-border: #2f2f2f;

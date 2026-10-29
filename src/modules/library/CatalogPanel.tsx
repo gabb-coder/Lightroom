@@ -5,6 +5,7 @@ import { sortCollections, type CollectionRecord } from '../../model/collections'
 import { addToCollection, createCollection, deleteCollection, PHOTO_DRAG_TYPE, draggedPhotoIds, renameCollection, showCollection } from '../../state/collectionActions';
 import { collectionView, latestBatchId, useLibraryStore, type CatalogView } from '../../state/libraryStore';
 import layout from '../layout.module.css';
+import { BackupPanel } from './BackupPanel';
 import styles from './LibraryView.module.css';
 
 function NavItem({ current, label, count, icon, onClick }: { current: boolean; label: string; count: number; icon: React.ReactNode; onClick: () => void }) {
@@ -174,6 +175,7 @@ export function CatalogPanel() {
         <NavItem key={id} current={view === id} label={label} count={count} icon={<Icon />} onClick={() => setView(id)} />
       ))}
       <Collections />
+      <BackupPanel />
     </aside>
   );
 }

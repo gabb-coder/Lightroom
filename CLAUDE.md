@@ -158,6 +158,11 @@ component library.
   (`overflow: hidden`, drag/wheel), click toggles 1:1 at the point, Z
   toggles; the crop tool always shows Fit. Navigator draws the renderer's
   small preview (display only). Improvement plan: `docs/V3_PLAN.md`.
+- Catalog safety (M17): `io/zip.ts` (store-only ZIP writer/reader with
+  ZIP64, CRC-checked), `model/backup.ts` (manifest format + validation;
+  untrusted on restore), `state/catalogActions.ts` (backup, restore merges
+  by id and never overwrites, `deletePhotos` removes every trace; a master
+  takes its virtual copies). Delete key / "Remove from catalog…" asks first.
 - Export (M7): `workers/export.worker.ts` runs the same `Renderer` on an
   OffscreenCanvas at full resolution (readPixels), resizes with the browser
   scaler only when asked, encodes, and copies EXIF per policy

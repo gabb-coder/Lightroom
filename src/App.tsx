@@ -2,6 +2,7 @@ import { TopBar } from './components/TopBar';
 import { ImportInput } from './components/ImportInput';
 import { ExportToast } from './components/ExportToast';
 import { SettingsDialog } from './components/SettingsDialog';
+import { DeletePhotosDialog } from './components/DeletePhotosDialog';
 import { DevelopView } from './modules/develop/DevelopView';
 import { LibraryView } from './modules/library/LibraryView';
 import { ExportView } from './modules/export/ExportView';
@@ -33,6 +34,7 @@ export function App() {
       <ImportInput />
       <ExportToast />
       <SettingsDialog />
+      <DeletePhotosDialog />
     </div>
   );
 }
