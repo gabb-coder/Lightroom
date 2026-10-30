@@ -2,6 +2,11 @@ import { LUMA_WEIGHTS } from '../engine/color';
 import { CURVE_LUT_SIZE } from '../engine/curve';
 import { GRAIN_SEED } from '../engine/grain';
 import { HSL_CENTER_LIST, HSL_MAX_HUE_SHIFT, HSL_MAX_LUM } from '../engine/hsl';
+import {
+  CHROMA_GUIDE_SIGMA,
+  DENOISE_CHROMA_MAX_TAPS,
+  DENOISE_LUMA_MAX_TAPS,
+} from '../engine/denoise';
 import { CLARITY_GAIN, DEHAZE_STRENGTH, HAZE_LEVEL, HAZE_STRENGTH, PRESENCE_WEIGHT_COUNT } from '../engine/presence';
 import { SHARPEN_WEIGHT_COUNT } from '../engine/sharpen';
 import { TONE_GAMMA } from '../engine/tone';
@@ -460,6 +465,139 @@ void main() {
     sum += u_weights[abs(i)] * luminance(texelFetch(u_image, ivec2(x, p.y), 0).rgb);
   }
   outColor = pack16(sum);
+}
+`;
+
+/** engine/denoise.ts: range weight and the color-difference encoding. */
+const DENOISE_GLSL = /* glsl */ `
+uniform int u_lumaTaps;
+uniform float u_lumaWeights[${DENOISE_LUMA_MAX_TAPS + 1}];
+uniform int u_chromaTaps;
+uniform float u_chromaWeights[${DENOISE_CHROMA_MAX_TAPS + 1}];
+uniform float u_lumaSigma;
+uniform float u_colorSigma;
+const float GUIDE_SIGMA = ${glslFloat(CHROMA_GUIDE_SIGMA)};
+float rangeWeight(float d2, float sigma) { return exp(-d2 / (2.0 * sigma * sigma)); }
+float decodeDiff(vec2 t) { return 2.0 * unpack16v(t) - 1.0; }
+vec2 encodeDiff(float d) { return pack16v((d + 1.0) / 2.0); }
+`;
+
+/** Noise reduction, row pass of the luminance bilateral (16-bit Y in RG). */
+export const DENOISE_LUMA_H_FRAGMENT_SHADER = /* glsl */ `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform sampler2D u_image;
+out vec4 outColor;
+${COLOR_GLSL}
+${LEVEL_GLSL}
+${DENOISE_GLSL}
+void main() {
+  ivec2 size = textureSize(u_image, 0);
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  float center = luminance(texelFetch(u_image, p, 0).rgb);
+  float sum = 0.0;
+  float weights = 0.0;
+  for (int k = -u_lumaTaps; k <= u_lumaTaps; k++) {
+    float v = luminance(texelFetch(u_image, ivec2(clamp(p.x + k, 0, size.x - 1), p.y), 0).rgb);
+    float w = u_lumaWeights[abs(k)] * rangeWeight((v - center) * (v - center), u_lumaSigma);
+    sum += w * v;
+    weights += w;
+  }
+  outColor = vec4(pack16v(sum / weights), 0.0, 1.0);
+}
+`;
+
+/** Noise reduction, row pass of the color cross-bilateral (dr in RG, db in BA, 16-bit each). */
+export const DENOISE_CHROMA_H_FRAGMENT_SHADER = /* glsl */ `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform sampler2D u_image;
+out vec4 outColor;
+${COLOR_GLSL}
+${LEVEL_GLSL}
+${DENOISE_GLSL}
+void main() {
+  ivec2 size = textureSize(u_image, 0);
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec3 c0 = texelFetch(u_image, p, 0).rgb;
+  float g0 = luminance(c0);
+  vec2 d0 = vec2(c0.r - g0, c0.b - g0);
+  vec2 sum = vec2(0.0);
+  float weights = 0.0;
+  for (int k = -u_chromaTaps; k <= u_chromaTaps; k++) {
+    vec3 c = texelFetch(u_image, ivec2(clamp(p.x + k, 0, size.x - 1), p.y), 0).rgb;
+    float g = luminance(c);
+    vec2 d = vec2(c.r - g, c.b - g);
+    vec2 dd = d - d0;
+    float w = u_chromaWeights[abs(k)] * rangeWeight((g - g0) * (g - g0), GUIDE_SIGMA) * rangeWeight(dot(dd, dd), u_colorSigma);
+    sum += w * d;
+    weights += w;
+  }
+  vec2 d = sum / weights;
+  outColor = vec4(encodeDiff(d.x), encodeDiff(d.y));
+}
+`;
+
+/**
+ * Noise reduction, column passes and recombination (engine/denoise.ts
+ * denoiseRgba8): luminance from the bilateral, color differences from the
+ * cross-bilateral (guided by the developed luminance), G from the weights.
+ */
+export const DENOISE_V_FRAGMENT_SHADER = /* glsl */ `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform sampler2D u_image;
+uniform sampler2D u_lumaH;
+uniform sampler2D u_chromaH;
+uniform bool u_lumaOn;
+uniform bool u_colorOn;
+out vec4 outColor;
+${COLOR_GLSL}
+${LEVEL_GLSL}
+${DENOISE_GLSL}
+void main() {
+  ivec2 size = textureSize(u_image, 0);
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec4 src = texelFetch(u_image, p, 0);
+  float y = luminance(src.rgb);
+  float lum = y;
+  if (u_lumaOn) {
+    float center = unpack16v(texelFetch(u_lumaH, p, 0).rg);
+    float sum = 0.0;
+    float weights = 0.0;
+    for (int k = -u_lumaTaps; k <= u_lumaTaps; k++) {
+      float v = unpack16v(texelFetch(u_lumaH, ivec2(p.x, clamp(p.y + k, 0, size.y - 1)), 0).rg);
+      float w = u_lumaWeights[abs(k)] * rangeWeight((v - center) * (v - center), u_lumaSigma);
+      sum += w * v;
+      weights += w;
+    }
+    lum = sum / weights;
+  }
+  vec2 diff = vec2(src.r - y, src.b - y);
+  if (u_colorOn) {
+    vec4 t0 = texelFetch(u_chromaH, p, 0);
+    vec2 d0 = vec2(decodeDiff(t0.rg), decodeDiff(t0.ba));
+    vec2 sum = vec2(0.0);
+    float weights = 0.0;
+    for (int k = -u_chromaTaps; k <= u_chromaTaps; k++) {
+      ivec2 q = ivec2(p.x, clamp(p.y + k, 0, size.y - 1));
+      vec4 t = texelFetch(u_chromaH, q, 0);
+      vec2 d = vec2(decodeDiff(t.rg), decodeDiff(t.ba));
+      float g = luminance(texelFetch(u_image, q, 0).rgb);
+      vec2 dd = d - d0;
+      float w = u_chromaWeights[abs(k)] * rangeWeight((g - y) * (g - y), GUIDE_SIGMA) * rangeWeight(dot(dd, dd), u_colorSigma);
+      sum += w * d;
+      weights += w;
+    }
+    diff = sum / weights;
+  }
+  float r = lum + diff.x;
+  float b = lum + diff.y;
+  float g = (lum - LUMA.r * r - LUMA.b * b) / LUMA.g;
+  outColor = vec4(clamp(vec3(r, g, b), 0.0, 1.0), src.a);
 }
 `;
 

@@ -13,6 +13,7 @@ import { grainOffset, grainParams, type GrainParams } from './grain';
 import { sharpenOffsets, sharpenParams, type SharpenParams } from './sharpen';
 import { vignetteAmount } from './vignette';
 import { applyMasks, maskParams, maskWeight, type MaskParams } from './masks';
+import { denoiseParams, denoiseRgba8, type DenoiseParams } from './denoise';
 import { dehazeChannel, presenceLevels, presenceOffset, presenceParams, sampleLevel, type PresenceParams } from './presence';
 
 /**
@@ -34,6 +35,8 @@ export interface PipelineParams {
   bw: boolean;
   /** Color grading wheels (engine/colorGrading.ts), or null when neutral. */
   colorGrading: ColorGradingParams | null;
+  /** Noise reduction (engine/denoise.ts), before the detail stage; null when off. */
+  denoise: DenoiseParams | null;
   /** Texture, Clarity, Dehaze (engine/presence.ts), or null when all are zero. */
   presence: PresenceParams | null;
   /** Detail: unsharp mask on luminance (engine/sharpen.ts), or null when off. */
@@ -59,6 +62,7 @@ export function pipelineParams(settings: EditSettings): PipelineParams {
     saturationScale: saturationScale(b.saturation),
     bw: b.treatment === 'bw',
     colorGrading: colorGradingParams(settings.colorGrading),
+    denoise: denoiseParams(settings.detail),
     presence: presenceParams(b),
     sharpen: sharpenParams(settings.detail),
     grain: grainParams(settings.effects),
@@ -152,8 +156,10 @@ export function applyDetailRgba8(data: Uint8Array | Uint8ClampedArray, size: Siz
   return out;
 }
 
-/** Full CPU reference: develop every pixel, detail, then crop/straighten/rotate/flip and vignette. */
+/** Full CPU reference: develop every pixel, noise reduction, detail, then crop/straighten/rotate/flip and vignette. */
 export function renderRgba8(src: Uint8Array | Uint8ClampedArray, size: Size, p: PipelineParams, scale = 1) {
-  const detailed = applyDetailRgba8(processRgba8(src, p, size.width), size, p, scale);
+  const developed = processRgba8(src, p, size.width);
+  const denoised = p.denoise ? denoiseRgba8(developed, size, p.denoise, scale) : developed;
+  const detailed = applyDetailRgba8(denoised, size, p, scale);
   return applyGeometryRgba8(detailed, size, p.geometry, p.vignette);
 }

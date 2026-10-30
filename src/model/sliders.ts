@@ -51,6 +51,8 @@ function unipolar(id: string, label: string, min: number, max: number, step: num
 export const DETAIL_SLIDERS = {
   sharpAmount: unipolar('sharpAmount', 'Amount', 0, 150, 1, 0, 'uint', 'Sharpening'),
   sharpRadius: unipolar('sharpRadius', 'Radius', 0.5, 3, 0.1, 1, 'dec', 'Sharpen radius'),
+  nrLuma: { ...unipolar('nrLuma', 'Luminance', 0, 100, 1, 0, 'uint', 'Luminance noise reduction'), ariaLabel: 'Luminance noise reduction' },
+  nrColor: { ...unipolar('nrColor', 'Color', 0, 100, 1, 0, 'uint', 'Color noise reduction'), ariaLabel: 'Color noise reduction' },
 } as const satisfies Record<string, SliderDef>;
 
 export const EFFECTS_SLIDERS = {

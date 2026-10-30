@@ -111,6 +111,12 @@ const DETAIL_CASES: Record<string, [Partial<BasicSettings>, Partial<Geometry>, G
   ],
   'proxy: sharpen 150 radius 3 at half size': [{}, {}, { detail: { sharpAmount: 150, sharpRadius: 3 }, proxy: true }],
   'proxy: grain 60 at half size': [{}, {}, { effects: { grain: 60, grainSize: 10 }, proxy: true }],
+  // Noise reduction (M27): alone, together, before sharpening and presence, on a proxy and a larger image.
+  'noise reduction: luminance 100': [{}, {}, { detail: { nrLuma: 100 } }],
+  'noise reduction: color 100': [{}, {}, { detail: { nrColor: 100 } }],
+  'noise reduction: both 50 + sharpen 80 + grain': [{ exposure: 0.3 }, {}, { detail: { nrLuma: 50, nrColor: 50, sharpAmount: 80, sharpRadius: 1.4 }, effects: { grain: 20, grainSize: 30 } }],
+  'proxy: noise reduction 70 / 70': [{}, {}, { detail: { nrLuma: 70, nrColor: 70 }, proxy: true }],
+  'large: noise reduction 100 / 100 + clarity 50, cropped': [{ clarity: 50 }, { cropRect: { x: 0.05, y: 0.1, w: 0.9, h: 0.8 } }, { detail: { nrLuma: 100, nrColor: 100 }, large: true }],
   // Presence (M26): Texture, Clarity, Dehaze; the large image makes the levels average blocks (factor > 1).
   'texture 100 + sharpen 60': [{ texture: 100 }, {}, { detail: { sharpAmount: 60, sharpRadius: 1 } }],
   'clarity -100 + grain': [{ clarity: -100 }, {}, { effects: { grain: 40, grainSize: 20 } }],

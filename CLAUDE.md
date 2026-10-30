@@ -149,6 +149,12 @@ component library.
   channel are stored 16-bit in RGBA8 (`LEVEL_DOWN`/`LEVEL_BLUR` shaders,
   `Renderer.levelPasses`). Dehaze is a simplified dark-channel haze model.
   Plan for M26–M35: `docs/V4_PLAN.md`.
+- Noise reduction (M27): Detail panel Luminance / Color (`engine/denoise.ts`),
+  on the developed image BEFORE presence and sharpening (its own RGBA8
+  result `denoised`). Luminance = separable bilateral on Y; Color =
+  separable cross-bilateral on (R − Y, B − Y) guided by Y; row passes
+  stored 16-bit (`DENOISE_*` shaders, `Renderer.denoisePasses`); spatial
+  sigma in full-resolution pixels × render scale, like sharpening.
 - Color grading (M14): `engine/colorGrading.ts` runs after B&W (so it
   split-tones monochrome); zero-luma tint + gray offset on encoded values,
   weighted by shadows/midtones/highlights curves (pivot = balance, width =

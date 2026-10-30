@@ -105,7 +105,7 @@ describe('presets and masks', () => {
 
 describe('preset files from before M9', () => {
   it('version 1 files get the old untouched sharpening (40) reset, like the catalog', () => {
-    const settings = { ...defaultEditSettings(), detail: { sharpAmount: 40, sharpRadius: 1 } };
+    const settings = { ...defaultEditSettings(), detail: { ...defaultEditSettings().detail, sharpAmount: 40, sharpRadius: 1 } };
     const v1 = JSON.stringify({ format: 'photo-editor-preset', version: 1, id: 'p', name: 'Old', group: 'user', settings });
     expect(parsePreset(v1).settings.detail.sharpAmount).toBe(0);
     const current = serializePreset({ id: 'p', name: 'New', group: 'user', settings: { ...settings } });

@@ -4,12 +4,16 @@ import { BRUSH_RASTER_EDGE, type BrushRaster } from '../engine/brush';
 import { HIGHLIGHT_CLIP_RGB, isPlainDisplay, MASK_OVERLAY_OPACITY, MASK_OVERLAY_RGB, SHADOW_CLIP_RGB, type DisplayOptions } from '../engine/display';
 import type { MaskShape } from '../engine/masks';
 import { hasDetailStage, type PipelineParams } from '../engine/pipeline';
+import { denoiseKernels } from '../engine/denoise';
 import { CLARITY_LEVEL, levelLayout, TEXTURE_LEVEL, type LevelLayout, type LevelSpec } from '../engine/presence';
 import { sharpenKernel } from '../engine/sharpen';
 import { MAX_MASKS } from '../model/editSettings';
 import { createProgram, createTexture, type RgbaImage, type TextureSource } from './gl';
 import {
   BLUR_FRAGMENT_SHADER,
+  DENOISE_CHROMA_H_FRAGMENT_SHADER,
+  DENOISE_LUMA_H_FRAGMENT_SHADER,
+  DENOISE_V_FRAGMENT_SHADER,
   DETAIL_FRAGMENT_SHADER,
   DEVELOP_FRAGMENT_SHADER,
   DISPLAY_FRAGMENT_SHADER,
@@ -78,6 +82,8 @@ const DETAIL_UNIFORMS = [
   'dehaze',
 ] as const;
 const LEVEL_DOWN_UNIFORMS = ['image', 'factor'] as const;
+const DENOISE_UNIFORMS = ['image', 'lumaH', 'chromaH', 'lumaOn', 'colorOn', 'lumaTaps', 'lumaWeights', 'chromaTaps', 'chromaWeights', 'lumaSigma', 'colorSigma'] as const;
+type DenoiseUniforms = Uniforms<(typeof DENOISE_UNIFORMS)[number]>;
 const LEVEL_BLUR_UNIFORMS = ['level', 'dir', 'taps', 'weights'] as const;
 const GEOMETRY_UNIFORMS = ['image', 'flipY', 'outSize', 'rowX', 'rowY', 'vignette'] as const;
 const DISPLAY_UNIFORMS = [
@@ -143,14 +149,30 @@ const SCRATCH_FORMAT: Readonly<Record<IntermediateKind, 'rgba8' | 'rg8'>> = {
   textureScratch: 'rgba8',
   coarseLevel: 'rgba8',
   coarseScratch: 'rgba8',
+  denoiseLuma: 'rg8',
+  denoiseChroma: 'rgba8',
+  denoised: 'rgba8',
 };
 
 /**
  * Reused scratch targets: developed color, 16-bit blur, after detail (source
  * size), the finished After / Before images for the display pass (output size),
- * and the small presence levels (M26) with their blur scratch.
+ * the small presence levels (M26) with their blur scratch, and noise
+ * reduction's row passes and result (M27).
  */
-type IntermediateKind = 'developed' | 'blur' | 'detailed' | 'shownAfter' | 'shownBefore' | 'textureLevel' | 'textureScratch' | 'coarseLevel' | 'coarseScratch';
+type IntermediateKind =
+  | 'developed'
+  | 'blur'
+  | 'detailed'
+  | 'shownAfter'
+  | 'shownBefore'
+  | 'textureLevel'
+  | 'textureScratch'
+  | 'coarseLevel'
+  | 'coarseScratch'
+  | 'denoiseLuma'
+  | 'denoiseChroma'
+  | 'denoised';
 
 interface Target {
   /** Null = the canvas. */
@@ -185,6 +207,8 @@ export class Renderer {
   private readonly geometryProgram: WebGLProgram;
   private readonly displayProgram: WebGLProgram;
   private readonly levelDownProgram: WebGLProgram;
+  /** Noise reduction (M27): luminance row pass, color row pass, column passes + recombination. */
+  private readonly denoisePrograms: { program: WebGLProgram; uniforms: DenoiseUniforms }[];
   private readonly levelBlurProgram: WebGLProgram;
   private readonly levelDownUniforms: Uniforms<(typeof LEVEL_DOWN_UNIFORMS)[number]>;
   private readonly levelBlurUniforms: Uniforms<(typeof LEVEL_BLUR_UNIFORMS)[number]>;
@@ -226,6 +250,10 @@ export class Renderer {
     this.geometryUniforms = locate(gl, this.geometryProgram, GEOMETRY_UNIFORMS);
     this.displayUniforms = locate(gl, this.displayProgram, DISPLAY_UNIFORMS);
     this.levelDownProgram = createProgram(gl, VERTEX_SHADER, LEVEL_DOWN_FRAGMENT_SHADER);
+    this.denoisePrograms = [DENOISE_LUMA_H_FRAGMENT_SHADER, DENOISE_CHROMA_H_FRAGMENT_SHADER, DENOISE_V_FRAGMENT_SHADER].map((fs) => {
+      const program = createProgram(gl, VERTEX_SHADER, fs);
+      return { program, uniforms: locate(gl, program, DENOISE_UNIFORMS) };
+    });
     this.levelBlurProgram = createProgram(gl, VERTEX_SHADER, LEVEL_BLUR_FRAGMENT_SHADER);
     this.levelDownUniforms = locate(gl, this.levelDownProgram, LEVEL_DOWN_UNIFORMS);
     this.levelBlurUniforms = locate(gl, this.levelBlurProgram, LEVEL_BLUR_UNIFORMS);
@@ -305,7 +333,7 @@ export class Renderer {
     this.gl.deleteTexture(this.curveTexture);
     this.gl.deleteTexture(this.emptyBrush);
     if (this.brushTexture) this.gl.deleteTexture(this.brushTexture);
-    for (const program of [this.developProgram, this.blurProgram, this.detailProgram, this.geometryProgram, this.displayProgram, this.levelDownProgram, this.levelBlurProgram]) this.gl.deleteProgram(program);
+    for (const program of [this.developProgram, this.blurProgram, this.detailProgram, this.geometryProgram, this.displayProgram, this.levelDownProgram, this.levelBlurProgram, ...this.denoisePrograms.map((d) => d.program)]) this.gl.deleteProgram(program);
   }
 
   /**
@@ -368,18 +396,59 @@ export class Renderer {
 
   private render(source: SizedTexture, params: PipelineParams, target: Target): void {
     const detail = hasDetailStage(params);
-    if (!detail && params.vignette === 0 && isIdentityGeometry(params.geometry)) {
+    if (!params.denoise && !detail && params.vignette === 0 && isIdentityGeometry(params.geometry)) {
       this.developPass(source, params, target);
       return;
     }
     const developed = this.intermediateFor('developed', source);
     this.developPass(source, params, this.offscreen(developed));
-    let image: SizedTexture = developed;
-    if (detail) {
-      const scale = source.width / (this.textures.full?.width ?? source.width);
-      image = this.detailPasses(developed, params, scale);
-    }
+    const scale = source.width / (this.textures.full?.width ?? source.width);
+    let image: RenderTarget = developed;
+    if (params.denoise) image = this.denoisePasses(developed, params, scale);
+    if (detail) image = this.detailPasses(image, params, scale);
     this.geometryPass(image, params, target);
+  }
+
+  /** Noise reduction (engine/denoise.ts): row passes into 16-bit scratch, then columns + recombination. */
+  private denoisePasses(developed: RenderTarget, params: PipelineParams, scale: number): RenderTarget {
+    const { gl } = this;
+    const p = params.denoise;
+    if (!p) return developed;
+    const kernels = denoiseKernels(scale);
+    const lumaH = p.luma > 0 ? this.intermediateFor('denoiseLuma', developed) : null;
+    const chromaH = p.color > 0 ? this.intermediateFor('denoiseChroma', developed) : null;
+    const denoised = this.intermediateFor('denoised', developed);
+    const setup = (index: number, target: RenderTarget) => {
+      const entry = this.denoisePrograms[index];
+      if (!entry) throw new Error('missing denoise program');
+      const u = entry.uniforms;
+      this.bindTarget(this.offscreen(target));
+      gl.useProgram(entry.program);
+      this.bindTexture(0, developed.texture, u.image);
+      gl.uniform1i(u.lumaTaps, kernels.luma.taps);
+      gl.uniform1fv(u.lumaWeights, kernels.luma.weights);
+      gl.uniform1i(u.chromaTaps, kernels.chroma.taps);
+      gl.uniform1fv(u.chromaWeights, kernels.chroma.weights);
+      gl.uniform1f(u.lumaSigma, p.luma);
+      gl.uniform1f(u.colorSigma, p.color);
+      return u;
+    };
+    if (lumaH) {
+      setup(0, lumaH);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    if (chromaH) {
+      setup(1, chromaH);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    const u = setup(2, denoised);
+    // Samplers point at valid textures even when a filter is off.
+    this.bindTexture(1, (lumaH ?? developed).texture, u.lumaH);
+    this.bindTexture(2, (chromaH ?? developed).texture, u.chromaH);
+    gl.uniform1i(u.lumaOn, lumaH ? 1 : 0);
+    gl.uniform1i(u.colorOn, chromaH ? 1 : 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    return denoised;
   }
 
   /**
