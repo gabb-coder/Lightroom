@@ -80,6 +80,9 @@ interface DevelopState {
   masksOpen: boolean;
   /** White balance eyedropper active: the next click on the photo sets Temp/Tint (M20). */
   wbPicking: boolean;
+  /** Hovering a preset (M32): rendered instead of `settings`, never saved or added to history. */
+  presetPreview: EditSettings | null;
+  setPresetPreview: (preview: EditSettings | null) => void;
   /** Range eyedropper (M30): the next click on the photo sets the selected mask's color range. */
   rangePicking: boolean;
   setRangePicking: (on: boolean) => void;
@@ -203,6 +206,8 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
   masksOpen: false,
   wbPicking: false,
   rangePicking: false,
+  presetPreview: null,
+  setPresetPreview: (presetPreview) => set((s) => (s.photo || !presetPreview ? { presetPreview } : s)),
   setRangePicking: (rangePicking) => set((s) => (s.photo || !rangePicking ? { rangePicking, ...(rangePicking ? { wbPicking: false, maskTool: null } : {}) } : s)),
   spotsOpen: false,
   selectedSpotId: null,
@@ -213,12 +218,12 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
     set((s) => {
       if (s.photo && s.photo.bitmap !== photo.bitmap) s.photo.bitmap.close?.();
       const previousPhotoId = s.photo && s.photo.id !== photo.id ? s.photo.id : s.previousPhotoId;
-      return { photo, previousPhotoId, ...initialEditState(history), interacting: false, before: false, peeking: false, cropping: false, selectedMaskId: null, maskTool: null, wbPicking: false, selectedSpotId: null };
+      return { photo, previousPhotoId, ...initialEditState(history), interacting: false, before: false, peeking: false, cropping: false, selectedMaskId: null, maskTool: null, wbPicking: false, selectedSpotId: null, presetPreview: null };
     }),
   closePhoto: () =>
     set((s) => {
       s.photo?.bitmap.close?.();
-      return { photo: null, ...initialEditState(), interacting: false, before: false, peeking: false, cropping: false, selectedMaskId: null, maskTool: null, wbPicking: false, selectedSpotId: null };
+      return { photo: null, ...initialEditState(), interacting: false, before: false, peeking: false, cropping: false, selectedMaskId: null, maskTool: null, wbPicking: false, selectedSpotId: null, presetPreview: null };
     }),
   setBasic: (key, value) =>
     set((s) => {
@@ -352,7 +357,7 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
       return commit(s.history, { label: EFFECTS_SLIDERS[key].historyLabel ?? EFFECTS_SLIDERS[key].label, key: `effects.${key}`, settings });
     }),
   applyPreset: (preset) =>
-    set((s) => commit(s.history, { label: `Preset: ${preset.name}`, key: null, settings: applyPresetTo(s.settings, preset) })),
+    set((s) => ({ ...commit(s.history, { label: `Preset: ${preset.name}`, key: null, settings: applyPresetTo(s.settings, preset) }), presetPreview: null })),
   applySettings: (label, settings) =>
     set((s) => (jsonEqual(settings, s.settings) ? s : commit(s.history, { label, key: null, settings }))),
   resetAll: () => set((s) => commit(s.history, { label: 'Reset all', key: null, settings: defaultEditSettings() })),

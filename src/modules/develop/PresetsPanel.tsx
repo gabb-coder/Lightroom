@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type KeyboardEvent } from 'react';
 import { PanelSection } from '../../components/PanelSection';
 import controls from '../../components/controls.module.css';
-import { PRESET_GROUP_LABELS, type PresetGroup } from '../../model/presets';
+import { applyPresetTo, PRESET_GROUP_LABELS, type Preset, type PresetGroup } from '../../model/presets';
 import { useDevelopStore } from '../../state/developStore';
 import { usePresetStore } from '../../state/presetStore';
 import styles from './PresetsPanel.module.css';
@@ -52,7 +52,10 @@ export function PresetsPanel() {
   const presets = usePresetStore((s) => s.presets);
   const applyPreset = useDevelopStore((s) => s.applyPreset);
   const hasPhoto = useDevelopStore((s) => s.photo !== null);
+  const setPresetPreview = useDevelopStore((s) => s.setPresetPreview);
   const [saving, setSaving] = useState(false);
+  // Pointing at (or tabbing to) a preset shows it on the photo; leaving puts the edit back (M32).
+  const preview = (preset: Preset | null) => setPresetPreview(preset ? applyPresetTo(useDevelopStore.getState().settings, preset) : null);
 
   return (
     <PanelSection
@@ -85,7 +88,12 @@ export function PresetsPanel() {
                 type="button"
                 className={styles.preset}
                 disabled={!hasPhoto}
+                title="Point to preview, click to apply"
                 onClick={() => applyPreset(preset)}
+                onPointerEnter={() => preview(preset)}
+                onPointerLeave={() => preview(null)}
+                onFocus={() => preview(preset)}
+                onBlur={() => preview(null)}
               >
                 {preset.name}
               </button>

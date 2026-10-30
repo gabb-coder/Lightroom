@@ -239,6 +239,13 @@ component library.
   (`state/previewCache.ts`, LRU of 8; the photo open in Develop keys on its
   history so unsaved edits show). Compare at 1:1 renders full size; zoom
   and pan are shared by both panes.
+- Faster decisions (M32): hovering / focusing a preset sets
+  `developStore.presetPreview`, which the renderer draws instead of the
+  settings (no history, no saved preview or thumbnail; canvas
+  data-preset="preview"). RGB readout: `viewStore.hover` (pointer over the
+  photo, fractions) + the 512 px rendered copy kept in `histogramStore.image`.
+  Library Auto tone / Ctrl+Cmd+U: `editingAids.autoTonePhotos` measures each
+  original and applies one step per photo through `settingsSync.applyToPhotos`.
 - Interface (M22): every shortcut is listed in `shortcuts/shortcutList.ts`
   (the `?` / top-bar dialog renders it; a unit test reads the handler
   sources and fails if a handled key is missing, so add new shortcuts

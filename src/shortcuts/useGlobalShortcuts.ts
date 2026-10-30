@@ -13,7 +13,7 @@ import { settingsSourceId } from '../state/settingsSync';
 import { createVirtualCopy } from '../state/virtualCopyActions';
 import { useViewStore } from '../state/viewStore';
 import { useDeleteDialogStore } from '../state/deleteDialogStore';
-import { runAutoTone } from '../state/editingAids';
+import { autoToneSelection, runAutoTone } from '../state/editingAids';
 import { useShortcutsHelpStore } from '../state/shortcutsHelpStore';
 import { openCompare, openFullscreen, openSlideshow } from '../state/viewerActions';
 import { useViewerStore } from '../state/viewerStore';
@@ -70,10 +70,15 @@ export function useGlobalShortcuts(): void {
         useAppStore.getState().setModule('export');
         return;
       }
-      // Ctrl/Cmd+U: Auto tone (as in Lightroom).
-      if (command && !event.shiftKey && event.key.toLowerCase() === 'u' && developHasPhoto()) {
-        event.preventDefault();
-        runAutoTone();
+      // Ctrl/Cmd+U: Auto tone (as in Lightroom); in Library, every selected photo (M32).
+      if (command && !event.shiftKey && event.key.toLowerCase() === 'u') {
+        if (developHasPhoto()) {
+          event.preventDefault();
+          runAutoTone();
+        } else if (useAppStore.getState().module === 'library' && useLibraryStore.getState().selection.ids.length > 0) {
+          event.preventDefault();
+          void autoToneSelection();
+        }
         return;
       }
       // Ctrl/Cmd+Enter: slideshow (as in Lightroom's impromptu slideshow).

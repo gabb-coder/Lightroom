@@ -47,6 +47,22 @@ function ClipButton({ end, histogram }: { end: 'shadows' | 'highlights'; histogr
   );
 }
 
+/** RGB values (0–255) of the rendered photo under the pointer (M32), from the small rendered copy. */
+function PixelReadout() {
+  const hover = useViewStore((s) => s.hover);
+  const image = useHistogramStore((s) => s.image);
+  if (!hover || !image || hover.x < 0 || hover.y < 0 || hover.x >= 1 || hover.y >= 1) return null;
+  const x = Math.min(image.width - 1, Math.floor(hover.x * image.width));
+  const y = Math.min(image.height - 1, Math.floor(hover.y * image.height));
+  const i = (y * image.width + x) * 4;
+  if ((image.data[i + 3] ?? 0) === 0) return null; // outside the straightened photo
+  return (
+    <div className={`num ${styles.readout}`} data-testid="pixel-readout" aria-live="off">
+      R {image.data[i]} G {image.data[i + 1]} B {image.data[i + 2]}
+    </div>
+  );
+}
+
 /** Live RGB histogram of the rendered image (design/Develop.dc.html). */
 export function Histogram() {
   const histogram = useHistogramStore((s) => s.histogram);
@@ -68,6 +84,7 @@ export function Histogram() {
         </svg>
         <ClipButton end="shadows" histogram={histogram} />
         <ClipButton end="highlights" histogram={histogram} />
+        <PixelReadout />
       </div>
     </section>
   );

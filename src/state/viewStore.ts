@@ -22,6 +22,9 @@ interface ViewState {
   toggleClipping: () => void;
   setSplit: (on: boolean) => void;
   setSplitAt: (at: number) => void;
+  /** Pointer over the photo (M32), as fractions of the shown image, for the RGB readout; null when away. */
+  hover: { x: number; y: number } | null;
+  setHover: (hover: { x: number; y: number } | null) => void;
   /** Mask overlay (M21, O): tint the selected mask's area while the Masks panel is open. */
   showMaskOverlay: boolean;
   setShowMaskOverlay: (on: boolean) => void;
@@ -40,6 +43,8 @@ interface ViewState {
 }
 
 export const useViewStore = create<ViewState>()((set) => ({
+  hover: null,
+  setHover: (hover) => set({ hover }),
   clipShadows: false,
   clipHighlights: false,
   split: false,

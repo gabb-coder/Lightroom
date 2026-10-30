@@ -123,6 +123,8 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
     pan.current = { x: e.clientX, y: e.clientY, left: area.scrollLeft, top: area.scrollTop, moved: false };
   };
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    const frame = e.currentTarget.getBoundingClientRect();
+    useViewStore.getState().setHover({ x: (e.clientX - frame.left) / frame.width, y: (e.clientY - frame.top) / frame.height });
     const p = pan.current;
     const area = areaRef.current;
     if (!p || !area) return;
@@ -165,6 +167,7 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={() => (pan.current = null)}
+            onPointerLeave={() => useViewStore.getState().setHover(null)}
           >
             <canvas ref={canvasRef} className={styles.canvas} role="img" aria-label={`Edited photo: ${photo.name}`} data-testid="photo-canvas" />
             {showOverlay && <CropOverlay oriented={orientedSize(photo, geometry.rotation)} />}
