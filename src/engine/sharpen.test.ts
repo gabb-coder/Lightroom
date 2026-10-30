@@ -20,7 +20,7 @@ function edgeImage(dark: number, bright: number, color: [number, number, number]
 
 function sharpened(data: Uint8ClampedArray, amount: number, radius: number, scale = 1) {
   const settings = defaultEditSettings();
-  settings.detail = { sharpAmount: amount, sharpRadius: radius };
+  settings.detail = { ...settings.detail, sharpAmount: amount, sharpRadius: radius };
   return applyDetailRgba8(data, { width: W, height: H }, pipelineParams(settings), scale);
 }
 

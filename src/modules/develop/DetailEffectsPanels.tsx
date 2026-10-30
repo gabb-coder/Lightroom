@@ -10,7 +10,10 @@ interface Group<K extends string> {
 }
 
 /** Groups in design order (design/Develop.dc.html). */
-const DETAIL_GROUPS: readonly Group<DetailKey>[] = [{ label: 'Sharpening', keys: ['sharpAmount', 'sharpRadius'] }];
+const DETAIL_GROUPS: readonly Group<DetailKey>[] = [
+  { label: 'Sharpening', keys: ['sharpAmount', 'sharpRadius'] },
+  { label: 'Noise reduction', keys: ['nrLuma', 'nrColor'] },
+];
 const EFFECTS_GROUPS: readonly Group<EffectsKey>[] = [
   { label: 'Vignette', keys: ['vignette'] },
   { label: 'Grain', keys: ['grain', 'grainSize'] },

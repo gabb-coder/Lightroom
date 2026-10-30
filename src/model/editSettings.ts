@@ -60,7 +60,7 @@ export interface BasicSettings {
 export type BasicSliderKey = Exclude<keyof BasicSettings, 'treatment'>;
 
 // Type aliases (not interfaces) so they stay assignable to Record<string, number>.
-export type DetailSettings = { sharpAmount: number; sharpRadius: number };
+export type DetailSettings = { sharpAmount: number; sharpRadius: number; nrLuma: number; nrColor: number };
 export type EffectsSettings = { vignette: number; grain: number; grainSize: number };
 
 /** One color grading wheel (M14): hue in degrees, saturation 0–100, luminance −100–100. */
@@ -212,7 +212,7 @@ export function defaultEditSettings(): EditSettings {
     hsl,
     colorGrading: defaultColorGrading(),
     masks: [],
-    detail: { sharpAmount: 0, sharpRadius: 1 },
+    detail: { sharpAmount: 0, sharpRadius: 1, nrLuma: 0, nrColor: 0 },
     effects: { vignette: 0, grain: 0, grainSize: 25 },
     geometry: { cropRect: { x: 0, y: 0, w: 1, h: 1 }, angle: 0, rotation: 0, flipH: false, flipV: false, aspect: 'original' },
   };
