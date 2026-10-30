@@ -256,6 +256,13 @@ component library.
   the limit for tests. Timing-sensitive e2e tests are tagged `@perf` and run
   in their own Playwright project after all others (it is skipped when
   another test fails).
+- Output (M34): `ExportOptions.outputSharpen` / `sharpenAmount`
+  (`engine/outputSharpen.ts`, luminance unsharp mask on the final export
+  pixels after resize, before the watermark; CPU only, part of export
+  presets). Contact sheet (Library, `state/contactSheetStore.ts`): layout
+  math in `model/contactSheet.ts`; each photo rendered with its edits by
+  the thumbnail export client, arranged with Canvas 2D on white pages
+  (one page downloads as an image, more as a ZIP).
 - Interface (M22): every shortcut is listed in `shortcuts/shortcutList.ts`
   (the `?` / top-bar dialog renders it; a unit test reads the handler
   sources and fails if a handled key is missing, so add new shortcuts

@@ -5,6 +5,7 @@ import { SettingsDialog } from './components/SettingsDialog';
 import { DeletePhotosDialog } from './components/DeletePhotosDialog';
 import { ShortcutsDialog } from './components/ShortcutsDialog';
 import { CompareView } from './components/CompareView';
+import { ContactSheetDialog } from './components/ContactSheetDialog';
 import { PhotoViewer } from './components/PhotoViewer';
 import { SupportBanner } from './components/SupportBanner';
 import { DevelopView } from './modules/develop/DevelopView';
@@ -43,6 +44,7 @@ export function App() {
       <ShortcutsDialog />
       <PhotoViewer />
       <CompareView />
+      <ContactSheetDialog />
     </div>
   );
 }

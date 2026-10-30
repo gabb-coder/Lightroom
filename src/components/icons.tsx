@@ -190,3 +190,13 @@ export function PlayIcon() {
     </svg>
   );
 }
+
+/** Contact sheet (M34): a page with a grid of photos. */
+export function ContactSheetIcon() {
+  return (
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
+      <rect x="2.5" y="1.5" width="11" height="13" rx="1" />
+      <path d="M5 4.5h2.5v2H5zM8.5 4.5H11v2H8.5zM5 8.5h2.5v2H5zM8.5 8.5H11v2H8.5z" />
+    </svg>
+  );
+}
