@@ -2,7 +2,11 @@ import { autoTone } from '../engine/autoTone';
 import { averageLinear, neutralizingWhiteBalance } from '../engine/whiteBalance';
 import { defaultMaskRange, type EditSettings } from '../model/editSettings';
 import { hueOf } from '../engine/masks';
+import { getOriginal } from '../db/db';
 import { fitLongEdge } from '../render/proxy';
+import { applyToPhotos } from './settingsSync';
+import { showMessage } from './copyPasteStore';
+import { useLibraryStore } from './libraryStore';
 import { useDevelopStore, type LoadedPhoto } from './developStore';
 
 /**
@@ -82,6 +86,37 @@ export function pickWhiteBalance(u: number, v: number): boolean {
   if (!wb) return false;
   applySettings('White balance', withBasic(settings, wb));
   return true;
+}
+
+/**
+ * Auto tone for several photos (M32, Library): each is measured from its own
+ * original and gets ONE "Auto tone" history step. Returns how many changed.
+ */
+export async function autoTonePhotos(ids: readonly string[]): Promise<number> {
+  const samples = new Map<string, Uint8ClampedArray>();
+  for (const id of ids) {
+    const original = await getOriginal(id);
+    if (!original) continue;
+    const bitmap = await createImageBitmap(original.blob, { imageOrientation: 'from-image', premultiplyAlpha: 'none' });
+    try {
+      const size = { width: bitmap.width, height: bitmap.height };
+      samples.set(id, readRegion(bitmap, { x: 0, y: 0, w: size.width, h: size.height }, fitLongEdge(size, AUTO_SAMPLE_EDGE)));
+    } finally {
+      bitmap.close();
+    }
+  }
+  return applyToPhotos([...samples.keys()], 'Auto tone', (current, record) => {
+    const sample = samples.get(record.id);
+    return sample ? withBasic(current, autoTone(sample, current.basic)) : current;
+  });
+}
+
+/** Library: Auto tone the selected photos, with a status message. */
+export async function autoToneSelection(): Promise<void> {
+  const ids = useLibraryStore.getState().selection.ids;
+  if (ids.length === 0) return;
+  const changed = await autoTonePhotos(ids);
+  showMessage(`Auto tone: ${changed} of ${ids.length} ${ids.length === 1 ? 'photo' : 'photos'} changed`);
 }
 
 /** Auto tone on the open photo (one history step). */

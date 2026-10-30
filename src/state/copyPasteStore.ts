@@ -38,7 +38,7 @@ export const useCopyPasteStore = create<CopyPasteState>()((set) => ({
 let messageTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Shows a short status message ("Pasted settings to 3 photos") for a few seconds. */
-function showMessage(message: string): void {
+export function showMessage(message: string): void {
   if (messageTimer) clearTimeout(messageTimer);
   useCopyPasteStore.setState({ message });
   messageTimer = setTimeout(() => useCopyPasteStore.setState({ message: null }), 5000);

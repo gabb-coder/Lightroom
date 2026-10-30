@@ -56,7 +56,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
       { action: 'Crop (Enter or Esc to finish)', keys: ['R'] },
       { action: 'White balance picker', keys: ['W'] },
       { action: 'Spot removal (Esc to finish)', keys: ['Q'] },
-      { action: 'Auto tone', keys: [MOD, 'U'] },
+      { action: 'Auto tone (Library: every selected photo)', keys: [MOD, 'U'] },
       { action: 'Clipping warnings', keys: ['J'] },
     ],
   },

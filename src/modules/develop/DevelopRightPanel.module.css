@@ -69,3 +69,17 @@
 .clipHighlights {
   right: 4px;
 }
+
+/* RGB under the pointer (M32), over the histogram's bottom edge. */
+.readout {
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  transform: translateX(-50%);
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.65);
+  color: var(--color-text-bright);
+  white-space: nowrap;
+  pointer-events: none;
+}

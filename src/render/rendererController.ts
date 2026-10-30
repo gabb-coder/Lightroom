@@ -49,8 +49,10 @@ export function attachRenderer(canvas: HTMLCanvasElement, onError: (message: str
     if (disposed || !renderer.hasImage) return;
     const state = useDevelopStore.getState();
     const before = selectShowingBefore(state);
-    const geometry = displayGeometry(state.settings.geometry, { before, cropping: state.cropping });
-    let params = before ? BEFORE_PARAMS : { ...pipelineParams(state.settings), geometry };
+    // Hovering a preset (M32) shows it without changing the edit.
+    const settings = state.presetPreview ?? state.settings;
+    const geometry = displayGeometry(settings.geometry, { before, cropping: state.cropping });
+    let params = before ? BEFORE_PARAMS : { ...pipelineParams(settings), geometry };
     const kind = state.interacting ? 'proxy' : 'full';
     const view = useViewStore.getState();
     const display = displayOptions(view, !before && !state.cropping, overlayShape(state, view.showMaskOverlay && !before));
@@ -62,14 +64,15 @@ export function attachRenderer(canvas: HTMLCanvasElement, onError: (message: str
     shown = { params, kind, display };
     renderer.draw(params, kind, { options: display, before: BEFORE_PARAMS });
     const small = renderer.readPixels(params, 'histogram');
-    useHistogramStore.getState().setHistogram(computeHistogram(small.data));
-    if (!before && !state.interacting && !state.cropping && state.photo) {
+    useHistogramStore.getState().setHistogram(computeHistogram(small.data), small);
+    if (!before && !state.interacting && !state.cropping && !state.presetPreview && state.photo) {
       usePreviewStore.getState().setPreview({ photoId: state.photo.id, settings: state.settings, image: small });
     }
     canvas.dataset.renderMode = kind;
     canvas.dataset.cropping = String(state.cropping);
     canvas.dataset.view = before ? 'before' : display.split !== null ? 'split' : 'after';
     canvas.dataset.clipping = [display.shadows && 'shadows', display.highlights && 'highlights'].filter(Boolean).join(' ') || 'off';
+    canvas.dataset.preset = state.presetPreview ? 'preview' : 'none';
     canvas.dataset.renderCount = String(++renderCount);
   };
 
@@ -102,6 +105,7 @@ export function attachRenderer(canvas: HTMLCanvasElement, onError: (message: str
     if (state.photo !== prev.photo) void loadPhoto(state.photo);
     else if (
       state.settings !== prev.settings ||
+      state.presetPreview !== prev.presetPreview ||
       state.interacting !== prev.interacting ||
       state.cropping !== prev.cropping ||
       state.selectedMaskId !== prev.selectedMaskId ||

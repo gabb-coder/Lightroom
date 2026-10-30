@@ -1,6 +1,7 @@
 import { CompareIcon, FullScreenIcon, ImportIcon, PlayIcon } from '../../components/icons';
 import { modifierLabel } from '../../shortcuts/platform';
 import { openCompare, openFullscreen, openSlideshow } from '../../state/viewerActions';
+import { autoToneSelection } from '../../state/editingAids';
 import { PhotoThumb } from '../../components/PhotoThumb';
 import { CollapsibleSection } from '../../components/SectionTitle';
 import controls from '../../components/controls.module.css';
@@ -175,6 +176,15 @@ function DevelopSettingsPanel() {
       </div>
       <button type="button" className={`${controls.button} ${styles.syncButton}`} disabled={!hasPhoto || selected < 2} onClick={openSyncDialog}>
         Sync settings…
+      </button>
+      <button
+        type="button"
+        className={`${controls.button} ${styles.syncButton}`}
+        disabled={selected === 0}
+        title={`Auto tone each selected photo (${modifierLabel()}U)`}
+        onClick={() => void autoToneSelection()}
+      >
+        Auto tone {selected > 1 ? `${selected} photos` : ''}
       </button>
       <VirtualCopyButtons />
       <RemoveButton />
