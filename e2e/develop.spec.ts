@@ -13,6 +13,17 @@ import {
 } from './utils/develop';
 import { countDifferentPixels, encodePng, imageStats, makeTestPhoto, meanAbsDiff } from './utils/png';
 
+/** smallPhotoPng's gradient with a ±16 checker of 4 px cells on top. */
+const detailedSmallPhotoPng = (() => {
+  const photo = makeTestPhoto(600, 360);
+  for (let i = 0; i < photo.data.length; i += 4) {
+    const n = i / 4;
+    const sign = (Math.floor((n % 600) / 4) + Math.floor(n / 600 / 4)) % 2 ? 16 : -16;
+    for (let c = 0; c < 3; c++) photo.data[i + c] = Math.max(0, Math.min(255, (photo.data[i + c] ?? 0) + sign));
+  }
+  return encodePng(photo);
+})();
+
 test.describe('Develop: open a photo', () => {
   test('file picker opens and renders the photo at full resolution', async ({ page }) => {
     await gotoDevelop(page);
@@ -85,7 +96,8 @@ test.describe('Develop: Basic panel', () => {
   test('every slider at min and max visibly changes the output; double-click resets to identical pixels', async ({ page }) => {
     test.slow(); // many full renders on software WebGL
     await gotoDevelop(page);
-    await openTestPhoto(page, smallPhotoPng);
+    // The gradient photo plus fine detail: Texture and Clarity (M26) have nothing to act on in a smooth gradient.
+    await openTestPhoto(page, detailedSmallPhotoPng);
     const base = await canvasPixels(page);
 
     for (const def of Object.values(BASIC_SLIDERS)) {

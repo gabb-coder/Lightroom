@@ -36,6 +36,9 @@ export const BASIC_SLIDERS: Readonly<Record<BasicSliderKey, SliderDef>> = {
   shadows: bipolar('shadows', 'Shadows', -100, 100, 1, 'int'),
   whites: bipolar('whites', 'Whites', -100, 100, 1, 'int'),
   blacks: bipolar('blacks', 'Blacks', -100, 100, 1, 'int'),
+  texture: bipolar('texture', 'Texture', -100, 100, 1, 'int'),
+  clarity: bipolar('clarity', 'Clarity', -100, 100, 1, 'int'),
+  dehaze: bipolar('dehaze', 'Dehaze', -100, 100, 1, 'int'),
   vibrance: bipolar('vibrance', 'Vibrance', -100, 100, 1, 'int'),
   saturation: bipolar('saturation', 'Saturation', -100, 100, 1, 'int'),
 };

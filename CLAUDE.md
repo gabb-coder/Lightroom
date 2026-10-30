@@ -141,6 +141,14 @@ component library.
   geometry + vignette; with nothing after color, develop renders straight to
   the output (pixel-exact fast path). Sharpening defaults to 0 (design shows
   40); catalog v3 migrates the old stored default (`model/migrate.ts`).
+- Presence (M26): Texture, Clarity, Dehaze in Basic (`engine/presence.ts`),
+  applied in the detail stage on the developed image. Each uses a "level":
+  the image block-averaged so its long edge is ≤ 1024 (Texture) or ≤ 256
+  (Clarity, Dehaze), Gaussian-blurred there (sigma relative to the photo, so
+  proxies look the same) and sampled back bilinearly; luminance and dark
+  channel are stored 16-bit in RGBA8 (`LEVEL_DOWN`/`LEVEL_BLUR` shaders,
+  `Renderer.levelPasses`). Dehaze is a simplified dark-channel haze model.
+  Plan for M26–M35: `docs/V4_PLAN.md`.
 - Color grading (M14): `engine/colorGrading.ts` runs after B&W (so it
   split-tones monochrome); zero-luma tint + gray offset on encoded values,
   weighted by shadows/midtones/highlights curves (pivot = balance, width =
