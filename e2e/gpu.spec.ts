@@ -111,6 +111,16 @@ const DETAIL_CASES: Record<string, [Partial<BasicSettings>, Partial<Geometry>, G
   ],
   'proxy: sharpen 150 radius 3 at half size': [{}, {}, { detail: { sharpAmount: 150, sharpRadius: 3 }, proxy: true }],
   'proxy: grain 60 at half size': [{}, {}, { effects: { grain: 60, grainSize: 10 }, proxy: true }],
+  // Presence (M26): Texture, Clarity, Dehaze; the large image makes the levels average blocks (factor > 1).
+  'texture 100 + sharpen 60': [{ texture: 100 }, {}, { detail: { sharpAmount: 60, sharpRadius: 1 } }],
+  'clarity -100 + grain': [{ clarity: -100 }, {}, { effects: { grain: 40, grainSize: 20 } }],
+  'dehaze 100, cropped with vignette': [{ dehaze: 100 }, { cropRect: { x: 0.1, y: 0.1, w: 0.8, h: 0.8 } }, { effects: { vignette: -50 } }],
+  'proxy: texture 60, clarity 80, dehaze 50': [{ texture: 60, clarity: 80, dehaze: 50 }, {}, { proxy: true }],
+  'large: texture 100': [{ texture: 100 }, {}, { large: true }],
+  'large: clarity 100': [{ clarity: 100 }, {}, { large: true }],
+  'large: clarity -70, texture -60': [{ clarity: -70, texture: -60 }, {}, { large: true }],
+  'large: dehaze 100': [{ dehaze: 100 }, {}, { large: true }],
+  'large: dehaze -100 + exposure, sharpen': [{ dehaze: -100, exposure: 0.4 }, {}, { large: true, detail: { sharpAmount: 50, sharpRadius: 1.2 } }],
 };
 
 /** Color grading (M14): each region, blending/balance extremes, with B&W and other edits. */

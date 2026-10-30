@@ -1,4 +1,4 @@
-import { clamp01, linearToSrgb, mapRgb, srgbToLinear, type Rgb } from './color';
+import { clamp01, linearToSrgb, luminance, mapRgb, srgbToLinear, type Rgb } from './color';
 import { applyColorGrading, colorGradingParams, type ColorGradingParams } from './colorGrading';
 import { applyCurve, buildCurveLut, isIdentityCurveSet } from './curve';
 import { applyExposure, exposureGain } from './exposure';
@@ -13,6 +13,7 @@ import { grainOffset, grainParams, type GrainParams } from './grain';
 import { sharpenOffsets, sharpenParams, type SharpenParams } from './sharpen';
 import { vignetteAmount } from './vignette';
 import { applyMasks, maskParams, maskWeight, type MaskParams } from './masks';
+import { dehazeChannel, presenceLevels, presenceOffset, presenceParams, sampleLevel, type PresenceParams } from './presence';
 
 /**
  * Numeric parameters for every implemented stage. Both the CPU reference and
@@ -33,6 +34,8 @@ export interface PipelineParams {
   bw: boolean;
   /** Color grading wheels (engine/colorGrading.ts), or null when neutral. */
   colorGrading: ColorGradingParams | null;
+  /** Texture, Clarity, Dehaze (engine/presence.ts), or null when all are zero. */
+  presence: PresenceParams | null;
   /** Detail: unsharp mask on luminance (engine/sharpen.ts), or null when off. */
   sharpen: SharpenParams | null;
   /** Effects: film grain (engine/grain.ts), or null when off. */
@@ -56,6 +59,7 @@ export function pipelineParams(settings: EditSettings): PipelineParams {
     saturationScale: saturationScale(b.saturation),
     bw: b.treatment === 'bw',
     colorGrading: colorGradingParams(settings.colorGrading),
+    presence: presenceParams(b),
     sharpen: sharpenParams(settings.detail),
     grain: grainParams(settings.effects),
     geometry: settings.geometry,
@@ -111,26 +115,36 @@ export function processRgba8(src: Uint8Array | Uint8ClampedArray, p: PipelinePar
   return out;
 }
 
-/** True when the detail stage (sharpening, grain) changes pixels. */
+/** True when the detail stage (presence, sharpening, grain) changes pixels. */
 export function hasDetailStage(p: PipelineParams): boolean {
-  return p.sharpen !== null || p.grain !== null;
+  return p.presence !== null || p.sharpen !== null || p.grain !== null;
 }
 
 /**
- * CPU reference for the detail stage on a developed RGBA8 image: sharpening
- * plus grain, both on sRGB-encoded values. `scale` is the rendered size over
+ * CPU reference for the detail stage on a developed RGBA8 image: Dehaze,
+ * then Texture, Clarity, sharpening and grain offsets, on sRGB-encoded values. `scale` is the rendered size over
  * the full-resolution size (1 for full resolution and export).
  */
 export function applyDetailRgba8(data: Uint8Array | Uint8ClampedArray, size: Size, p: PipelineParams, scale = 1): Uint8ClampedArray {
   const out = new Uint8ClampedArray(data);
   if (!hasDetailStage(p)) return out;
   const sharpen = sharpenOffsets(data, size, p.sharpen, scale);
+  const levels = presenceLevels(data, size, p.presence);
   for (let y = 0; y < size.height; y++) {
     for (let x = 0; x < size.width; x++) {
       const i = y * size.width + x;
-      const offset = (sharpen?.[i] ?? 0) + (p.grain ? grainOffset(x, y, p.grain, scale) : 0);
+      let offset = (sharpen?.[i] ?? 0) + (p.grain ? grainOffset(x, y, p.grain, scale) : 0);
+      let dark = 0;
+      if (p.presence) {
+        const luma = luminance([(data[i * 4] ?? 0) / 255, (data[i * 4 + 1] ?? 0) / 255, (data[i * 4 + 2] ?? 0) / 255]);
+        const blurT = levels.texture ? sampleLevel(levels.texture.luma, levels.texture.layout, x, y) : luma;
+        const blurC = levels.coarse ? sampleLevel(levels.coarse.luma, levels.coarse.layout, x, y) : luma;
+        if (levels.coarse) dark = sampleLevel(levels.coarse.dark, levels.coarse.layout, x, y);
+        offset += presenceOffset(luma, blurT, blurC, p.presence);
+      }
       for (let ch = 0; ch < 3; ch++) {
-        const v = (data[i * 4 + ch] ?? 0) / 255 + offset;
+        const c = (data[i * 4 + ch] ?? 0) / 255;
+        const v = (p.presence ? dehazeChannel(c, dark, p.presence.dehaze) : c) + offset;
         out[i * 4 + ch] = Math.round(Math.min(1, Math.max(0, v)) * 255);
       }
     }

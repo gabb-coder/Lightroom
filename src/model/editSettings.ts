@@ -49,6 +49,10 @@ export interface BasicSettings {
   shadows: number;
   whites: number;
   blacks: number;
+  /** Presence (M26): medium detail, large-scale contrast, haze. −100–100. */
+  texture: number;
+  clarity: number;
+  dehaze: number;
   vibrance: number;
   saturation: number;
 }
@@ -198,6 +202,9 @@ export function defaultEditSettings(): EditSettings {
       shadows: 0,
       whites: 0,
       blacks: 0,
+      texture: 0,
+      clarity: 0,
+      dehaze: 0,
       vibrance: 0,
       saturation: 0,
     },

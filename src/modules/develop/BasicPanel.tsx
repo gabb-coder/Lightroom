@@ -39,7 +39,7 @@ function AutoToneButton({ disabled }: { disabled: boolean }) {
 const GROUPS: readonly { label: string; keys: readonly BasicSliderKey[] }[] = [
   { label: 'White balance', keys: ['temp', 'tint'] },
   { label: 'Tone', keys: ['exposure', 'contrast', 'highlights', 'shadows', 'whites', 'blacks'] },
-  { label: 'Presence', keys: ['vibrance', 'saturation'] },
+  { label: 'Presence', keys: ['texture', 'clarity', 'dehaze', 'vibrance', 'saturation'] },
 ];
 
 const TREATMENTS: readonly { id: Treatment; label: string }[] = [

@@ -2,6 +2,7 @@ import { LUMA_WEIGHTS } from '../engine/color';
 import { CURVE_LUT_SIZE } from '../engine/curve';
 import { GRAIN_SEED } from '../engine/grain';
 import { HSL_CENTER_LIST, HSL_MAX_HUE_SHIFT, HSL_MAX_LUM } from '../engine/hsl';
+import { CLARITY_GAIN, DEHAZE_STRENGTH, HAZE_LEVEL, HAZE_STRENGTH, PRESENCE_WEIGHT_COUNT } from '../engine/presence';
 import { SHARPEN_WEIGHT_COUNT } from '../engine/sharpen';
 import { TONE_GAMMA } from '../engine/tone';
 import { MAX_MASKS } from '../model/editSettings';
@@ -185,6 +186,53 @@ vec4 pack16(float v) {
 }
 float unpack16(vec4 t) {
   return (floor(t.r * 255.0 + 0.5) * 256.0 + floor(t.g * 255.0 + 0.5)) / 65535.0;
+}
+`;
+
+/** engine/presence.ts: two 16-bit values per RGBA8 texel (luminance in RG, dark channel in BA). */
+const LEVEL_GLSL = /* glsl */ `
+vec2 pack16v(float v) {
+  float q = floor(clamp(v, 0.0, 1.0) * 65535.0 + 0.5);
+  float hi = floor(q / 256.0);
+  return vec2(hi / 255.0, (q - hi * 256.0) / 255.0);
+}
+float unpack16v(vec2 t) {
+  return (floor(t.x * 255.0 + 0.5) * 256.0 + floor(t.y * 255.0 + 0.5)) / 65535.0;
+}
+vec2 levelAt(sampler2D level, ivec2 q) {
+  vec4 t = texelFetch(level, q, 0);
+  return vec2(unpack16v(t.rg), unpack16v(t.ba));
+}
+`;
+
+/** engine/presence.ts sampleLevel, softDetail, presenceOffset, dehazeChannel */
+const PRESENCE_GLSL = /* glsl */ `
+vec2 sampleLevel(sampler2D level, int factor, ivec2 p) {
+  ivec2 size = textureSize(level, 0);
+  vec2 uv = (vec2(p) + 0.5) / float(factor) - 0.5;
+  vec2 i0f = floor(uv);
+  vec2 f = uv - i0f;
+  ivec2 i0 = ivec2(i0f);
+  ivec2 lo = clamp(i0, ivec2(0), size - 1);
+  ivec2 hi = clamp(i0 + 1, ivec2(0), size - 1);
+  vec2 top = mix(levelAt(level, ivec2(lo.x, lo.y)), levelAt(level, ivec2(hi.x, lo.y)), f.x);
+  vec2 bottom = mix(levelAt(level, ivec2(lo.x, hi.y)), levelAt(level, ivec2(hi.x, hi.y)), f.x);
+  return mix(top, bottom, f.y);
+}
+float softDetail(float d) { return d / (1.0 + 4.0 * abs(d)); }
+float presenceOffset(float y, float blurT, float blurC, float texture, float clarity) {
+  return texture * softDetail(y - blurT) + clarity * ${glslFloat(CLARITY_GAIN)} * 4.0 * y * (1.0 - y) * softDetail(y - blurC);
+}
+vec3 dehaze(vec3 c, float dark, float amount) {
+  if (amount > 0.0) {
+    float t = 1.0 - ${glslFloat(DEHAZE_STRENGTH)} * amount * dark;
+    return 1.0 - (1.0 - c) / t;
+  }
+  if (amount < 0.0) {
+    float k = -amount * ${glslFloat(HAZE_STRENGTH)};
+    return c * (1.0 - k) + ${glslFloat(HAZE_LEVEL)} * k;
+  }
+  return c;
 }
 `;
 
@@ -416,6 +464,60 @@ void main() {
 `;
 
 /**
+ * Presence level, step 1 (engine/presence.ts downsample): averages each
+ * factor × factor block of the developed image (edge blocks: only the pixels
+ * they have) into luminance and dark channel, 16 bits each.
+ */
+export const LEVEL_DOWN_FRAGMENT_SHADER = /* glsl */ `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform sampler2D u_image;
+uniform int u_factor;
+out vec4 outColor;
+${COLOR_GLSL}
+${LEVEL_GLSL}
+void main() {
+  ivec2 size = textureSize(u_image, 0);
+  ivec2 o = ivec2(gl_FragCoord.xy) * u_factor;
+  ivec2 e = min(o + u_factor, size);
+  float sl = 0.0;
+  float sd = 0.0;
+  for (int y = o.y; y < e.y; y++) {
+    for (int x = o.x; x < e.x; x++) {
+      vec3 c = texelFetch(u_image, ivec2(x, y), 0).rgb;
+      sl += luminance(c);
+      sd += min(c.r, min(c.g, c.b));
+    }
+  }
+  float n = float((e.x - o.x) * (e.y - o.y));
+  outColor = vec4(pack16v(sl / n), pack16v(sd / n));
+}
+`;
+
+/** Presence level, steps 2 and 3: separable Gaussian along u_dir, edges clamped, 16 bits each. */
+export const LEVEL_BLUR_FRAGMENT_SHADER = /* glsl */ `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform sampler2D u_level;
+uniform ivec2 u_dir;
+uniform int u_taps;
+uniform float u_weights[${PRESENCE_WEIGHT_COUNT}];
+out vec4 outColor;
+${LEVEL_GLSL}
+void main() {
+  ivec2 size = textureSize(u_level, 0);
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec2 sum = vec2(0.0);
+  for (int i = -u_taps; i <= u_taps; i++) {
+    sum += u_weights[abs(i)] * levelAt(u_level, clamp(p + u_dir * i, ivec2(0), size - 1));
+  }
+  outColor = vec4(pack16v(sum.x), pack16v(sum.y));
+}
+`;
+
+/**
  * Detail pass 2 of 2 (engine/pipeline.ts applyDetailRgba8): vertical blur,
  * unsharp mask on luminance, then grain. Same size as the source; rows stay
  * top-first.
@@ -432,15 +534,35 @@ uniform bool u_grainOn;
 uniform float u_grainAmount;
 uniform float u_grainCell;
 uniform float u_scale;
+uniform bool u_presenceOn;
+uniform bool u_textureOn;
+uniform sampler2D u_textureLevel;
+uniform int u_textureFactor;
+uniform bool u_coarseOn;
+uniform sampler2D u_coarseLevel;
+uniform int u_coarseFactor;
+uniform float u_texture;
+uniform float u_clarity;
+uniform float u_dehaze;
 out vec4 outColor;
 ${COLOR_GLSL}
 ${SHARPEN_GLSL}
+${LEVEL_GLSL}
+${PRESENCE_GLSL}
 ${GRAIN_GLSL}
 void main() {
   ivec2 size = textureSize(u_image, 0);
   ivec2 p = ivec2(gl_FragCoord.xy);
   vec4 src = texelFetch(u_image, p, 0);
+  vec3 c = src.rgb;
   float offset = 0.0;
+  if (u_presenceOn) {
+    float y = luminance(src.rgb);
+    float blurT = u_textureOn ? sampleLevel(u_textureLevel, u_textureFactor, p).x : y;
+    vec2 coarse = u_coarseOn ? sampleLevel(u_coarseLevel, u_coarseFactor, p) : vec2(y, 0.0);
+    offset += presenceOffset(y, blurT, coarse.x, u_texture, u_clarity);
+    c = dehaze(c, coarse.y, u_dehaze);
+  }
   if (u_sharpenOn) {
     float blur = 0.0;
     for (int j = -u_taps; j <= u_taps; j++) {
@@ -452,7 +574,7 @@ void main() {
   if (u_grainOn) {
     offset += u_grainAmount * valueNoise((vec2(p) + 0.5) / u_scale / u_grainCell);
   }
-  outColor = vec4(clamp(src.rgb + offset, 0.0, 1.0), src.a);
+  outColor = vec4(clamp(c + offset, 0.0, 1.0), src.a);
 }
 `;
 

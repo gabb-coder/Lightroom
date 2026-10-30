@@ -32,7 +32,7 @@ export function sharpenParams(detail: { sharpAmount: number; sharpRadius: number
 export interface SharpenKernel {
   /** Half-width in pixels; 0 means no blur (the mask has no effect). */
   taps: number;
-  /** weights[i] for offset ±i, i = 0..SHARPEN_MAX_TAPS; normalized, zero past taps. */
+  /** weights[i] for offset ±i, i = 0..max taps; normalized, zero past taps. */
   weights: Float32Array;
 }
 
@@ -42,9 +42,16 @@ export interface SharpenKernel {
  * Float32 so the CPU uses exactly the weights the shader receives.
  */
 export function sharpenKernel(radius: number, scale = 1): SharpenKernel {
-  const sigma = radius * scale;
-  const weights = new Float32Array(SHARPEN_WEIGHT_COUNT);
-  const taps = Math.min(SHARPEN_MAX_TAPS, Math.ceil(3 * sigma));
+  return gaussianKernel(radius * scale, SHARPEN_MAX_TAPS);
+}
+
+/**
+ * Normalized Gaussian weights for `sigma` (pixels), at most `maxTaps` on each
+ * side (taps = ceil(3σ)); `weights` has maxTaps + 1 entries, zero past taps.
+ */
+export function gaussianKernel(sigma: number, maxTaps: number): SharpenKernel {
+  const weights = new Float32Array(maxTaps + 1);
+  const taps = Math.min(maxTaps, Math.ceil(3 * sigma));
   if (sigma <= 0 || taps === 0) {
     weights[0] = 1;
     return { taps: 0, weights };

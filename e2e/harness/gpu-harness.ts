@@ -50,7 +50,30 @@ function maxDiff(a: Uint8Array | Uint8ClampedArray, b: Uint8Array | Uint8Clamped
   return { max, at };
 }
 
+/** Smooth shapes, a hazy veil and fine texture: exercises the presence levels at factor > 1. */
+function largeImage(): RgbaImage {
+  const width = 1100;
+  const height = 240;
+  const data = new Uint8Array(width * height * 4);
+  let seed = 777;
+  const random = () => {
+    seed = (seed * 1103515245 + 12345) >>> 0;
+    return ((seed >>> 16) & 0xff) / 255 - 0.5;
+  };
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const u = x / width;
+      const v = y / height;
+      const disc = Math.hypot((u - 0.3) * 4.6, v - 0.5) < 0.35 ? 70 : 0;
+      const base = 60 + 120 * u + disc + 18 * Math.sin(x / 9) * Math.cos(y / 7) + 20 * random();
+      data.set([base + 30 * v, base * 0.9, base * 0.75 + 40 * (1 - u), 255].map((c) => Math.max(0, Math.min(255, Math.round(c)))), (y * width + x) * 4);
+    }
+  }
+  return { width, height, data };
+}
+
 const source = testImage();
+const large = largeImage();
 const renderer = Renderer.create(new OffscreenCanvas(1, 1));
 renderer.setImage({ full: source });
 
@@ -58,6 +81,9 @@ renderer.setImage({ full: source });
 const proxyRenderer = Renderer.create(new OffscreenCanvas(1, 1));
 proxyRenderer.setImage({ full: { width: WIDTH * 2, height: HEIGHT * 2, data: new Uint8Array(WIDTH * HEIGHT * 16) }, proxy: source });
 const PROXY_SCALE = 0.5;
+
+const largeRenderer = Renderer.create(new OffscreenCanvas(1, 1));
+largeRenderer.setImage({ full: large });
 
 function runGpuCheck(basic: Partial<BasicSettings>, geometry: Partial<Geometry> = {}, extra: GpuExtra = {}): GpuCheckResult {
   const settings = defaultEditSettings();
@@ -70,20 +96,21 @@ function runGpuCheck(basic: Partial<BasicSettings>, geometry: Partial<Geometry> 
   if (extra.colorGrading) settings.colorGrading = { ...settings.colorGrading, ...extra.colorGrading };
   if (extra.masks) settings.masks = extra.masks;
   const params = pipelineParams(settings);
-  const gpuImage = extra.proxy ? proxyRenderer.readPixels(params, 'proxy') : renderer.readPixels(params);
-  const cpuImage = renderRgba8(source.data, source, params, extra.proxy ? PROXY_SCALE : 1);
+  const image = extra.large ? large : source;
+  const gpuImage = extra.large ? largeRenderer.readPixels(params) : extra.proxy ? proxyRenderer.readPixels(params, 'proxy') : renderer.readPixels(params);
+  const cpuImage = renderRgba8(image.data, image, params, extra.proxy ? PROXY_SCALE : 1);
   const gpu = gpuImage.data;
   const cpu = cpuImage.data;
   const sameSize = gpuImage.width === cpuImage.width && gpuImage.height === cpuImage.height;
   const diff = sameSize ? maxDiff(gpu, cpu) : { max: 255, at: 0 };
-  const changeSameSize = gpuImage.width === WIDTH && gpuImage.height === HEIGHT;
+  const changeSameSize = gpuImage.width === image.width && gpuImage.height === image.height;
   return {
     width: gpuImage.width,
     height: gpuImage.height,
     sameSize,
     maxDiff: diff.max,
     worst: { pixel: Math.floor(diff.at / 4), channel: diff.at % 4, gpu: gpu[diff.at] ?? 0, cpu: cpu[diff.at] ?? 0 },
-    maxChangeFromSource: changeSameSize ? maxDiff(gpu, source.data).max : 255,
+    maxChangeFromSource: changeSameSize ? maxDiff(gpu, image.data).max : 255,
   };
 }
 

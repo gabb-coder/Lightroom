@@ -4,10 +4,20 @@ import { BRUSH_RASTER_EDGE, type BrushRaster } from '../engine/brush';
 import { HIGHLIGHT_CLIP_RGB, isPlainDisplay, MASK_OVERLAY_OPACITY, MASK_OVERLAY_RGB, SHADOW_CLIP_RGB, type DisplayOptions } from '../engine/display';
 import type { MaskShape } from '../engine/masks';
 import { hasDetailStage, type PipelineParams } from '../engine/pipeline';
+import { CLARITY_LEVEL, levelLayout, TEXTURE_LEVEL, type LevelLayout, type LevelSpec } from '../engine/presence';
 import { sharpenKernel } from '../engine/sharpen';
 import { MAX_MASKS } from '../model/editSettings';
 import { createProgram, createTexture, type RgbaImage, type TextureSource } from './gl';
-import { BLUR_FRAGMENT_SHADER, DETAIL_FRAGMENT_SHADER, DEVELOP_FRAGMENT_SHADER, DISPLAY_FRAGMENT_SHADER, GEOMETRY_FRAGMENT_SHADER, VERTEX_SHADER } from './shaders';
+import {
+  BLUR_FRAGMENT_SHADER,
+  DETAIL_FRAGMENT_SHADER,
+  DEVELOP_FRAGMENT_SHADER,
+  DISPLAY_FRAGMENT_SHADER,
+  GEOMETRY_FRAGMENT_SHADER,
+  LEVEL_BLUR_FRAGMENT_SHADER,
+  LEVEL_DOWN_FRAGMENT_SHADER,
+  VERTEX_SHADER,
+} from './shaders';
 
 const DEVELOP_UNIFORMS = [
   'source',
@@ -45,7 +55,30 @@ const DEVELOP_UNIFORMS = [
   'cgMidWidth',
 ] as const;
 const BLUR_UNIFORMS = ['image', 'taps', 'weights'] as const;
-const DETAIL_UNIFORMS = ['image', 'blur', 'taps', 'weights', 'sharpenOn', 'sharpenAmount', 'grainOn', 'grainAmount', 'grainCell', 'scale'] as const;
+const DETAIL_UNIFORMS = [
+  'image',
+  'blur',
+  'taps',
+  'weights',
+  'sharpenOn',
+  'sharpenAmount',
+  'grainOn',
+  'grainAmount',
+  'grainCell',
+  'scale',
+  'presenceOn',
+  'textureOn',
+  'textureLevel',
+  'textureFactor',
+  'coarseOn',
+  'coarseLevel',
+  'coarseFactor',
+  'texture',
+  'clarity',
+  'dehaze',
+] as const;
+const LEVEL_DOWN_UNIFORMS = ['image', 'factor'] as const;
+const LEVEL_BLUR_UNIFORMS = ['level', 'dir', 'taps', 'weights'] as const;
 const GEOMETRY_UNIFORMS = ['image', 'flipY', 'outSize', 'rowX', 'rowY', 'vignette'] as const;
 const DISPLAY_UNIFORMS = [
   'after',
@@ -100,13 +133,24 @@ interface SizedTexture {
 type RenderTarget = SizedTexture & { framebuffer: WebGLFramebuffer; bytesPerPixel: number };
 
 /** Texture format per scratch target: the blur only needs two bytes (16-bit fixed point). */
-const SCRATCH_FORMAT: Readonly<Record<IntermediateKind, 'rgba8' | 'rg8'>> = { developed: 'rgba8', blur: 'rg8', detailed: 'rgba8', shownAfter: 'rgba8', shownBefore: 'rgba8' };
+const SCRATCH_FORMAT: Readonly<Record<IntermediateKind, 'rgba8' | 'rg8'>> = {
+  developed: 'rgba8',
+  blur: 'rg8',
+  detailed: 'rgba8',
+  shownAfter: 'rgba8',
+  shownBefore: 'rgba8',
+  textureLevel: 'rgba8',
+  textureScratch: 'rgba8',
+  coarseLevel: 'rgba8',
+  coarseScratch: 'rgba8',
+};
 
 /**
  * Reused scratch targets: developed color, 16-bit blur, after detail (source
- * size), and the finished After / Before images for the display pass (output size).
+ * size), the finished After / Before images for the display pass (output size),
+ * and the small presence levels (M26) with their blur scratch.
  */
-type IntermediateKind = 'developed' | 'blur' | 'detailed' | 'shownAfter' | 'shownBefore';
+type IntermediateKind = 'developed' | 'blur' | 'detailed' | 'shownAfter' | 'shownBefore' | 'textureLevel' | 'textureScratch' | 'coarseLevel' | 'coarseScratch';
 
 interface Target {
   /** Null = the canvas. */
@@ -140,6 +184,10 @@ export class Renderer {
   private readonly detailProgram: WebGLProgram;
   private readonly geometryProgram: WebGLProgram;
   private readonly displayProgram: WebGLProgram;
+  private readonly levelDownProgram: WebGLProgram;
+  private readonly levelBlurProgram: WebGLProgram;
+  private readonly levelDownUniforms: Uniforms<(typeof LEVEL_DOWN_UNIFORMS)[number]>;
+  private readonly levelBlurUniforms: Uniforms<(typeof LEVEL_BLUR_UNIFORMS)[number]>;
   private readonly developUniforms: Uniforms<(typeof DEVELOP_UNIFORMS)[number]>;
   private readonly blurUniforms: Uniforms<(typeof BLUR_UNIFORMS)[number]>;
   private readonly detailUniforms: Uniforms<(typeof DETAIL_UNIFORMS)[number]>;
@@ -177,6 +225,10 @@ export class Renderer {
     this.detailUniforms = locate(gl, this.detailProgram, DETAIL_UNIFORMS);
     this.geometryUniforms = locate(gl, this.geometryProgram, GEOMETRY_UNIFORMS);
     this.displayUniforms = locate(gl, this.displayProgram, DISPLAY_UNIFORMS);
+    this.levelDownProgram = createProgram(gl, VERTEX_SHADER, LEVEL_DOWN_FRAGMENT_SHADER);
+    this.levelBlurProgram = createProgram(gl, VERTEX_SHADER, LEVEL_BLUR_FRAGMENT_SHADER);
+    this.levelDownUniforms = locate(gl, this.levelDownProgram, LEVEL_DOWN_UNIFORMS);
+    this.levelBlurUniforms = locate(gl, this.levelBlurProgram, LEVEL_BLUR_UNIFORMS);
     this.emptyBrush = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.emptyBrush);
     gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.R8, 1, 1, 1);
@@ -253,7 +305,7 @@ export class Renderer {
     this.gl.deleteTexture(this.curveTexture);
     this.gl.deleteTexture(this.emptyBrush);
     if (this.brushTexture) this.gl.deleteTexture(this.brushTexture);
-    for (const program of [this.developProgram, this.blurProgram, this.detailProgram, this.geometryProgram, this.displayProgram]) this.gl.deleteProgram(program);
+    for (const program of [this.developProgram, this.blurProgram, this.detailProgram, this.geometryProgram, this.displayProgram, this.levelDownProgram, this.levelBlurProgram]) this.gl.deleteProgram(program);
   }
 
   /**
@@ -330,9 +382,39 @@ export class Renderer {
     this.geometryPass(image, params, target);
   }
 
-  /** Sharpening (blur passes) and grain at source size; returns the result texture. */
+  /**
+   * A presence level (engine/presence.ts buildLevel): block average of the
+   * developed image, then horizontal and vertical blur, 16 bits per value.
+   */
+  private levelPasses(developed: RenderTarget, spec: LevelSpec, kind: 'texture' | 'coarse'): { target: RenderTarget; layout: LevelLayout } {
+    const { gl } = this;
+    const layout = levelLayout(developed, spec);
+    const level = this.intermediateFor(kind === 'texture' ? 'textureLevel' : 'coarseLevel', layout);
+    const scratch = this.intermediateFor(kind === 'texture' ? 'textureScratch' : 'coarseScratch', layout);
+    this.bindTarget(this.offscreen(level));
+    gl.useProgram(this.levelDownProgram);
+    this.bindTexture(0, developed.texture, this.levelDownUniforms.image);
+    gl.uniform1i(this.levelDownUniforms.factor, layout.factor);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    const u = this.levelBlurUniforms;
+    gl.useProgram(this.levelBlurProgram);
+    gl.uniform1i(u.taps, layout.kernel.taps);
+    gl.uniform1fv(u.weights, layout.kernel.weights);
+    for (const [from, to, dir] of [[level, scratch, [1, 0]], [scratch, level, [0, 1]]] as const) {
+      this.bindTarget(this.offscreen(to));
+      this.bindTexture(0, from.texture, u.level);
+      gl.uniform2i(u.dir, dir[0], dir[1]);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    return { target: level, layout };
+  }
+
+  /** Presence levels, sharpening (blur passes) and grain at source size; returns the result texture. */
   private detailPasses(developed: RenderTarget, params: PipelineParams, scale: number): RenderTarget {
     const { gl } = this;
+    const presence = params.presence;
+    const textureLevel = presence && presence.texture !== 0 ? this.levelPasses(developed, TEXTURE_LEVEL, 'texture') : null;
+    const coarseLevel = presence && (presence.clarity !== 0 || presence.dehaze !== 0) ? this.levelPasses(developed, CLARITY_LEVEL, 'coarse') : null;
     const kernel = sharpenKernel(params.sharpen?.radius ?? 0, scale);
     const blur = params.sharpen ? this.intermediateFor('blur', developed) : null;
     if (blur) {
@@ -359,6 +441,17 @@ export class Renderer {
     gl.uniform1f(u.grainAmount, params.grain?.amount ?? 0);
     gl.uniform1f(u.grainCell, params.grain?.cell ?? 1);
     gl.uniform1f(u.scale, scale);
+    // Level samplers point at valid textures even when a level is off.
+    this.bindTexture(2, (textureLevel?.target ?? developed).texture, u.textureLevel);
+    this.bindTexture(3, (coarseLevel?.target ?? developed).texture, u.coarseLevel);
+    gl.uniform1i(u.presenceOn, presence ? 1 : 0);
+    gl.uniform1i(u.textureOn, textureLevel ? 1 : 0);
+    gl.uniform1i(u.textureFactor, textureLevel?.layout.factor ?? 1);
+    gl.uniform1i(u.coarseOn, coarseLevel ? 1 : 0);
+    gl.uniform1i(u.coarseFactor, coarseLevel?.layout.factor ?? 1);
+    gl.uniform1f(u.texture, presence?.texture ?? 0);
+    gl.uniform1f(u.clarity, presence?.clarity ?? 0);
+    gl.uniform1f(u.dehaze, presence?.dehaze ?? 0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     return detailed;
   }

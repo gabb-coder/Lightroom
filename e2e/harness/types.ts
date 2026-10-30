@@ -23,6 +23,8 @@ export interface GpuExtra {
   colorGrading?: Partial<EditSettings['colorGrading']>;
   masks?: EditSettings['masks'];
   proxy?: boolean;
+  /** Render an 1100 × 240 photo-like image instead (presence levels average blocks there). */
+  large?: boolean;
 }
 
 export interface GpuHarness {
