@@ -1,4 +1,6 @@
-import { ImportIcon } from '../../components/icons';
+import { CompareIcon, FullScreenIcon, ImportIcon, PlayIcon } from '../../components/icons';
+import { modifierLabel } from '../../shortcuts/platform';
+import { openCompare, openFullscreen, openSlideshow } from '../../state/viewerActions';
 import { PhotoThumb } from '../../components/PhotoThumb';
 import { CollapsibleSection } from '../../components/SectionTitle';
 import controls from '../../components/controls.module.css';
@@ -44,12 +46,24 @@ function StatusBar({ shown, total }: { shown: number; total: number }) {
   const thumbSize = useLibraryStore((s) => s.thumbSize);
   const copyMessage = useCopyPasteStore((s) => s.message);
   const setThumbSize = useLibraryStore((s) => s.setThumbSize);
+  const hasFocus = useLibraryStore((s) => s.selectedId !== null);
   return (
     <div className={`num ${styles.statusBar}`} data-testid="status-bar">
       <span>
         {shown} of {total} photos
       </span>
       <span>{selected} selected</span>
+      <div className={styles.viewButtons} role="group" aria-label="View">
+        <button type="button" className={controls.iconButton} aria-label="Compare" title="Compare (C)" disabled={total < 2 || !hasFocus} onClick={() => void openCompare()}>
+          <CompareIcon />
+        </button>
+        <button type="button" className={controls.iconButton} aria-label="Full screen" title="Full screen (F)" disabled={shown === 0} onClick={openFullscreen}>
+          <FullScreenIcon />
+        </button>
+        <button type="button" className={controls.iconButton} aria-label="Slideshow" title={`Slideshow (${modifierLabel()}Enter)`} disabled={shown === 0} onClick={openSlideshow}>
+          <PlayIcon />
+        </button>
+      </div>
       {importing && (
         <span role="status">
           Importing {importing.done} of {importing.total}…
