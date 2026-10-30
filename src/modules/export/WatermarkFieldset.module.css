@@ -85,6 +85,32 @@
   pointer-events: none;
 }
 
+/* The mark inside its box: turned about its center like the export (M35). */
+.markImage {
+  position: absolute;
+  display: block;
+  max-width: none;
+  user-select: none;
+}
+
+/* Watermark 1 / 2 (M35). */
+.marks {
+  width: fit-content;
+  margin-bottom: 10px;
+}
+
+.fontRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.fontRow > select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 /* In the enlarged preview the watermark can be dragged. */
 .movable {
   pointer-events: auto;

@@ -132,6 +132,7 @@ const THUMBNAIL_OPTIONS: ExportOptions = {
   subfolder: '',
   // Thumbnails show the photo, never the export logo or output sharpening.
   watermark: DEFAULT_WATERMARK,
+  watermark2: DEFAULT_WATERMARK,
   outputSharpen: 'none',
   sharpenAmount: 'standard',
 };

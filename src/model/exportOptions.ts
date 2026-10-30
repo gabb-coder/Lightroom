@@ -25,6 +25,8 @@ export interface ExportOptions {
   subfolder: string;
   /** A logo laid on every exported photo (M23). */
   watermark: WatermarkOptions;
+  /** A second watermark (M35), laid on after the first. */
+  watermark2: WatermarkOptions;
   /** Output sharpening (M34, engine/outputSharpen.ts): where the photo is going, and how much. */
   outputSharpen: OutputSharpenTarget;
   sharpenAmount: OutputSharpenAmount;
@@ -34,6 +36,9 @@ export const OUTPUT_SHARPEN_LABELS: Readonly<Record<OutputSharpenTarget, string>
 export const SHARPEN_AMOUNT_LABELS: Readonly<Record<OutputSharpenAmount, string>> = { low: 'Low', standard: 'Standard', high: 'High' };
 
 export type WatermarkKind = 'logo' | 'text';
+/** Text watermark typeface (M35): Inter (bundled), or the system's serif / monospace. */
+export type WatermarkFont = 'sans' | 'serif' | 'mono';
+export const WATERMARK_FONT_LABELS: Readonly<Record<WatermarkFont, string>> = { sans: 'Sans (Inter)', serif: 'Serif', mono: 'Monospace' };
 
 export interface WatermarkOptions {
   enabled: boolean;
@@ -47,6 +52,14 @@ export interface WatermarkOptions {
   textColor: string;
   /** A soft shadow behind the text, so it reads on any photo. */
   textShadow: boolean;
+  /** Text style (M35). */
+  textFont: WatermarkFont;
+  textBold: boolean;
+  /** Turn in degrees, clockwise (M35), −90–90. */
+  rotation: number;
+  /** Repeat across the whole photo (M35) instead of one placed mark; gap in % of the mark. */
+  pattern: boolean;
+  spacing: number;
   /** A grid position, or 'custom' after dragging it in the enlarged preview (M25). */
   position: WatermarkAnchor;
   /** Where a 'custom' watermark sits between the margins, 0–1 across and down (engine/watermark.ts). */
@@ -60,7 +73,13 @@ export interface WatermarkOptions {
   inset: number;
 }
 
-export const WATERMARK_RANGES = { size: { min: 2, max: 100 }, opacity: { min: 5, max: 100 }, inset: { min: 0, max: 25 } } as const;
+export const WATERMARK_RANGES = {
+  size: { min: 2, max: 100 },
+  opacity: { min: 5, max: 100 },
+  inset: { min: 0, max: 25 },
+  rotation: { min: -90, max: 90 },
+  spacing: { min: 0, max: 300 },
+} as const;
 
 export const MAX_WATERMARK_TEXT = 200;
 
@@ -71,6 +90,11 @@ export const DEFAULT_WATERMARK: WatermarkOptions = {
   text: '',
   textColor: '#ffffff',
   textShadow: true,
+  textFont: 'sans',
+  textBold: true,
+  rotation: 0,
+  pattern: false,
+  spacing: 60,
   position: 'bottom-right',
   x: 1,
   y: 1,
@@ -97,6 +121,7 @@ const BASE: ExportOptions = {
   useSubfolder: true,
   subfolder: 'Exports',
   watermark: DEFAULT_WATERMARK,
+  watermark2: DEFAULT_WATERMARK,
   outputSharpen: 'none',
   sharpenAmount: 'standard',
 };
@@ -142,6 +167,7 @@ export function normalizeExportOptions(raw: Partial<ExportOptions>): ExportOptio
     useSubfolder: typeof o.useSubfolder === 'boolean' ? o.useSubfolder : BASE.useSubfolder,
     subfolder: typeof o.subfolder === 'string' ? safeFolderName(o.subfolder) : BASE.subfolder,
     watermark: normalizeWatermark(o.watermark),
+    watermark2: normalizeWatermark(o.watermark2),
     outputSharpen: o.outputSharpen === 'screen' || o.outputSharpen === 'matte' || o.outputSharpen === 'glossy' ? o.outputSharpen : 'none',
     sharpenAmount: o.sharpenAmount === 'low' || o.sharpenAmount === 'high' ? o.sharpenAmount : 'standard',
   };
@@ -162,6 +188,11 @@ export function normalizeWatermark(raw: unknown): WatermarkOptions {
     text: typeof w.text === 'string' ? w.text.replace(/[\r\n\t]+/g, ' ').slice(0, MAX_WATERMARK_TEXT) : d.text,
     textColor: typeof w.textColor === 'string' && /^#[0-9a-f]{6}$/i.test(w.textColor) ? w.textColor.toLowerCase() : d.textColor,
     textShadow: typeof w.textShadow === 'boolean' ? w.textShadow : d.textShadow,
+    textFont: w.textFont === 'serif' || w.textFont === 'mono' ? w.textFont : 'sans',
+    textBold: typeof w.textBold === 'boolean' ? w.textBold : d.textBold,
+    rotation: num(w.rotation, WATERMARK_RANGES.rotation, d.rotation),
+    pattern: w.pattern === true,
+    spacing: num(w.spacing, WATERMARK_RANGES.spacing, d.spacing),
     position: w.position === 'custom' || WATERMARK_POSITIONS.some((p) => p === w.position) ? (w.position as WatermarkAnchor) : d.position,
     x: fraction(w.x, d.x),
     y: fraction(w.y, d.y),
@@ -171,11 +202,20 @@ export function normalizeWatermark(raw: unknown): WatermarkOptions {
   };
 }
 
-/** True when exports get a watermark: switched on, with a logo chosen or some text. */
-export function hasWatermark(o: Pick<ExportOptions, 'watermark'>): boolean {
-  const w = o.watermark;
+/** True when a watermark applies: switched on, with a logo chosen or some text. */
+export function markApplies(w: WatermarkOptions): boolean {
   if (!w.enabled) return false;
   return w.kind === 'text' ? w.text.trim() !== '' : w.logoId !== null;
+}
+
+/** True when exports get a watermark (either of the two, M35). */
+export function hasWatermark(o: Pick<ExportOptions, 'watermark' | 'watermark2'>): boolean {
+  return watermarksOf(o).some(markApplies);
+}
+
+/** Both watermarks (M35), first then second. */
+export function watermarksOf(o: Pick<ExportOptions, 'watermark' | 'watermark2'>): [WatermarkOptions, WatermarkOptions] {
+  return [o.watermark, o.watermark2];
 }
 
 /** Size of the exported image for a rendered output of `width × height`. */
@@ -238,7 +278,7 @@ export function uniqueFileNames(names: readonly string[]): string[] {
 }
 
 /** Settings an export preset leaves alone: where files go (M19) and the logo (M23). */
-export const KEPT_KEYS = ['destination', 'useSubfolder', 'subfolder', 'watermark'] as const;
+export const KEPT_KEYS = ['destination', 'useSubfolder', 'subfolder', 'watermark', 'watermark2'] as const;
 
 export const DESTINATION_LABELS: Readonly<Record<ExportDestination, string>> = {
   downloads: 'Downloads, one file each',
@@ -258,7 +298,7 @@ export function safeFolderName(name: string): string {
 
 /** `options` with the kept settings of `from` (applying a preset keeps where files go and the logo). */
 export function withKept(options: ExportOptions, from: Pick<ExportOptions, (typeof KEPT_KEYS)[number]>): ExportOptions {
-  return { ...options, destination: from.destination, useSubfolder: from.useSubfolder, subfolder: from.subfolder, watermark: from.watermark };
+  return { ...options, destination: from.destination, useSubfolder: from.useSubfolder, subfolder: from.subfolder, watermark: from.watermark, watermark2: from.watermark2 };
 }
 
 /** Same export look, wherever the files go and whatever the logo. */

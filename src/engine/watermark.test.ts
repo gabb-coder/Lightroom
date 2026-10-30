@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   applyWatermark,
   compositeLogo,
+  patternRects,
   placementFractions,
+  rotatedBox,
+  rotateRaster,
   resampleWeights,
   resizeLogo,
   snapPlacement,
   textShadowColor,
   watermarkFractionsAt,
+  watermarkGeometry,
   watermarkRect,
   WATERMARK_POSITIONS,
 } from './watermark';
@@ -139,5 +143,95 @@ describe('text watermark shadow', () => {
     expect(textShadowColor('#ffd400')).toBe('rgba(0, 0, 0, 0.55)');
     expect(textShadowColor('#000000')).toBe('rgba(255, 255, 255, 0.55)');
     expect(textShadowColor('#1e3a8a')).toBe('rgba(255, 255, 255, 0.55)');
+  });
+});
+
+describe('turned and repeated marks (M35)', () => {
+  it('without a turn the box is the mark itself and the result is what it was before', () => {
+    const p = { position: 'bottom-right' as const, size: 20, inset: 3 };
+    const g = watermarkGeometry(IMAGE, LOGO, { ...p, rotation: 0 });
+    expect(g.rect).toEqual(watermarkRect(IMAGE, LOGO, p));
+    expect(g.inner).toEqual({ width: g.rect.width, height: g.rect.height });
+
+    const logo = solid(LOGO.width, LOGO.height, [255, 0, 0, 255]);
+    const before = solid(IMAGE.width, IMAGE.height, [10, 20, 30, 255]);
+    const rect = watermarkRect(before, logo, p);
+    compositeLogo(before, resizeLogo(logo, rect), rect, 0.6);
+    const after = solid(IMAGE.width, IMAGE.height, [10, 20, 30, 255]);
+    applyWatermark(after, logo, { ...p, rotation: 0 }, 0.6, null);
+    let differ = 0;
+    for (let i = 0; i < after.data.length; i++) if (after.data[i] !== before.data[i]) differ++;
+    expect(differ).toBe(0);
+  });
+
+  it('turns about the center: the box grows to hold it and stays between the margins', () => {
+    expect(rotatedBox(200, 100, 90).width).toBeCloseTo(100);
+    expect(rotatedBox(200, 100, 90).height).toBeCloseTo(200);
+    const turned = rotatedBox(200, 100, 45);
+    expect(turned.width).toBeCloseTo(turned.height);
+    expect(turned.width).toBeCloseTo(150 * Math.SQRT2);
+
+    const g = watermarkGeometry(IMAGE, LOGO, { position: 'bottom-right', size: 30, inset: 2, rotation: 30 });
+    expect(g.inner.width).toBe(300);
+    expect(g.rect.width).toBeGreaterThan(g.inner.width);
+    expect(g.rect.x + g.rect.width).toBe(IMAGE.width - 12);
+    expect(g.rect.y + g.rect.height).toBe(IMAGE.height - 12);
+    // A big turned mark shrinks to fit, keeping its shape.
+    const big = watermarkGeometry(IMAGE, LOGO, { position: 'center', size: 100, inset: 0, rotation: 90 });
+    expect(big.rect.height).toBeLessThanOrEqual(IMAGE.height);
+    expect(big.inner.width / big.inner.height).toBeCloseTo(2, 1);
+  });
+
+  it('turns clockwise, like CSS rotate(): the left end of the mark ends up at the top at 90°', () => {
+    // 4 × 2 mark: red left half, blue right half (premultiplied, opaque).
+    const size = { width: 4, height: 2 };
+    const raster = new Float32Array(4 * 2 * 4);
+    for (let y = 0; y < 2; y++) for (let x = 0; x < 4; x++) raster.set(x < 2 ? [1, 0, 0, 1] : [0, 0, 1, 1], (y * 4 + x) * 4);
+    const out = rotateRaster(raster, size, 90, { width: 2, height: 4 });
+    const px = (x: number, y: number) => Array.from(out.slice((y * 2 + x) * 4, (y * 2 + x) * 4 + 4));
+    expect(px(0, 0)).toEqual([1, 0, 0, 1]);
+    expect(px(1, 3)).toEqual([0, 0, 1, 1]);
+    // Outside the turned mark it is transparent.
+    const diag = rotateRaster(raster, size, 45, { width: 5, height: 5 });
+    expect(diag[3]).toBe(0);
+  });
+
+  it('repeats in a brick pattern that covers the photo to its edges without overlapping', () => {
+    const tile = { width: 100, height: 40 };
+    const rects = patternRects(IMAGE, tile, { spacing: 50 });
+    expect(rects.length).toBeGreaterThan(20);
+    const rows = [...new Set(rects.map((r) => r.y))].sort((a, b) => a - b);
+    expect(rows[0]).toBeLessThanOrEqual(20);
+    expect((rows.at(-1) ?? 0) + tile.height).toBeGreaterThanOrEqual(IMAGE.height - 20);
+    expect((rows[1] ?? 0) - (rows[0] ?? 0)).toBe(60);
+    for (const y of rows) {
+      const row = rects.filter((r) => r.y === y).sort((a, b) => a.x - b.x);
+      expect(row[0]?.x ?? 1).toBeLessThanOrEqual(0);
+      expect((row.at(-1)?.x ?? 0) + tile.width).toBeGreaterThanOrEqual(IMAGE.width);
+      for (let i = 1; i < row.length; i++) expect((row[i]?.x ?? 0) - (row[i - 1]?.x ?? 0)).toBe(150);
+    }
+    // Neighbouring rows are shifted by half a step.
+    const firstX = (y: number | undefined) => Math.min(...rects.filter((r) => r.y === y).map((r) => r.x));
+    expect(Math.abs(firstX(rows[1]) - firstX(rows[0]))).toBe(75);
+    // No spacing: the tiles touch.
+    const tight = patternRects(IMAGE, tile, { spacing: 0 });
+    const tRow = tight.filter((r) => r.y === tight[0]?.y).sort((a, b) => a.x - b.x);
+    expect((tRow[1]?.x ?? 0) - (tRow[0]?.x ?? 0)).toBe(tile.width);
+  });
+
+  it('a repeated mark is drawn on every tile, ignoring the margin', () => {
+    const logo = solid(LOGO.width, LOGO.height, [255, 255, 255, 255]);
+    const image = solid(IMAGE.width, IMAGE.height, [0, 0, 0, 255]);
+    const first = applyWatermark(image, logo, { position: 'center', size: 10, inset: 10 }, 1, { spacing: 100 });
+    const tiles = patternRects(IMAGE, { width: first.width, height: first.height }, { spacing: 100 });
+    let white = 0;
+    for (let i = 0; i < image.data.length; i += 4) if (image.data[i] === 255) white++;
+    const inside = tiles.reduce((n, t) => {
+      const w = Math.min(IMAGE.width, t.x + t.width) - Math.max(0, t.x);
+      const h = Math.min(IMAGE.height, t.y + t.height) - Math.max(0, t.y);
+      return n + Math.max(0, w) * Math.max(0, h);
+    }, 0);
+    expect(white).toBe(inside);
+    expect(first.width).toBe(100);
   });
 });

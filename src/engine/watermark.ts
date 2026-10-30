@@ -27,6 +27,13 @@ export interface WatermarkPlacement {
    */
   x?: number;
   y?: number;
+  /** Turn in degrees, clockwise (M35); the mark is placed by its turned bounding box. */
+  rotation?: number;
+}
+
+/** Repeat the mark across the whole photo (M35); `spacing` = gap as % of the mark's size. */
+export interface WatermarkPattern {
+  spacing: number;
 }
 
 export interface Size {
@@ -41,16 +48,33 @@ export interface Rect {
   height: number;
 }
 
-/** The logo's size, the margin, and the room left to move it in, in whole pixels. */
+/** Bounding box of a w × h box turned by `deg`. */
+export function rotatedBox(width: number, height: number, deg: number): Size {
+  if (!deg) return { width, height };
+  const t = (deg * Math.PI) / 180;
+  const c = Math.abs(Math.cos(t));
+  const s = Math.abs(Math.sin(t));
+  return { width: width * c + height * s, height: width * s + height * c };
+}
+
+/**
+ * The logo's own size (`inner`), its (turned) bounding box, the margin and
+ * the room left to move it in, in whole pixels. Without a turn the box is
+ * the logo itself.
+ */
 function layout(image: Size, logo: Size, p: WatermarkPlacement) {
   const inset = Math.round((Math.min(image.width, image.height) * p.inset) / 100);
   const room = { width: Math.max(1, image.width - 2 * inset), height: Math.max(1, image.height - 2 * inset) };
   let width = (image.width * p.size) / 100;
   let height = (width * logo.height) / logo.width;
-  const fit = Math.min(1, room.width / width, room.height / height);
+  const turned = rotatedBox(width, height, p.rotation ?? 0);
+  const fit = Math.min(1, room.width / turned.width, room.height / turned.height);
   width = Math.max(1, Math.round(width * fit));
   height = Math.max(1, Math.round(height * fit));
-  return { inset, width, height, free: { x: room.width - width, y: room.height - height } };
+  const box = rotatedBox(width, height, p.rotation ?? 0);
+  const boxW = Math.max(1, Math.round(box.width));
+  const boxH = Math.max(1, Math.round(box.height));
+  return { inset, inner: { width, height }, width: boxW, height: boxH, free: { x: Math.max(0, room.width - boxW), y: Math.max(0, room.height - boxH) } };
 }
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
@@ -67,9 +91,70 @@ export function placementFractions(p: WatermarkPlacement): { x: number; y: numbe
  * and shrinks it if it wouldn't fit between the insets.
  */
 export function watermarkRect(image: Size, logo: Size, p: WatermarkPlacement): Rect {
-  const { inset, width, height, free } = layout(image, logo, p);
+  return watermarkGeometry(image, logo, p).rect;
+}
+
+/** The (turned) mark's bounding box on the image, and the mark's own size inside it. */
+export function watermarkGeometry(image: Size, logo: Size, p: WatermarkPlacement): { rect: Rect; inner: Size } {
+  const { inset, inner, width, height, free } = layout(image, logo, p);
   const f = placementFractions(p);
-  return { x: inset + Math.round(free.x * f.x), y: inset + Math.round(free.y * f.y), width, height };
+  return { rect: { x: inset + Math.round(free.x * f.x), y: inset + Math.round(free.y * f.y), width, height }, inner };
+}
+
+/**
+ * Where the tiles of a repeated mark go (M35): rows of `tile`-sized boxes
+ * with gaps of `spacing` % of the tile, every other row shifted by half a
+ * step (brick pattern), centered on the image and covering it to the edges.
+ */
+export function patternRects(image: Size, tile: Size, pattern: WatermarkPattern): Rect[] {
+  const gapX = Math.round((tile.width * pattern.spacing) / 100);
+  const gapY = Math.round((tile.height * pattern.spacing) / 100);
+  const stepX = tile.width + gapX;
+  const stepY = tile.height + gapY;
+  const rows = Math.ceil(image.height / stepY) + 1;
+  const cols = Math.ceil(image.width / stepX) + 2;
+  const y0 = Math.round((image.height - (rows * stepY - gapY)) / 2);
+  const x0 = Math.round((image.width - (cols * stepX - gapX)) / 2);
+  const out: Rect[] = [];
+  for (let r = 0; r < rows; r++) {
+    const shift = r % 2 === 1 ? Math.round(stepX / 2) : 0;
+    for (let c = 0; c < cols; c++) {
+      const rect = { x: x0 + c * stepX + shift - Math.round(stepX / 2), y: y0 + r * stepY, width: tile.width, height: tile.height };
+      if (rect.x < image.width && rect.y < image.height && rect.x + rect.width > 0 && rect.y + rect.height > 0) out.push(rect);
+    }
+  }
+  return out;
+}
+
+/**
+ * A resized (premultiplied) mark turned by `deg` clockwise into a box of
+ * `box` size, centered; bilinear, transparent outside the mark.
+ */
+export function rotateRaster(raster: Float32Array, size: Size, deg: number, box: Size): Float32Array {
+  const out = new Float32Array(box.width * box.height * 4);
+  const t = (deg * Math.PI) / 180;
+  const cos = Math.cos(t);
+  const sin = Math.sin(t);
+  const at = (i: number, j: number, c: number) => (i < 0 || j < 0 || i >= size.width || j >= size.height ? 0 : (raster[(j * size.width + i) * 4 + c] ?? 0));
+  for (let y = 0; y < box.height; y++) {
+    for (let x = 0; x < box.width; x++) {
+      // Box pixel center → the mark's own pixel coordinates (inverse turn).
+      const dx = x + 0.5 - box.width / 2;
+      const dy = y + 0.5 - box.height / 2;
+      const u = dx * cos + dy * sin + size.width / 2 - 0.5;
+      const v = -dx * sin + dy * cos + size.height / 2 - 0.5;
+      const i0 = Math.floor(u);
+      const j0 = Math.floor(v);
+      const fx = u - i0;
+      const fy = v - j0;
+      for (let c = 0; c < 4; c++) {
+        const top = at(i0, j0, c) * (1 - fx) + at(i0 + 1, j0, c) * fx;
+        const bottom = at(i0, j0 + 1, c) * (1 - fx) + at(i0 + 1, j0 + 1, c) * fx;
+        out[(y * box.width + x) * 4 + c] = top * (1 - fy) + bottom * fy;
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -188,16 +273,24 @@ export function compositeLogo(image: { width: number; height: number; data: Uint
   }
 }
 
-/** Places and composites a logo onto an RGBA8 image, in place. */
+/**
+ * Places and composites a logo onto an RGBA8 image, in place: resized,
+ * turned if asked (M35), once at its place or repeated across the photo.
+ * Returns the placed box (the first tile's, for a pattern).
+ */
 export function applyWatermark(
   image: { width: number; height: number; data: Uint8Array | Uint8ClampedArray },
   logo: { width: number; height: number; data: Uint8Array | Uint8ClampedArray },
   placement: WatermarkPlacement,
   opacity: number,
+  pattern: WatermarkPattern | null = null,
 ): Rect {
-  const rect = watermarkRect(image, logo, placement);
-  compositeLogo(image, resizeLogo(logo, rect), rect, opacity);
-  return rect;
+  const { rect, inner } = watermarkGeometry(image, logo, pattern ? { ...placement, inset: 0 } : placement);
+  const resized = resizeLogo(logo, inner);
+  const raster = placement.rotation ? rotateRaster(resized, inner, placement.rotation, rect) : resized;
+  const tiles = pattern ? patternRects(image, rect, pattern) : [rect];
+  for (const tile of tiles) compositeLogo(image, raster, tile, opacity);
+  return tiles[0] ?? rect;
 }
 
 /** Shadow color for text of color `hex` (#rrggbb): dark behind light text, light behind dark text. */
