@@ -11,6 +11,8 @@ import {
   type MaskAdjustKey,
   type MaskKind,
   MAX_MASKS,
+  MAX_SPOTS,
+  type Spot,
   type GradeWheel,
   type EffectsKey,
   type HslColor,
@@ -33,6 +35,7 @@ import {
 import { basicHistoryKey, basicHistoryLabel } from '../model/historyDisplay';
 import { applyPresetTo, type Preset } from '../model/presets';
 import { jsonEqual } from '../model/compare';
+import { DEFAULT_SPOT_OPTIONS, spotRadius, type SpotOptions } from '../model/spotEdit';
 import type { CurveChannel } from '../model/curveEdit';
 import { BRUSH_FEATHER_SLIDER, BRUSH_SIZE_SLIDER, DETAIL_SLIDERS, EFFECTS_SLIDERS, GRADE_REGION_LABELS, gradeSliderDef, GRADING_SLIDERS, hslSliderDef, maskSliderDef, type HslProp } from '../model/sliders';
 
@@ -77,6 +80,11 @@ interface DevelopState {
   masksOpen: boolean;
   /** White balance eyedropper active: the next click on the photo sets Temp/Tint (M20). */
   wbPicking: boolean;
+  /** The Spot removal panel is open: clicks on the photo add spots (M28). */
+  spotsOpen: boolean;
+  selectedSpotId: string | null;
+  /** Options for new spots; not part of the edit. */
+  spotOptions: SpotOptions;
   /** Brush options for new strokes (M21); not part of the edit. */
   brush: BrushOptions;
   setBrush: (patch: Partial<BrushOptions>) => void;
@@ -103,6 +111,16 @@ interface DevelopState {
   setMaskTool: (tool: MaskKind | null) => void;
   setMasksOpen: (open: boolean) => void;
   setEffect: (key: EffectsKey, value: number) => void;
+  /** Adds a spot as one history step and selects it. */
+  addSpot: (spot: Spot) => void;
+  /** Changes a spot; `key` merges a drag into one step. */
+  updateSpot: (id: string, patch: Partial<Spot>, label: string, key: string | null) => void;
+  removeSpot: (id: string) => void;
+  clearSpots: () => void;
+  selectSpot: (id: string | null) => void;
+  setSpotsOpen: (open: boolean) => void;
+  /** Changes an option for new spots, and the selected spot's too. */
+  setSpotOption: <K extends keyof SpotOptions>(key: K, value: SpotOptions[K]) => void;
   applyPreset: (preset: Preset) => void;
   /** Replaces all settings as one history step (paste, sync, Previous); no step if nothing changes. */
   applySettings: (label: string, settings: EditSettings) => void;
@@ -179,18 +197,21 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
   maskTool: null,
   masksOpen: false,
   wbPicking: false,
+  spotsOpen: false,
+  selectedSpotId: null,
+  spotOptions: DEFAULT_SPOT_OPTIONS,
   brush: { size: BRUSH_SIZE_SLIDER.defaultValue, feather: BRUSH_FEATHER_SLIDER.defaultValue, erase: false },
   setBrush: (patch) => set((s) => ({ brush: { ...s.brush, ...patch } })),
   loadPhoto: (photo, history) =>
     set((s) => {
       if (s.photo && s.photo.bitmap !== photo.bitmap) s.photo.bitmap.close?.();
       const previousPhotoId = s.photo && s.photo.id !== photo.id ? s.photo.id : s.previousPhotoId;
-      return { photo, previousPhotoId, ...initialEditState(history), interacting: false, before: false, peeking: false, cropping: false, selectedMaskId: null, maskTool: null, wbPicking: false };
+      return { photo, previousPhotoId, ...initialEditState(history), interacting: false, before: false, peeking: false, cropping: false, selectedMaskId: null, maskTool: null, wbPicking: false, selectedSpotId: null };
     }),
   closePhoto: () =>
     set((s) => {
       s.photo?.bitmap.close?.();
-      return { photo: null, ...initialEditState(), interacting: false, before: false, peeking: false, cropping: false, selectedMaskId: null, maskTool: null, wbPicking: false };
+      return { photo: null, ...initialEditState(), interacting: false, before: false, peeking: false, cropping: false, selectedMaskId: null, maskTool: null, wbPicking: false, selectedSpotId: null };
     }),
   setBasic: (key, value) =>
     set((s) => {
@@ -254,9 +275,55 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
   selectMask: (selectedMaskId) => set({ selectedMaskId }),
   setMaskTool: (maskTool) =>
     set((s) =>
-      s.photo || !maskTool ? { maskTool, cropping: maskTool ? false : s.cropping, masksOpen: maskTool ? true : s.masksOpen, wbPicking: maskTool ? false : s.wbPicking } : s,
+      s.photo || !maskTool
+        ? { maskTool, cropping: maskTool ? false : s.cropping, masksOpen: maskTool ? true : s.masksOpen, wbPicking: maskTool ? false : s.wbPicking, spotsOpen: maskTool ? false : s.spotsOpen }
+        : s,
     ),
-  setMasksOpen: (masksOpen) => set(() => (masksOpen ? { masksOpen } : { masksOpen, maskTool: null, selectedMaskId: null })),
+  setMasksOpen: (masksOpen) => set(() => (masksOpen ? { masksOpen, spotsOpen: false } : { masksOpen, maskTool: null, selectedMaskId: null })),
+  addSpot: (spot) =>
+    set((s) => {
+      if (s.settings.spots.length >= MAX_SPOTS) return s;
+      const settings = { ...s.settings, spots: [...s.settings.spots, spot] };
+      return { ...commit(s.history, { label: spot.mode === 'clone' ? 'Clone spot' : 'Heal spot', key: null, settings }), selectedSpotId: spot.id };
+    }),
+  updateSpot: (id, patch, label, key) =>
+    set((s) => {
+      const current = s.settings.spots.find((sp) => sp.id === id);
+      if (!current) return s;
+      const next = { ...current, ...patch };
+      if (jsonEqual(next, current)) return s;
+      const spots = s.settings.spots.map((sp) => (sp.id === id ? next : sp));
+      return commit(s.history, { label, key, settings: { ...s.settings, spots } });
+    }),
+  removeSpot: (id) =>
+    set((s) => {
+      if (!s.settings.spots.some((sp) => sp.id === id)) return s;
+      const settings = { ...s.settings, spots: s.settings.spots.filter((sp) => sp.id !== id) };
+      return { ...commit(s.history, { label: 'Delete spot', key: null, settings }), selectedSpotId: s.selectedSpotId === id ? null : s.selectedSpotId };
+    }),
+  clearSpots: () =>
+    set((s) => (s.settings.spots.length === 0 ? s : { ...commit(s.history, { label: 'Clear spots', key: null, settings: { ...s.settings, spots: [] } }), selectedSpotId: null })),
+  selectSpot: (selectedSpotId) => set({ selectedSpotId }),
+  setSpotsOpen: (spotsOpen) =>
+    set((s) =>
+      spotsOpen
+        ? s.photo
+          ? { spotsOpen, masksOpen: false, maskTool: null, selectedMaskId: null, cropping: false, wbPicking: false }
+          : s
+        : { spotsOpen, selectedSpotId: null },
+    ),
+  setSpotOption: (key, value) =>
+    set((s) => {
+      const spotOptions = { ...s.spotOptions, [key]: value };
+      const selected = s.settings.spots.find((sp) => sp.id === s.selectedSpotId);
+      if (!selected) return { spotOptions };
+      const patch: Partial<Spot> = key === 'size' ? { radius: spotRadius(value as number) } : { [key]: value };
+      const next = { ...selected, ...patch };
+      if (jsonEqual(next, selected)) return { spotOptions };
+      const spots = s.settings.spots.map((sp) => (sp.id === selected.id ? next : sp));
+      const label = key === 'mode' ? (value === 'clone' ? 'Clone spot' : 'Heal spot') : key === 'size' ? 'Spot size' : key === 'feather' ? 'Spot feather' : 'Spot opacity';
+      return { spotOptions, ...commit(s.history, { label, key: `spots.${selected.id}.${key}`, settings: { ...s.settings, spots } }) };
+    }),
   setGradeWheel: (region, patch, prop) =>
     set((s) => {
       const wheel = { ...s.settings.colorGrading[region], ...patch };
@@ -287,7 +354,7 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
   goToHistory: (index) => set((s) => moveTo(goToHistory(s.history, index))),
   setInteracting: (interacting) => set({ interacting }),
   setCropping: (cropping) =>
-    set((s) => (s.photo || !cropping ? { cropping, maskTool: cropping ? null : s.maskTool, wbPicking: cropping ? false : s.wbPicking } : s)),
+    set((s) => (s.photo || !cropping ? { cropping, maskTool: cropping ? null : s.maskTool, wbPicking: cropping ? false : s.wbPicking, spotsOpen: cropping ? false : s.spotsOpen } : s)),
   setWbPicking: (on) => set((s) => (s.photo || !on ? { wbPicking: on, ...(on ? { cropping: false, maskTool: null } : {}) } : s)),
   setCrop: (rect) =>
     set((s) => {

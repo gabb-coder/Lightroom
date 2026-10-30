@@ -7,7 +7,8 @@ import { applySaturation, applyVibrance, saturationScale, vibranceAmount } from 
 import { applyTone, toneParams, type ToneParams } from './tone';
 import { applyTreatment } from './treatment';
 import { applyWhiteBalance, whiteBalanceGains } from './whiteBalance';
-import type { EditSettings, Geometry } from '../model/editSettings';
+import type { EditSettings, Geometry, Spot } from '../model/editSettings';
+import { retouchRgba8 } from './spots';
 import { applyGeometryRgba8, type Size } from './geometry';
 import { grainOffset, grainParams, type GrainParams } from './grain';
 import { sharpenOffsets, sharpenParams, type SharpenParams } from './sharpen';
@@ -21,6 +22,8 @@ import { dehazeChannel, presenceLevels, presenceOffset, presenceParams, sampleLe
  * the WebGL shader consume these, so slider-to-math mapping lives in one place.
  */
 export interface PipelineParams {
+  /** Spot removal (engine/spots.ts), applied to the original first. */
+  spots: readonly Spot[];
   whiteBalance: Rgb;
   exposureGain: number;
   tone: ToneParams;
@@ -52,6 +55,7 @@ export interface PipelineParams {
 export function pipelineParams(settings: EditSettings): PipelineParams {
   const b = settings.basic;
   return {
+    spots: settings.spots,
     whiteBalance: whiteBalanceGains(b.temp, b.tint),
     exposureGain: exposureGain(b.exposure),
     tone: toneParams(b),
@@ -156,9 +160,10 @@ export function applyDetailRgba8(data: Uint8Array | Uint8ClampedArray, size: Siz
   return out;
 }
 
-/** Full CPU reference: develop every pixel, noise reduction, detail, then crop/straighten/rotate/flip and vignette. */
+/** Full CPU reference: spots, develop every pixel, noise reduction, detail, then crop/straighten/rotate/flip and vignette. */
 export function renderRgba8(src: Uint8Array | Uint8ClampedArray, size: Size, p: PipelineParams, scale = 1) {
-  const developed = processRgba8(src, p, size.width);
+  const retouched = p.spots.length ? retouchRgba8(src, size, p.spots) : src;
+  const developed = processRgba8(retouched, p, size.width);
   const denoised = p.denoise ? denoiseRgba8(developed, size, p.denoise, scale) : developed;
   const detailed = applyDetailRgba8(denoised, size, p, scale);
   return applyGeometryRgba8(detailed, size, p.geometry, p.vignette);

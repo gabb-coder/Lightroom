@@ -105,6 +105,11 @@ export const MASK_ANGLE_SLIDER: SliderDef = { ...bipolar('mask-angle', 'Angle', 
 export const BRUSH_SIZE_SLIDER: SliderDef = { ...unipolar('brush-size', 'Size', 1, 100, 1, 25, 'uint', 'Brush size'), ariaLabel: 'Brush size' };
 export const BRUSH_FEATHER_SLIDER: SliderDef = { ...unipolar('brush-feather', 'Feather', 0, 100, 1, 50, 'uint', 'Brush feather'), ariaLabel: 'Brush feather' };
 
+/** Spot removal (M28): size maps to a radius through model/spotEdit.ts spotRadius. */
+export const SPOT_SIZE_SLIDER: SliderDef = { ...unipolar('spot-size', 'Size', 1, 100, 1, 30, 'uint', 'Spot size'), ariaLabel: 'Spot size' };
+export const SPOT_FEATHER_SLIDER: SliderDef = { ...unipolar('spot-feather', 'Feather', 0, 100, 1, 50, 'uint', 'Spot feather'), ariaLabel: 'Spot feather' };
+export const SPOT_OPACITY_SLIDER: SliderDef = { ...unipolar('spot-opacity', 'Opacity', 0, 100, 1, 100, 'uint', 'Spot opacity'), ariaLabel: 'Spot opacity' };
+
 export const ANGLE_SLIDER: SliderDef = bipolar('angle', 'Straighten', -45, 45, 0.1, 'deg');
 
 /** Color mixer hue / saturation / luminance offsets. */

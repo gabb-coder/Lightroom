@@ -52,9 +52,10 @@ test.describe('Copy and paste settings', () => {
     await expect(dialog(page)).toContainText('Copy settings');
     await expect(dialog(page)).toContainText('Choose what to copy from IMG_0418.png.');
     const boxes = dialog(page).getByRole('checkbox');
-    await expect(boxes).toHaveCount(8);
-    // Default: everything except crop and geometry.
+    await expect(boxes).toHaveCount(9);
+    // Default: everything except spots, masks, crop and geometry.
     await expect(dialog(page).getByRole('checkbox', { name: 'Crop and geometry' })).not.toBeChecked();
+    await expect(dialog(page).getByRole('checkbox', { name: 'Spot removal' })).not.toBeChecked();
     await expect(dialog(page).getByRole('checkbox', { name: 'Basic' })).toBeChecked();
     await dialog(page).getByRole('checkbox', { name: 'Effects' }).uncheck();
     await page.screenshot({ path: 'test-results/screenshots/m10-copy-dialog.png' });

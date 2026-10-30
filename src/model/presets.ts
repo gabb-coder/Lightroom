@@ -3,11 +3,11 @@ import { parseEditSettings } from './validate';
 import { migrateSharpenDefault } from './migrate';
 
 /**
- * A preset is a complete look: everything except geometry and masks, so
+ * A preset is a complete look: everything except geometry, masks and spots, so
  * applying one replaces all global adjustments but keeps the photo's crop,
  * rotation and local adjustments (which are tied to this picture).
  */
-export type PresetSettings = Omit<EditSettings, 'geometry' | 'masks'>;
+export type PresetSettings = Omit<EditSettings, 'geometry' | 'masks' | 'spots'>;
 
 export type PresetGroup = 'user' | 'builtin';
 
@@ -24,14 +24,14 @@ export const PRESET_GROUP_LABELS: Readonly<Record<PresetGroup, string>> = {
 };
 
 export function presetSettingsOf(settings: EditSettings): PresetSettings {
-  // Geometry and masks are deliberately left out of presets.
-  const { geometry, masks, ...rest } = settings; // eslint-disable-line @typescript-eslint/no-unused-vars
+  // Geometry, masks and spots are deliberately left out of presets.
+  const { geometry, masks, spots, ...rest } = settings; // eslint-disable-line @typescript-eslint/no-unused-vars
   return structuredClone(rest);
 }
 
 /** Settings after applying a preset: the preset's look plus the current geometry. */
 export function applyPresetTo(current: EditSettings, preset: Preset): EditSettings {
-  return { ...structuredClone(preset.settings), geometry: current.geometry, masks: current.masks };
+  return { ...structuredClone(preset.settings), geometry: current.geometry, masks: current.masks, spots: current.spots };
 }
 
 export function createPreset(id: string, name: string, settings: EditSettings, group: PresetGroup = 'user'): Preset {

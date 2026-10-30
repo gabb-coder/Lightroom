@@ -1,0 +1,41 @@
+/* Spot removal (M28): extends MaskOverlay.module.css. */
+.spot,
+.spotSelected,
+.source {
+  fill: transparent;
+  stroke: var(--color-white);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+  cursor: move;
+  pointer-events: all;
+  touch-action: none;
+}
+
+.spotSelected {
+  stroke-width: 2.5;
+}
+
+.source {
+  stroke-dasharray: 5 4;
+}
+
+.spot:focus-visible,
+.spotSelected:focus-visible,
+.source:focus-visible {
+  outline: none;
+  stroke: var(--color-accent);
+}
+
+.link {
+  stroke: var(--color-white);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.7;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.9));
+  pointer-events: none;
+}
+
+.sizeHandle {
+  cursor: ew-resize;
+}

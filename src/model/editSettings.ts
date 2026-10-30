@@ -137,6 +137,35 @@ export type Mask = LinearMask | RadialMask | BrushMask;
 export type MaskKind = Mask['kind'];
 
 export const MAX_MASKS = 8;
+
+/** Spot removal (M28): copy (clone) or blend in (heal) a patch from elsewhere. */
+export type SpotMode = 'heal' | 'clone';
+
+/**
+ * One retouched spot. Positions are normalized to the uploaded photo
+ * (0–1 of its width / height), so spots follow crop, rotation and flips;
+ * the radius is a fraction of the photo's long edge.
+ */
+export interface Spot {
+  id: string;
+  mode: SpotMode;
+  /** Center of the spot that is covered. */
+  x: number;
+  y: number;
+  /** Center of the patch it is covered with. */
+  sx: number;
+  sy: number;
+  radius: number;
+  /** Soft edge, 0–100 % of the radius. */
+  feather: number;
+  /** 0–100. */
+  opacity: number;
+}
+
+export const MAX_SPOTS = 32;
+/** Spot radius limits, as a fraction of the photo's long edge. */
+export const MIN_SPOT_RADIUS = 0.002;
+export const MAX_SPOT_RADIUS = 0.25;
 /** Limits that keep a stored brush mask a sensible size. */
 export const MAX_BRUSH_STROKES = 500;
 export const MAX_STROKE_POINTS = 4000;
@@ -165,6 +194,8 @@ export interface EditSettings {
   colorGrading: ColorGradingSettings;
   /** Linear and radial gradient masks (M15) and brush masks (M21), applied in order. */
   masks: Mask[];
+  /** Spot removal (M28), applied to the original pixels before everything else. */
+  spots: Spot[];
   detail: DetailSettings;
   effects: EffectsSettings;
   geometry: Geometry;
@@ -212,6 +243,7 @@ export function defaultEditSettings(): EditSettings {
     hsl,
     colorGrading: defaultColorGrading(),
     masks: [],
+    spots: [],
     detail: { sharpAmount: 0, sharpRadius: 1, nrLuma: 0, nrColor: 0 },
     effects: { vignette: 0, grain: 0, grainSize: 25 },
     geometry: { cropRect: { x: 0, y: 0, w: 1, h: 1 }, angle: 0, rotation: 0, flipH: false, flipV: false, aspect: 'original' },

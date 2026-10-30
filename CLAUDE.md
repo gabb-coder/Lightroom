@@ -155,6 +155,15 @@ component library.
   separable cross-bilateral on (R − Y, B − Y) guided by Y; row passes
   stored 16-bit (`DENOISE_*` shaders, `Renderer.denoisePasses`); spatial
   sigma in full-resolution pixels × render scale, like sharpening.
+- Spot removal (M28): `settings.spots` (max 32; normalized to the uploaded
+  photo, radius a fraction of its long edge, so they follow crop/rotate and
+  proxies). `engine/spots.ts` retouches the ORIGINAL first (GPU
+  `RETOUCH` pass into `retouched`, then develop as usual); every spot reads
+  the original, clone copies, heal adds an inverse-distance-interpolated rim
+  correction (24 directions). Editing math + automatic source pick in
+  `model/spotEdit.ts`; overlay `SpotOverlay.tsx` while the Spot removal
+  panel is open (Q; Esc deselects then closes). Presets and default copy
+  panels leave spots alone, like masks.
 - Color grading (M14): `engine/colorGrading.ts` runs after B&W (so it
   split-tones monochrome); zero-luma tint + gray offset on encoded values,
   weighted by shadows/midtones/highlights curves (pivot = balance, width =

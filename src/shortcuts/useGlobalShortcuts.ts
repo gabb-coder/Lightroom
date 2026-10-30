@@ -120,6 +120,18 @@ export function useGlobalShortcuts(): void {
         develop.setMaskTool(develop.maskTool === kind ? null : kind);
         return;
       }
+      // Q: spot removal (as in Lightroom); press again to close it.
+      if (event.key.toLowerCase() === 'q' && !event.shiftKey && developHasPhoto()) {
+        event.preventDefault();
+        develop.setSpotsOpen(!develop.spotsOpen);
+        return;
+      }
+      if (event.key === 'Escape' && develop.spotsOpen) {
+        event.preventDefault();
+        if (develop.selectedSpotId) develop.selectSpot(null);
+        else develop.setSpotsOpen(false);
+        return;
+      }
       // W: white balance eyedropper; J: clipping warnings; Y: split Before/After (as in Lightroom).
       if (event.key.toLowerCase() === 'w' && !event.shiftKey && developHasPhoto()) {
         event.preventDefault();
