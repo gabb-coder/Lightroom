@@ -35,3 +35,12 @@
   /* Clear the sticky Previous/Reset all footer when scrolled into view. */
   scroll-margin-bottom: 64px;
 }
+
+/* Lens and perspective (M29). */
+.lensGroup {
+  margin-top: 12px;
+}
+
+.groupLabel {
+  margin-bottom: 4px;
+}

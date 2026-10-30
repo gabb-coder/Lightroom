@@ -4,7 +4,7 @@
  * compares it with the CPU reference in src/engine/.
  */
 import { displayRgba8, type DisplayOptions } from '../../src/engine/display';
-import { geometryMatrix } from '../../src/engine/geometry';
+import { geometryMap } from '../../src/engine/geometry';
 import { maskShape } from '../../src/engine/masks';
 import { pipelineParams, renderRgba8 } from '../../src/engine/pipeline';
 import { defaultEditSettings, type BasicSettings, type Geometry, type Mask } from '../../src/model/editSettings';
@@ -143,7 +143,7 @@ function displayCheck(baseOptions: DisplayOptions, basic: Partial<BasicSettings>
   const after = renderer.readPixels(params);
   const beforeImage = renderer.readPixels(before);
   const shown = renderer.readPixels(params, 'full', { options, before });
-  const frame = { matrix: geometryMatrix(source, params.geometry, after), source };
+  const frame = { map: geometryMap(source, params.geometry, after), source };
   const reference = displayRgba8(after.data, beforeImage.data, after.width, options, frame);
   const count = (rgb: readonly number[]) => {
     let n = 0;

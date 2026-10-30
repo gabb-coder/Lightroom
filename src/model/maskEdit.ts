@@ -1,4 +1,4 @@
-import { applyAffine, geometryMatrix, invertAffine, outputSize, type Size } from '../engine/geometry';
+import { applyAffine, geometryMap, geometryMatrix, invertAffine, outputSize, outputToSource, sourceToOutput, type Size } from '../engine/geometry';
 import { defaultMaskAdjust, MAX_STROKE_POINTS, type BrushMask, type BrushStroke, type Geometry, type LinearMask, type Mask, type RadialMask } from './editSettings';
 
 /**
@@ -28,18 +28,20 @@ export interface MaskView {
 /** A view for a photo of `source` size shown with `geometry` in a frame of `frame` CSS pixels. */
 export function maskView(source: Size, geometry: Geometry, frame: Size): MaskView {
   const out = outputSize(source, geometry);
-  const toSource = geometryMatrix(source, geometry, out); // output px → source px
+  const toSource = geometryMatrix(source, geometry, out); // output px → source px, without lens corrections
   const toOutput = invertAffine(toSource);
+  // Lens and perspective (M29) bend the mapping; the plain matrix is the fallback past the horizon.
+  const map = geometryMap(source, geometry, out);
   const sx = frame.width / out.width;
   const sy = frame.height / out.height;
-  const scale = Math.hypot(toSource[0], toSource[3]) / sx;
+  const scale = (Math.hypot(toSource[0], toSource[3]) / sx) * (map.lens?.invScale ?? 1);
   return {
     toFrame: (u, v) => {
-      const [ox, oy] = applyAffine(toOutput, u * source.width, v * source.height);
+      const [ox, oy] = sourceToOutput(map, u * source.width, v * source.height) ?? applyAffine(toOutput, u * source.width, v * source.height);
       return { x: ox * sx, y: oy * sy };
     },
     fromFrame: (x, y) => {
-      const [px, py] = applyAffine(toSource, x / sx, y / sy);
+      const [px, py] = outputToSource(map, x / sx, y / sy) ?? applyAffine(toSource, x / sx, y / sy);
       return { x: px / source.width, y: py / source.height };
     },
     scale,

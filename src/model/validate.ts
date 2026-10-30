@@ -28,6 +28,7 @@ import {
   ANGLE_SLIDER,
   BASIC_SLIDERS,
   DETAIL_SLIDERS,
+  LENS_SLIDERS,
   EFFECTS_SLIDERS,
   gradeSliderDef,
   GRADING_SLIDERS,
@@ -219,6 +220,7 @@ export function parseEditSettings(raw: unknown): EditSettings {
       flipH: geometry.flipH === true,
       flipV: geometry.flipV === true,
       aspect: CROP_ASPECTS.includes(geometry.aspect as CropAspect) ? (geometry.aspect as CropAspect) : d.geometry.aspect,
+      ...sliderGroup(LENS_SLIDERS, geometry, { distortion: d.geometry.distortion, vertical: d.geometry.vertical, horizontal: d.geometry.horizontal, scale: d.geometry.scale, fringeRed: d.geometry.fringeRed, fringeBlue: d.geometry.fringeBlue }),
     },
   };
 }
