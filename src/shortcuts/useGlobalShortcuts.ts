@@ -15,6 +15,7 @@ import { useViewStore } from '../state/viewStore';
 import { useDeleteDialogStore } from '../state/deleteDialogStore';
 import { autoToneSelection, runAutoTone } from '../state/editingAids';
 import { useShortcutsHelpStore } from '../state/shortcutsHelpStore';
+import { useContactSheetStore } from '../state/contactSheetStore';
 import { openCompare, openFullscreen, openSlideshow } from '../state/viewerActions';
 import { useViewerStore } from '../state/viewerStore';
 
@@ -42,7 +43,7 @@ export function useGlobalShortcuts(): void {
       // Text fields keep their own shortcuts (including native Ctrl/Cmd+Z).
       if (isTextEntryTarget(event.target as TargetLike | null)) return;
       // A modal dialog (Copy / Sync settings, Remove photos) owns the keyboard.
-      if (useCopyPasteStore.getState().dialog || useDeleteDialogStore.getState().ids || useShortcutsHelpStore.getState().open) return;
+      if (useCopyPasteStore.getState().dialog || useDeleteDialogStore.getState().ids || useShortcutsHelpStore.getState().open || useContactSheetStore.getState().open) return;
       // The viewers (M31) own the keyboard while open.
       if (useViewerStore.getState().mode || useViewerStore.getState().compare) return;
       const command = mac ? event.metaKey : event.ctrlKey;

@@ -6,6 +6,7 @@
  * policy. The original is only read.
  */
 import { pipelineParams } from '../engine/pipeline';
+import { applyOutputSharpen, outputSharpenParams } from '../engine/outputSharpen';
 import { applyWatermark } from '../engine/watermark';
 import { copyExif } from '../io/exifWrite';
 import type { EditSettings } from '../model/editSettings';
@@ -61,6 +62,17 @@ async function logoPixels(env: ExportEnvironment, logo: Blob): Promise<RgbaImage
   return { width: canvas.width, height: canvas.height, data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength) };
 }
 
+/** Output sharpening (M34) on the final pixels, after any resize and before the watermark. */
+function sharpenForOutput(canvas: EncodableCanvas, options: ExportOptions): void {
+  const p = outputSharpenParams(options.outputSharpen, options.sharpenAmount);
+  if (!p) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No 2D context for encoding');
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  applyOutputSharpen(image, p);
+  ctx.putImageData(image, 0, 0);
+}
+
 /** Lays the logo on the final pixels, if the options ask for one. */
 async function watermark(env: ExportEnvironment, canvas: EncodableCanvas, options: ExportOptions, logo: Blob | null): Promise<void> {
   if (!logo || !hasWatermark(options)) return;
@@ -107,6 +119,7 @@ export async function renderExport(
   r.releaseScratch();
   progress('encode');
   const canvas = await toCanvas(env, image, options);
+  sharpenForOutput(canvas, options);
   await watermark(env, canvas, options, logo);
   const blob = await encode(env, canvas, original, options);
   return { blob, width: canvas.width, height: canvas.height, reducedTo };

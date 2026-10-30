@@ -1,4 +1,5 @@
-import { CompareIcon, FullScreenIcon, ImportIcon, PlayIcon } from '../../components/icons';
+import { CompareIcon, ContactSheetIcon, FullScreenIcon, ImportIcon, PlayIcon } from '../../components/icons';
+import { useContactSheetStore } from '../../state/contactSheetStore';
 import { modifierLabel } from '../../shortcuts/platform';
 import { openCompare, openFullscreen, openSlideshow } from '../../state/viewerActions';
 import { autoToneSelection } from '../../state/editingAids';
@@ -63,6 +64,9 @@ function StatusBar({ shown, total }: { shown: number; total: number }) {
         </button>
         <button type="button" className={controls.iconButton} aria-label="Slideshow" title={`Slideshow (${modifierLabel()}Enter)`} disabled={shown === 0} onClick={openSlideshow}>
           <PlayIcon />
+        </button>
+        <button type="button" className={controls.iconButton} aria-label="Contact sheet" title="Contact sheet of the selected photos" disabled={shown === 0} onClick={() => useContactSheetStore.getState().setOpen(true)}>
+          <ContactSheetIcon />
         </button>
       </div>
       {importing && (

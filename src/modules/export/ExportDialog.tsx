@@ -7,12 +7,15 @@ import {
   LONG_EDGE_RANGE,
   METADATA_LABELS,
   NAMING_LABELS,
+  OUTPUT_SHARPEN_LABELS,
+  SHARPEN_AMOUNT_LABELS,
   QUALITY_RANGE,
   type ExportDestination,
   type ExportNaming,
   type ExportPreset,
   type MetadataPolicy,
 } from '../../model/exportOptions';
+import type { OutputSharpenAmount, OutputSharpenTarget } from '../../engine/outputSharpen';
 import { closeExportDialog, runExport, useExportStore } from '../../state/exportStore';
 import { supportsFolderExport } from '../../io/folderAccess';
 import { useLibraryStore } from '../../state/libraryStore';
@@ -237,6 +240,40 @@ function Settings() {
           />
           <span className={styles.hint}>px</span>
         </div>
+      </Fieldset>
+
+      <Fieldset legend="Output sharpening">
+        <label htmlFor="ex-sharpen" className={styles.label}>
+          Sharpen for
+        </label>
+        <select
+          id="ex-sharpen"
+          className={`${styles.select} ${styles.narrow}`}
+          value={options.outputSharpen}
+          onChange={(e) => setOptions({ outputSharpen: e.target.value as OutputSharpenTarget })}
+        >
+          {(Object.keys(OUTPUT_SHARPEN_LABELS) as OutputSharpenTarget[]).map((t) => (
+            <option key={t} value={t}>
+              {OUTPUT_SHARPEN_LABELS[t]}
+            </option>
+          ))}
+        </select>
+        <label htmlFor="ex-sharpen-amount" className={styles.label}>
+          Amount
+        </label>
+        <select
+          id="ex-sharpen-amount"
+          className={`${styles.select} ${styles.narrow}`}
+          value={options.sharpenAmount}
+          disabled={options.outputSharpen === 'none'}
+          onChange={(e) => setOptions({ sharpenAmount: e.target.value as OutputSharpenAmount })}
+        >
+          {(Object.keys(SHARPEN_AMOUNT_LABELS) as OutputSharpenAmount[]).map((a) => (
+            <option key={a} value={a}>
+              {SHARPEN_AMOUNT_LABELS[a]}
+            </option>
+          ))}
+        </select>
       </Fieldset>
 
       <WatermarkFieldset />

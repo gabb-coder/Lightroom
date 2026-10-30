@@ -130,8 +130,10 @@ const THUMBNAIL_OPTIONS: ExportOptions = {
   destination: 'downloads',
   useSubfolder: false,
   subfolder: '',
-  // Thumbnails show the photo, never the export logo.
+  // Thumbnails show the photo, never the export logo or output sharpening.
   watermark: DEFAULT_WATERMARK,
+  outputSharpen: 'none',
+  sharpenAmount: 'standard',
 };
 
 let thumbnailQueue: Promise<void> = Promise.resolve();

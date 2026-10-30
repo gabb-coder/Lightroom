@@ -1,3 +1,4 @@
+import type { OutputSharpenAmount, OutputSharpenTarget } from '../engine/outputSharpen';
 /** Export settings (design/Export.dc.html), pure helpers and built-in presets. */
 import { WATERMARK_POSITIONS, type WatermarkAnchor } from '../engine/watermark';
 
@@ -24,7 +25,13 @@ export interface ExportOptions {
   subfolder: string;
   /** A logo laid on every exported photo (M23). */
   watermark: WatermarkOptions;
+  /** Output sharpening (M34, engine/outputSharpen.ts): where the photo is going, and how much. */
+  outputSharpen: OutputSharpenTarget;
+  sharpenAmount: OutputSharpenAmount;
 }
+
+export const OUTPUT_SHARPEN_LABELS: Readonly<Record<OutputSharpenTarget, string>> = { none: 'None', screen: 'Screen', matte: 'Matte paper', glossy: 'Glossy paper' };
+export const SHARPEN_AMOUNT_LABELS: Readonly<Record<OutputSharpenAmount, string>> = { low: 'Low', standard: 'Standard', high: 'High' };
 
 export type WatermarkKind = 'logo' | 'text';
 
@@ -90,6 +97,8 @@ const BASE: ExportOptions = {
   useSubfolder: true,
   subfolder: 'Exports',
   watermark: DEFAULT_WATERMARK,
+  outputSharpen: 'none',
+  sharpenAmount: 'standard',
 };
 
 export const BUILTIN_EXPORT_PRESETS: readonly ExportPreset[] = [
@@ -133,6 +142,8 @@ export function normalizeExportOptions(raw: Partial<ExportOptions>): ExportOptio
     useSubfolder: typeof o.useSubfolder === 'boolean' ? o.useSubfolder : BASE.useSubfolder,
     subfolder: typeof o.subfolder === 'string' ? safeFolderName(o.subfolder) : BASE.subfolder,
     watermark: normalizeWatermark(o.watermark),
+    outputSharpen: o.outputSharpen === 'screen' || o.outputSharpen === 'matte' || o.outputSharpen === 'glossy' ? o.outputSharpen : 'none',
+    sharpenAmount: o.sharpenAmount === 'low' || o.sharpenAmount === 'high' ? o.sharpenAmount : 'standard',
   };
 }
 
