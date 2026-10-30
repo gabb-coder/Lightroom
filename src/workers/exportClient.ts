@@ -13,6 +13,8 @@ export interface ExportResult {
   blob: Blob;
   width: number;
   height: number;
+  /** Set when the photo was larger than the GPU can hold: rendered at this long edge (M33). */
+  reducedTo?: number;
 }
 
 /**
@@ -66,7 +68,7 @@ export function createExportClient() {
         if (res.id !== id) return;
         if (res.kind === 'progress') return onStage(res.stage);
         done();
-        if (res.kind === 'done') resolve({ blob: res.blob, width: res.width, height: res.height });
+        if (res.kind === 'done') resolve({ blob: res.blob, width: res.width, height: res.height, reducedTo: res.reducedTo });
         else reject(new Error(res.error));
       };
       // The worker script itself failed (e.g. module workers unsupported): never answers, so fall back.

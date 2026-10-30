@@ -294,8 +294,11 @@ export class Renderer {
     return new Renderer(canvas, gl);
   }
 
+  /** The GPU's limit; `?maxTexture=N` on the page lowers it (tests of photos larger than the GPU, M33). */
   get maxTextureSize(): number {
-    return this.gl.getParameter(this.gl.MAX_TEXTURE_SIZE) as number;
+    const gpu = this.gl.getParameter(this.gl.MAX_TEXTURE_SIZE) as number;
+    const cap = typeof location !== 'undefined' ? Number(new URLSearchParams(location.search).get('maxTexture')) : 0;
+    return cap > 0 ? Math.min(gpu, cap) : gpu;
   }
 
   get hasImage(): boolean {

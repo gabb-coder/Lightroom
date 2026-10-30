@@ -86,11 +86,12 @@ export async function renderExport(
   options: ExportOptions,
   progress: (stage: ExportStage) => void,
   logo: Blob | null = null,
-): Promise<{ blob: Blob; width: number; height: number }> {
+): Promise<{ blob: Blob; width: number; height: number; reducedTo?: number }> {
   progress('decode');
   const r = env.renderer();
   let bitmap = await createImageBitmap(original, { imageOrientation: 'from-image', premultiplyAlpha: 'none' });
   const fits = fitLongEdge(bitmap, r.maxTextureSize);
+  const reducedTo = fits.width !== bitmap.width ? r.maxTextureSize : undefined;
   if (fits.width !== bitmap.width) {
     // Larger than the GPU can hold: export at the largest size it can.
     const smaller = await createImageBitmap(bitmap, { resizeWidth: fits.width, resizeHeight: fits.height, resizeQuality: 'high', premultiplyAlpha: 'none' });
@@ -108,5 +109,5 @@ export async function renderExport(
   const canvas = await toCanvas(env, image, options);
   await watermark(env, canvas, options, logo);
   const blob = await encode(env, canvas, original, options);
-  return { blob, width: canvas.width, height: canvas.height };
+  return { blob, width: canvas.width, height: canvas.height, reducedTo };
 }

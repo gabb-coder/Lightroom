@@ -36,3 +36,7 @@ services:
       - path: /index.html
         name: Cache-Control
         value: no-cache
+      # The service worker (M33) must be re-checked on every visit, so updates install.
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
