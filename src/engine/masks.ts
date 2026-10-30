@@ -3,8 +3,10 @@ import { applyExposure, exposureGain } from './exposure';
 import { applySaturation, saturationScale } from './saturation';
 import { applyTone, toneParams, type ToneParams } from './tone';
 import { applyWhiteBalance, whiteBalanceGains } from './whiteBalance';
-import type { Mask, MaskAdjust } from '../model/editSettings';
+import type { Mask, MaskAdjust, MaskRange } from '../model/editSettings';
 import { brushRaster, sampleBrush, type BrushRaster } from './brush';
+
+const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 /**
  * Local adjustments (M15): each gradient mask has a weight per pixel (0..1)
@@ -25,6 +27,58 @@ export interface MaskShape {
   b: [number, number, number, number];
   /** Brush masks (M21): the rasterized strokes (engine/brush.ts). */
   raster: BrushRaster | null;
+  /**
+   * Range (M30): [kind, p, q, r]. kind 0 none; 1 luminance: low, high (0–1)
+   * and soft width (0–0.5); 2 color: hue (degrees), half width (degrees), unused.
+   */
+  range: [number, number, number, number];
+}
+
+const NO_RANGE: [number, number, number, number] = [0, 0, 0, 0];
+
+/** A mask's range as shape numbers (see MaskShape.range). */
+export function rangeOf(r: MaskRange | undefined): [number, number, number, number] {
+  if (!r || r.kind === 'none') return NO_RANGE;
+  if (r.kind === 'luminance') return [1, r.lo / 100, r.hi / 100, r.smooth / 200];
+  return [2, r.hue, r.width / 2, 0];
+}
+
+/** HSV hue (degrees, 0–360) of an sRGB-encoded color; 0 for grays. */
+export function hueOf(r: number, g: number, b: number): number {
+  const mx = Math.max(r, g, b);
+  const d = mx - Math.min(r, g, b);
+  if (d <= 0) return 0;
+  let h: number;
+  if (mx === r) h = (g - b) / d;
+  else if (mx === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return 60 * (h - 6 * Math.floor(h / 6));
+}
+
+/**
+ * How much of a mask applies at a pixel of the photo's own (sRGB-encoded)
+ * color, by its range: 1 inside, falling off linearly over the soft edge.
+ * Color ranges also fade out near gray and black, where hue means nothing.
+ */
+export function rangeWeight(range: readonly number[], [r, g, b]: readonly [number, number, number]): number {
+  const [kind = 0, p = 0, q = 0, soft = 0] = range;
+  if (kind === 1) {
+    const y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const fall = (d: number) => (soft > 0 ? Math.max(0, 1 - d / soft) : 0);
+    if (y < p) return fall(p - y);
+    if (y > q) return fall(y - q);
+    return 1;
+  }
+  if (kind === 2) {
+    const mx = Math.max(r, g, b);
+    if (mx <= 0) return 0;
+    const sat = (mx - Math.min(r, g, b)) / mx;
+    const raw = Math.abs(hueOf(r, g, b) - p);
+    const dist = Math.min(raw, 360 - raw);
+    const w = dist <= q ? 1 : Math.max(0, 1 - (dist - q) / Math.max(q, 1));
+    return w * clamp01((sat - 0.05) / 0.1) * clamp01((mx - 0.03) / 0.05);
+  }
+  return 1;
 }
 
 export interface MaskParams {
@@ -38,13 +92,14 @@ export interface MaskParams {
 const isNeutral = (a: MaskAdjust) => Object.values(a).every((v) => v === 0);
 
 export function maskShape(m: Mask): MaskShape {
-  if (m.kind === 'linear') return { kind: 'linear', a: [m.x0, m.y0, m.x1, m.y1], b: [0, 0, 0, 0], raster: null };
+  const range = rangeOf(m.range);
+  if (m.kind === 'linear') return { kind: 'linear', a: [m.x0, m.y0, m.x1, m.y1], b: [0, 0, 0, 0], raster: null, range };
   if (m.kind === 'brush') {
     const raster = brushRaster(m);
-    return { kind: 'brush', a: [0, 0, 0, 0], b: [raster.width, raster.height, 0, 0], raster };
+    return { kind: 'brush', a: [0, 0, 0, 0], b: [raster.width, raster.height, 0, 0], raster, range };
   }
   const t = (m.angle * Math.PI) / 180;
-  return { kind: 'radial', a: [m.cx, m.cy, m.rx, m.ry], b: [Math.cos(t), Math.sin(t), m.feather / 100, m.invert ? 1 : 0], raster: null };
+  return { kind: 'radial', a: [m.cx, m.cy, m.rx, m.ry], b: [Math.cos(t), Math.sin(t), m.feather / 100, m.invert ? 1 : 0], raster: null, range };
 }
 
 /** Masks that change something (neutral adjustments, or a brush with nothing painted, are skipped). */
@@ -60,7 +115,6 @@ export function maskParams(masks: readonly Mask[]): MaskParams[] {
     }));
 }
 
-const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const smoothstep = (a: number, b: number, x: number) => {
   const t = clamp01((x - a) / (b - a));
   return t * t * (3 - 2 * t);

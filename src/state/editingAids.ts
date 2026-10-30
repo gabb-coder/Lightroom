@@ -1,6 +1,7 @@
 import { autoTone } from '../engine/autoTone';
 import { averageLinear, neutralizingWhiteBalance } from '../engine/whiteBalance';
-import type { EditSettings } from '../model/editSettings';
+import { defaultMaskRange, type EditSettings } from '../model/editSettings';
+import { hueOf } from '../engine/masks';
 import { fitLongEdge } from '../render/proxy';
 import { useDevelopStore, type LoadedPhoto } from './developStore';
 
@@ -37,6 +38,28 @@ export function sampleRegion(size: { width: number; height: number }, u: number,
   const x = Math.max(0, cx - r);
   const y = Math.max(0, cy - r);
   return { x, y, w: Math.min(size.width, cx + r + 1) - x, h: Math.min(size.height, cy + r + 1) - y };
+}
+
+/**
+ * Range eyedropper (M30): sets the selected mask's color range to the hue
+ * at normalized source point (u, v) and turns the picker off. False when
+ * nothing usable was there (no mask, outside the photo, a gray spot).
+ */
+export function pickRangeColor(u: number, v: number): boolean {
+  const { photo, settings, selectedMaskId, updateMask, setRangePicking } = useDevelopStore.getState();
+  setRangePicking(false);
+  const mask = settings.masks.find((m) => m.id === selectedMaskId);
+  if (!photo || !mask || u < 0 || u > 1 || v < 0 || v > 1) return false;
+  const region = sampleRegion(bitmapSize(photo), u, v);
+  const px = readRegion(photo.bitmap, region, { width: region.w, height: region.h });
+  const sum = [0, 0, 0];
+  for (let i = 0; i < px.length; i += 4) for (let c = 0; c < 3; c++) sum[c] = (sum[c] ?? 0) + (px[i + c] ?? 0);
+  const n = px.length / 4;
+  const [r, g, b] = sum.map((x) => x / n / 255);
+  if (r === undefined || g === undefined || b === undefined || Math.max(r, g, b) - Math.min(r, g, b) < 0.02) return false;
+  const range = { ...defaultMaskRange(), ...mask.range, kind: 'color' as const, hue: Math.round(hueOf(r, g, b)) };
+  updateMask(mask.id, { range }, 'Mask color range', null);
+  return true;
 }
 
 function withBasic(settings: EditSettings, patch: Partial<EditSettings['basic']>): EditSettings {

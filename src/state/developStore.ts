@@ -80,6 +80,9 @@ interface DevelopState {
   masksOpen: boolean;
   /** White balance eyedropper active: the next click on the photo sets Temp/Tint (M20). */
   wbPicking: boolean;
+  /** Range eyedropper (M30): the next click on the photo sets the selected mask's color range. */
+  rangePicking: boolean;
+  setRangePicking: (on: boolean) => void;
   /** The Spot removal panel is open: clicks on the photo add spots (M28). */
   spotsOpen: boolean;
   selectedSpotId: string | null;
@@ -199,6 +202,8 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
   maskTool: null,
   masksOpen: false,
   wbPicking: false,
+  rangePicking: false,
+  setRangePicking: (rangePicking) => set((s) => (s.photo || !rangePicking ? { rangePicking, ...(rangePicking ? { wbPicking: false, maskTool: null } : {}) } : s)),
   spotsOpen: false,
   selectedSpotId: null,
   spotOptions: DEFAULT_SPOT_OPTIONS,

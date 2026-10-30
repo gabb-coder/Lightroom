@@ -154,6 +154,11 @@ export function useGlobalShortcuts(): void {
         develop.setWbPicking(false);
         return;
       }
+      if (event.key === 'Escape' && develop.rangePicking) {
+        event.preventDefault();
+        develop.setRangePicking(false);
+        return;
+      }
       // K: brush (as in Lightroom); O: show the selected mask as an overlay.
       if (event.key.toLowerCase() === 'k' && !event.shiftKey && developHasPhoto()) {
         event.preventDefault();

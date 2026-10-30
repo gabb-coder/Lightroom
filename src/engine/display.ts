@@ -1,6 +1,6 @@
 import { outputToSource, type GeometryMap, type Size } from './geometry';
 import { HISTOGRAM_BINS, type Histogram } from './histogram';
-import { maskWeight, type MaskShape } from './masks';
+import { maskWeight, rangeWeight, type MaskShape } from './masks';
 
 /**
  * Display-only stage (M20): clipping warnings and the split Before/After
@@ -26,10 +26,10 @@ export const NO_DISPLAY: DisplayOptions = { shadows: false, highlights: false, s
 export const MASK_OVERLAY_RGB = [255, 30, 60] as const;
 export const MASK_OVERLAY_OPACITY = 0.5;
 
-/** Maps output pixels to source pixels (engine/geometry.ts geometryMap), for the mask overlay. */
+/** Maps output pixels to source pixels (engine/geometry.ts geometryMap), for the mask overlay; `data` = the photo, for range masks. */
 export interface DisplayFrame {
   map: GeometryMap;
-  source: Size;
+  source: Size & { data?: Uint8Array | Uint8ClampedArray };
 }
 
 /** Overlay colors (RGB bytes): blue for crushed shadows, red for blown highlights. */
@@ -80,7 +80,14 @@ export function displayRgba8(
     out[i + 3] = a;
     if (o.overlay && frame && a > 0) {
       const at = outputToSource(frame.map, x + 0.5, Math.floor(i / 4 / width) + 0.5);
-      const t = at ? MASK_OVERLAY_OPACITY * maskWeight(o.overlay, at[0], at[1], frame.source.width, frame.source.height) : 0;
+      let t = at ? MASK_OVERLAY_OPACITY * maskWeight(o.overlay, at[0], at[1], frame.source.width, frame.source.height) : 0;
+      const pixels = frame.source.data;
+      if (at && t > 0 && pixels && o.overlay.range[0] !== 0) {
+        const qx = Math.min(frame.source.width - 1, Math.max(0, Math.floor(at[0])));
+        const qy = Math.min(frame.source.height - 1, Math.max(0, Math.floor(at[1])));
+        const k = (qy * frame.source.width + qx) * 4;
+        t *= rangeWeight(o.overlay.range, [(pixels[k] ?? 0) / 255, (pixels[k + 1] ?? 0) / 255, (pixels[k + 2] ?? 0) / 255]);
+      }
       for (let ch = 0; ch < 3; ch++) {
         const v = (out[i + ch] ?? 0) / 255;
         out[i + ch] = Math.round((v * (1 - t) + (MASK_OVERLAY_RGB[ch] ?? 0) / 255 * t) * 255);

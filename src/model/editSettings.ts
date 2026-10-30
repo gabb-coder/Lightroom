@@ -86,6 +86,27 @@ export type MaskAdjust = { exposure: number; contrast: number; highlights: numbe
 export type MaskAdjustKey = keyof MaskAdjust;
 
 /**
+ * Range mask (M30): limits a mask to a color (hue ± width / 2, softly
+ * wider) or a brightness band (lo–hi, 0–100, with soft edges), judged on the
+ * photo's own pixels. Absent or 'none' = no limit.
+ */
+export type MaskRange = {
+  kind: 'none' | 'color' | 'luminance';
+  /** Luminance band, 0–100. */
+  lo: number;
+  hi: number;
+  /** 0–100: how softly the band's edges fall off. */
+  smooth: number;
+  /** Color: target hue in degrees and full-strength width (5–180°). */
+  hue: number;
+  width: number;
+};
+
+export function defaultMaskRange(): MaskRange {
+  return { kind: 'none', lo: 0, hi: 100, smooth: 50, hue: 30, width: 60 };
+}
+
+/**
  * A gradient mask (M15). Coordinates are normalized to the uploaded photo
  * (0..1 of its width and height, before crop/rotate/flip), so a mask stays
  * on the same part of the picture when the crop changes.
@@ -99,6 +120,7 @@ export type LinearMask = {
   x1: number;
   y1: number;
   adjust: MaskAdjust;
+  range?: MaskRange;
 };
 
 export type RadialMask = {
@@ -116,6 +138,7 @@ export type RadialMask = {
   /** Adjust outside the ellipse instead of inside. */
   invert: boolean;
   adjust: MaskAdjust;
+  range?: MaskRange;
 };
 
 /** One brush stroke (M21): a path of dabs that paints the mask or erases it. */
@@ -140,6 +163,7 @@ export type BrushMask = {
   aspect: number;
   strokes: BrushStroke[];
   adjust: MaskAdjust;
+  range?: MaskRange;
 };
 
 export type Mask = LinearMask | RadialMask | BrushMask;

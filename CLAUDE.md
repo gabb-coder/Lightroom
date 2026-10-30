@@ -187,6 +187,12 @@ component library.
   `model/maskEdit.ts`; overlay `MaskOverlay.tsx` shows while the Masks panel
   is open (`masksOpen`); M / Shift+M pick a tool. Presets and the default
   copy panels leave masks alone (they belong to one picture).
+- Range masks (M30): optional `mask.range` (color: hue ± width with soft
+  edges, fading out near gray/black; luminance: lo–hi band + smoothness),
+  judged on the photo's own (retouched, sRGB-encoded) pixel and multiplied
+  into the mask weight (`engine/masks.ts` rangeWeight, GLSL `RANGE_GLSL` in
+  the develop pass and the overlay, which samples the photo texture).
+  Color eyedropper: `developStore.rangePicking` → `editingAids.pickRangeColor`.
 - Zoom and Navigator (M16): `model/zoom.ts` (Fit / Fill / 1:1 = one photo
   px per device px, visible rect, scroll-for-center), `state/viewStore.ts`
   (zoom, visible rect, pan requests). `PhotoCanvas` pans in code
