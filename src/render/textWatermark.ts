@@ -6,13 +6,18 @@
  * only draws the letters here; it never touches the photo.
  */
 import { textShadowColor } from '../engine/watermark';
-import type { WatermarkOptions } from '../model/exportOptions';
+import type { WatermarkFont, WatermarkOptions } from '../model/exportOptions';
 
 /** Font size the text is drawn at; the export scales it to the chosen size. */
 export const TEXT_RASTER_PX = 240;
 /** Keeps very long text inside canvas size limits. */
 const MAX_RASTER_WIDTH = 8000;
-const FONT_FAMILY = "Inter, system-ui, -apple-system, 'Segoe UI', sans-serif";
+/** Typefaces (M35): Inter is bundled; serif and monospace are the system's own (nothing loads from elsewhere). */
+const FONT_FAMILIES: Readonly<Record<WatermarkFont, string>> = {
+  sans: "Inter, system-ui, -apple-system, 'Segoe UI', sans-serif",
+  serif: "Georgia, 'Times New Roman', Times, serif",
+  mono: "ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace",
+};
 
 export interface TextImage {
   blob: Blob;
@@ -20,14 +25,18 @@ export interface TextImage {
   height: number;
 }
 
-type TextStyle = Pick<WatermarkOptions, 'text' | 'textColor' | 'textShadow'>;
+type TextStyle = Pick<WatermarkOptions, 'text' | 'textColor' | 'textShadow'> & Partial<Pick<WatermarkOptions, 'textFont' | 'textBold'>>;
 
-const fontAt = (px: number) => `600 ${px}px ${FONT_FAMILY}`;
+function fontFor(style: TextStyle): (px: number) => string {
+  const weight = style.textBold === false ? 400 : style.textFont && style.textFont !== 'sans' ? 700 : 600;
+  return (px) => `${weight} ${px}px ${FONT_FAMILIES[style.textFont ?? 'sans']}`;
+}
 
 /** The text as a PNG with a transparent background, or null for blank text. */
 export async function renderTextWatermark(style: TextStyle): Promise<TextImage | null> {
   const text = style.text.trim();
   if (!text) return null;
+  const fontAt = fontFor(style);
   // Make sure the web font is ready, or the first export would use a fallback.
   await document.fonts.load(fontAt(TEXT_RASTER_PX), text).catch(() => undefined);
   const probe = new OffscreenCanvas(1, 1).getContext('2d');

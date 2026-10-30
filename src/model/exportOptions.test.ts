@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_EXPORT_PRESETS, DEFAULT_EXPORT_OPTIONS, DEFAULT_WATERMARK, exportFileName, hasWatermark, normalizeWatermark, exportSize, normalizeExportOptions, sameLook, subfolderOf, withKept, zipEntryPath, zipFileName } from './exportOptions';
-import { uniqueFileNames } from './exportOptions';
+import { uniqueFileNames, watermarksOf } from './exportOptions';
 
 describe('export presets', () => {
   it('match the design list', () => {
@@ -110,5 +110,30 @@ describe('watermark options (M23)', () => {
     const preset = BUILTIN_EXPORT_PRESETS[1]?.options ?? DEFAULT_EXPORT_OPTIONS;
     expect(withKept(preset, on).watermark).toEqual(on.watermark);
     expect(sameLook(withKept(preset, on), preset)).toBe(true);
+  });
+});
+
+describe('watermark extras (M35)', () => {
+  it('clamps rotation and spacing, checks the font, and defaults to an upright single mark', () => {
+    expect(DEFAULT_WATERMARK).toMatchObject({ rotation: 0, pattern: false, textFont: 'sans', textBold: true });
+    expect(normalizeWatermark({ rotation: 200, spacing: -4, pattern: true, textFont: 'comic', textBold: false })).toMatchObject({
+      rotation: 90,
+      spacing: 0,
+      pattern: true,
+      textFont: 'sans',
+      textBold: false,
+    });
+    expect(normalizeWatermark({ rotation: -45.4, textFont: 'serif', pattern: 'yes' })).toMatchObject({ rotation: -45, textFont: 'serif', pattern: false });
+  });
+
+  it('has a second watermark, normalized and kept like the first', () => {
+    expect(normalizeExportOptions({}).watermark2).toEqual(DEFAULT_WATERMARK);
+    const second = normalizeExportOptions({ watermark2: { ...DEFAULT_WATERMARK, enabled: true, kind: 'text', text: 'Draft', size: 900 } });
+    expect(second.watermark2).toMatchObject({ enabled: true, text: 'Draft', size: 100 });
+    expect(hasWatermark(second)).toBe(true);
+    expect(watermarksOf(second)).toEqual([second.watermark, second.watermark2]);
+    const preset = BUILTIN_EXPORT_PRESETS[1]?.options ?? DEFAULT_EXPORT_OPTIONS;
+    expect(withKept(preset, second).watermark2).toEqual(second.watermark2);
+    expect(sameLook(withKept(preset, second), preset)).toBe(true);
   });
 });

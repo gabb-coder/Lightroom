@@ -10,7 +10,7 @@ import { applyOutputSharpen, outputSharpenParams } from '../engine/outputSharpen
 import { applyWatermark } from '../engine/watermark';
 import { copyExif } from '../io/exifWrite';
 import type { EditSettings } from '../model/editSettings';
-import { exportSize, hasWatermark, type ExportOptions } from '../model/exportOptions';
+import { exportSize, markApplies, watermarksOf, type WatermarkOptions, type ExportOptions } from '../model/exportOptions';
 import type { RgbaImage } from './gl';
 import { fitLongEdge } from './proxy';
 import { Renderer } from './Renderer';
@@ -73,13 +73,16 @@ function sharpenForOutput(canvas: EncodableCanvas, options: ExportOptions): void
   ctx.putImageData(image, 0, 0);
 }
 
-/** Lays the logo on the final pixels, if the options ask for one. */
-async function watermark(env: ExportEnvironment, canvas: EncodableCanvas, options: ExportOptions, logo: Blob | null): Promise<void> {
-  if (!logo || !hasWatermark(options)) return;
+/** Lays the watermarks on the final pixels, first then second (M35), each if it applies. */
+async function watermark(env: ExportEnvironment, canvas: EncodableCanvas, options: ExportOptions, logos: readonly (Blob | null)[]): Promise<void> {
+  const marks = watermarksOf(options)
+    .map((w, i) => ({ w, logo: logos[i] ?? null }))
+    .filter((m): m is { w: WatermarkOptions; logo: Blob } => m.logo !== null && markApplies(m.w));
+  if (marks.length === 0) return;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('No 2D context for encoding');
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  applyWatermark(image, await logoPixels(env, logo), options.watermark, options.watermark.opacity / 100);
+  for (const { w, logo } of marks) applyWatermark(image, await logoPixels(env, logo), w, w.opacity / 100, w.pattern ? { spacing: w.spacing } : null);
   ctx.putImageData(image, 0, 0);
 }
 
@@ -97,7 +100,7 @@ export async function renderExport(
   settings: EditSettings,
   options: ExportOptions,
   progress: (stage: ExportStage) => void,
-  logo: Blob | null = null,
+  logos: readonly (Blob | null)[] = [],
 ): Promise<{ blob: Blob; width: number; height: number; reducedTo?: number }> {
   progress('decode');
   const r = env.renderer();
@@ -120,7 +123,7 @@ export async function renderExport(
   progress('encode');
   const canvas = await toCanvas(env, image, options);
   sharpenForOutput(canvas, options);
-  await watermark(env, canvas, options, logo);
+  await watermark(env, canvas, options, logos);
   const blob = await encode(env, canvas, original, options);
   return { blob, width: canvas.width, height: canvas.height, reducedTo };
 }

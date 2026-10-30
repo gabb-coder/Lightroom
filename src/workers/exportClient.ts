@@ -38,11 +38,11 @@ export function createExportClient() {
     settings: EditSettings,
     options: ExportOptions,
     onStage: (stage: ExportStage) => void = () => undefined,
-    logo: Blob | null = null,
+    logos: (Blob | null)[] = [],
   ): Promise<ExportResult> {
     if (!useMainThread) {
       try {
-        return await runInWorker(original, settings, options, onStage, logo);
+        return await runInWorker(original, settings, options, onStage, logos);
       } catch (error) {
         if (error instanceof ExportCancelled) throw error;
         if (!isWorkerCapabilityError(error)) throw error;
@@ -50,10 +50,10 @@ export function createExportClient() {
       }
     }
     const { exportOnMainThread } = await import('../render/mainThreadExport');
-    return exportOnMainThread(original, settings, options, onStage, logo);
+    return exportOnMainThread(original, settings, options, onStage, logos);
   }
 
-  function runInWorker(original: Blob, settings: EditSettings, options: ExportOptions, onStage: (stage: ExportStage) => void, logo: Blob | null): Promise<ExportResult> {
+  function runInWorker(original: Blob, settings: EditSettings, options: ExportOptions, onStage: (stage: ExportStage) => void, logos: (Blob | null)[]): Promise<ExportResult> {
     worker ??= new Worker(new URL('./export.worker.ts', import.meta.url), { type: 'module' });
     const w = worker;
     const id = nextId++;
@@ -88,7 +88,7 @@ export function createExportClient() {
         cancelCurrent = null;
         reject(new ExportCancelled());
       };
-      w.postMessage({ id, original, settings, options, logo });
+      w.postMessage({ id, original, settings, options, logos });
     });
   }
 

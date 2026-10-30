@@ -231,6 +231,14 @@ component library.
   margins (grid positions are 0, ½, 1, pixel-identical);
   `watermarkFractionsAt` inverts `watermarkRect`, `snapPlacement` snaps
   within 2% back onto a named grid position.
+  Extras (M35): `rotation` (−90–90°, clockwise like CSS; the placed box is
+  the turned mark's bounding box, `watermarkGeometry` → rect + inner size,
+  `rotateRaster`), `pattern` + `spacing` (brick tiling over the whole
+  photo, margin ignored, `patternRects`), text `textFont` (sans/serif/mono)
+  and `textBold`, and a second mark `ExportOptions.watermark2` (a kept
+  setting too; applied after the first; `watermarksOf`, `markApplies`).
+  The export worker gets one logo blob per mark (`logos`). The fieldset
+  has "Watermark 1 / 2" tabs and its preview draws both with the same math.
 - Viewers (M31): full screen (F), slideshow (Ctrl/Cmd+Enter) and compare
   (C, Library) are full-window overlays (`components/PhotoViewer.tsx`,
   `CompareView.tsx`) driven by `state/viewerStore.ts` / `viewerActions.ts`;

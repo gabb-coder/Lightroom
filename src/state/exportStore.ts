@@ -4,7 +4,6 @@ import { downloadBlob } from '../io/download';
 import {
   BUILTIN_EXPORT_PRESETS,
   exportFileName,
-  hasWatermark,
   KEPT_KEYS,
   normalizeExportOptions,
   sameLook,
@@ -15,6 +14,9 @@ import {
   withKept,
   zipEntryPath,
   zipFileName,
+  markApplies,
+  watermarksOf,
+  type WatermarkOptions,
 } from '../model/exportOptions';
 import { exportFolder, pickFolder, supportsFolderExport, writeFile, type DirectoryHandle } from '../io/folderAccess';
 import { createZip } from '../io/zip';
@@ -123,21 +125,21 @@ export function exportTargets(): string[] {
 }
 
 /** Renders one photo in the worker (or on the page, see exportClient). */
-async function renderOne(photoId: string, options: ExportOptions, onProgress: (fraction: number) => void, logo: Blob | null): Promise<ExportResult> {
+async function renderOne(photoId: string, options: ExportOptions, onProgress: (fraction: number) => void, logos: (Blob | null)[]): Promise<ExportResult> {
   const original = await getOriginal(photoId);
   if (!original) throw new Error('This photo is no longer in the catalog.');
   const settings = await settingsOf(photoId);
-  return exportInWorker(original.blob, settings, options, (stage) => onProgress(STAGE_PROGRESS[stage]), logo);
+  return exportInWorker(original.blob, settings, options, (stage) => onProgress(STAGE_PROGRESS[stage]), logos);
 }
 
 /**
  * The watermark image for these options: the stored logo, or the text drawn
  * once for the whole batch (M24). Null for no watermark (or a logo that's gone).
  */
-async function logoFor(options: ExportOptions): Promise<Blob | null> {
-  if (!hasWatermark(options)) return null;
-  if (options.watermark.kind === 'text') return (await renderTextWatermark(options.watermark))?.blob ?? null;
-  return options.watermark.logoId ? ((await db.logos.get(options.watermark.logoId))?.blob ?? null) : null;
+async function logoFor(w: WatermarkOptions): Promise<Blob | null> {
+  if (!markApplies(w)) return null;
+  if (w.kind === 'text') return (await renderTextWatermark(w))?.blob ?? null;
+  return w.logoId ? ((await db.logos.get(w.logoId))?.blob ?? null) : null;
 }
 
 /** Where a batch's files go, and what the done message says. */
@@ -194,7 +196,7 @@ export async function runExport(): Promise<void> {
   const names = uniqueFileNames(records.map((r, i) => (r ? exportFileName(options, r, i + 1) : '')));
   const total = ids.length;
   const out = await delivery(options, total, folder);
-  const logo = await logoFor(options);
+  const logos = await Promise.all(watermarksOf(options).map(logoFor));
   const failed: string[] = [];
   let lastError = '';
   /** Long edge the GPU limited a photo to, if any (M33). */
@@ -208,7 +210,7 @@ export async function runExport(): Promise<void> {
     try {
       const id = ids[index];
       if (!id || !records[index]) throw new Error('This photo is no longer in the catalog.');
-      const result = await renderOne(id, options, progress, logo);
+      const result = await renderOne(id, options, progress, logos);
       reducedTo = result.reducedTo ?? reducedTo;
       await out.deliver(fileName, result.blob);
     } catch (error) {

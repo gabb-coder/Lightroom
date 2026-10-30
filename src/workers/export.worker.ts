@@ -24,7 +24,7 @@ const env: ExportEnvironment = {
 scope.onmessage = async (e) => {
   const req = e.data;
   try {
-    const result = await renderExport(env, req.original, req.settings, req.options, (stage) => scope.postMessage({ id: req.id, kind: 'progress', stage }), req.logo);
+    const result = await renderExport(env, req.original, req.settings, req.options, (stage) => scope.postMessage({ id: req.id, kind: 'progress', stage }), req.logos);
     scope.postMessage({ id: req.id, kind: 'done', ...result });
   } catch (error) {
     scope.postMessage({ id: req.id, kind: 'error', error: error instanceof Error ? error.message : String(error) });

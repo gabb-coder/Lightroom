@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 import { pipelineParams, renderRgba8 } from '../src/engine/pipeline';
-import { applyWatermark, watermarkRect } from '../src/engine/watermark';
+import { applyWatermark, watermarkGeometry, watermarkRect } from '../src/engine/watermark';
 import { defaultEditSettings } from '../src/model/editSettings';
 import { gotoDevelop, openTestPhoto, smallPhotoPng } from './utils/develop';
 import { storeCount } from './utils/idb';
@@ -311,5 +311,122 @@ test.describe('Logo watermark (M23)', () => {
     await page.getByRole('tab', { name: 'Export' }).click();
     await expect(dialog(page).getByLabel('Text', { exact: true })).toHaveValue('© Darkroom Studio');
     await expect(dialog(page).getByRole('group', { name: 'Watermark type' }).getByRole('button', { name: 'Text' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('two watermarks, one turned and one repeated across the photo: the export matches the CPU reference (M35)', async ({ page }) => {
+    test.slow();
+    const logo = makeLogo();
+    await gotoDevelop(page);
+    await openTestPhoto(page, smallPhotoPng); // 600 × 360
+    await page.getByRole('tab', { name: 'Export' }).click();
+    await dialog(page).getByRole('button', { name: 'PNG, lossless' }).click();
+    const marks = dialog(page).getByRole('group', { name: 'Which watermark' });
+    await expect(marks.getByRole('button', { name: 'Watermark 1' })).toHaveAttribute('aria-pressed', 'true');
+
+    // Watermark 1: the logo, turned 30° clockwise, bottom right.
+    await addLogo(page, logo);
+    await dialog(page).getByRole('slider', { name: 'Size', exact: true }).fill('30');
+    await dialog(page).getByRole('slider', { name: 'Opacity', exact: true }).fill('80');
+    await dialog(page).getByRole('slider', { name: 'Margin', exact: true }).fill('4');
+    await dialog(page).getByRole('slider', { name: 'Rotation', exact: true }).fill('30');
+    await expect(dialog(page).locator('output[for="ex-wm-rotation"]')).toHaveText('30°');
+
+    // Watermark 2: its own logo, repeated across the photo at −20°.
+    await marks.getByRole('button', { name: 'Watermark 2' }).click();
+    const second = dialog(page).getByLabel('Add a second watermark');
+    await expect(second).not.toBeChecked();
+    await addLogo(page, logo, 'pattern-logo.png');
+    await expect(second).toBeChecked(); // the new logo went to this mark, and switched it on
+    await expect(dialog(page).getByLabel('Logo', { exact: true }).locator('option:checked')).toHaveText('pattern-logo.png');
+    await dialog(page).getByLabel('Repeat across the photo').check();
+    await expect(dialog(page).getByRole('radiogroup', { name: 'Watermark position' })).toHaveCount(0);
+    await expect(dialog(page).getByRole('slider', { name: 'Margin', exact: true })).toHaveCount(0);
+    await dialog(page).getByRole('slider', { name: 'Size', exact: true }).fill('15');
+    await dialog(page).getByRole('slider', { name: 'Opacity', exact: true }).fill('40');
+    await dialog(page).getByRole('slider', { name: 'Spacing', exact: true }).fill('80');
+    await dialog(page).getByRole('slider', { name: 'Rotation', exact: true }).fill('-20');
+
+    // The preview shows both: many tiles plus the turned mark, each where the export puts it.
+    const preview = page.getByTestId('watermark-preview');
+    await page.getByTestId('watermark-preview').scrollIntoViewIfNeeded();
+    await expect.poll(() => preview.locator('img[alt=""]').count()).toBeGreaterThan(12);
+    await expect(preview.locator('img[alt=""][style*="rotate(30deg)"]')).toHaveCount(1);
+    await expect(preview.locator('img[alt=""][style*="rotate(-20deg)"]').first()).toBeVisible();
+    await page.screenshot({ path: 'test-results/screenshots/m35-two-watermarks-dialog.png' });
+    await marks.getByRole('button', { name: 'Watermark 1' }).click();
+    await expect(dialog(page).getByLabel('Logo', { exact: true }).locator('option:checked')).toHaveText('studio-logo.png');
+    const frame = await preview.locator('img').first().boundingBox();
+    const shown = await page.getByTestId('watermark-preview-logo').boundingBox();
+    if (!frame || !shown) throw new Error('no preview');
+    const first = { position: 'bottom-right' as const, size: 30, inset: 4, rotation: 30 };
+    const g = watermarkGeometry({ width: 600, height: 360 }, logo, first);
+    expect(Math.abs((shown.x - frame.x) / frame.width - g.rect.x / 600)).toBeLessThan(0.01);
+    expect(Math.abs(shown.width / frame.width - g.rect.width / 600)).toBeLessThan(0.01);
+    expect(Math.abs(shown.height / frame.height - g.rect.height / 360)).toBeLessThan(0.01);
+
+    const download = page.waitForEvent('download');
+    await dialog(page).getByRole('button', { name: 'Export 1 photo' }).click();
+    const file = await readFile(await (await download).path());
+    await writeFile('test-results/screenshots/m35-exported.png', file);
+    const exported = decodePng(file);
+
+    const source = makeTestPhoto(600, 360);
+    const photo = renderRgba8(source.data, source, pipelineParams(defaultEditSettings()));
+    const reference = { width: photo.width, height: photo.height, data: new Uint8ClampedArray(photo.data) };
+    applyWatermark(reference, logo, first, 0.8);
+    applyWatermark(reference, logo, { position: 'bottom-right', size: 15, inset: 3, rotation: -20 }, 0.4, { spacing: 80 });
+    let maxDiff = 0;
+    let changed = 0;
+    for (let i = 0; i < reference.data.length; i++) {
+      if (i % 4 === 3) continue;
+      maxDiff = Math.max(maxDiff, Math.abs((exported.data[i] ?? 0) - (reference.data[i] ?? 0)));
+      if (Math.abs((exported.data[i] ?? 0) - (photo.data[i] ?? 0)) > 10) changed++;
+    }
+    console.log(`two watermarks vs CPU reference: max diff ${maxDiff}/255, ${changed} channel values changed`);
+    expect(maxDiff).toBeLessThanOrEqual(2);
+    // The pattern really covers the photo: marks in all four quarters.
+    const quarter = (qx: number, qy: number) => {
+      let n = 0;
+      for (let y = qy * 180; y < qy * 180 + 180; y++) {
+        for (let x = qx * 300; x < qx * 300 + 300; x++) {
+          const i = (y * 600 + x) * 4;
+          if (Math.abs((exported.data[i] ?? 0) - (photo.data[i] ?? 0)) > 10) n++;
+        }
+      }
+      return n;
+    };
+    for (const [qx, qy] of [[0, 0], [1, 0], [0, 1], [1, 1]] as const) expect(quarter(qx, qy)).toBeGreaterThan(300);
+
+    // Both are kept settings: still there after a reload.
+    await page.reload();
+    await page.getByRole('tab', { name: 'Export' }).click();
+    await dialog(page).getByRole('group', { name: 'Which watermark' }).getByRole('button', { name: 'Watermark 2' }).click();
+    await expect(dialog(page).getByLabel('Add a second watermark')).toBeChecked();
+    await expect(dialog(page).getByLabel('Repeat across the photo')).toBeChecked();
+    await expect(dialog(page).locator('output[for="ex-wm-spacing"]')).toHaveText('80%');
+  });
+
+  test('text watermarks can use another font and a regular weight (M35)', async ({ page }) => {
+    test.slow();
+    await gotoDevelop(page);
+    await openTestPhoto(page, smallPhotoPng);
+    await page.getByRole('tab', { name: 'Export' }).click();
+    await dialog(page).getByLabel('Add a watermark').check();
+    await dialog(page).getByRole('group', { name: 'Watermark type' }).getByRole('button', { name: 'Text' }).click();
+    await dialog(page).getByLabel('Text', { exact: true }).fill('Darkroom Mmm');
+    const mark = page.getByTestId('watermark-preview-logo').locator('img');
+    const aspect = () => mark.evaluate((el: HTMLImageElement) => (el.complete && el.naturalHeight ? el.naturalWidth / el.naturalHeight : 0));
+    await expect.poll(aspect).toBeGreaterThan(0);
+    const sansBold = await aspect();
+    const font = dialog(page).getByLabel('Font', { exact: true });
+    await expect(font).toHaveValue('sans');
+    await expect(dialog(page).getByLabel('Bold')).toBeChecked();
+    await font.selectOption('mono');
+    await expect.poll(aspect).not.toBeCloseTo(sansBold, 2);
+    const monoBold = await aspect();
+    await dialog(page).getByLabel('Bold').uncheck();
+    await expect.poll(aspect).not.toBeCloseTo(monoBold, 3);
+    await page.getByTestId('watermark-preview').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: 'test-results/screenshots/m35-text-font.png' });
   });
 });
