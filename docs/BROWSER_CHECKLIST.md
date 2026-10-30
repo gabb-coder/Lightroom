@@ -26,7 +26,10 @@ shot with EXIF rotation, one larger than 20 MP).
 
 Large photos: the on-screen render and exports are capped at the GPU's
 maximum texture size (often 4096 or 8192 px on phones). Exports from such
-devices come out at that size.
+devices come out at that size, and the export toast says so (M33).
+Measured on software WebGL (no GPU, the e2e machine): a 50 MP photo
+(8192 × 6144) opens in about 9 s and exports at full size in about 40 s;
+a real GPU is much faster.
 
 ## Checklist
 
@@ -42,5 +45,6 @@ devices come out at that size.
 10. **Reload:** everything is still there.
 11. **Phone/tablet:** steps 2, 3, 4 and 8 with touch. Nothing scrolls sideways; a vertical swipe on a fitted photo scrolls the page; sliders and buttons are easy to hit.
 12. **Keyboard:** `?` lists the shortcuts; try a few from each group.
+13. **Install and offline (M33):** install the app (Chrome/Edge: the install icon in the address bar; Safari: Share → Add to Dock / Home Screen). Open it, then turn the network off and reload: the app starts, opens and edits a photo, and exports it.
 
 Note anything that differs, with the browser version, and file it.

@@ -230,8 +230,9 @@ test.describe('Persistence', () => {
   });
 });
 
+// @perf: measured on its own after the other tests (playwright.config.ts "performance" project).
 test.describe('Performance', () => {
-  test('200 photos import and the grid scrolls at 60fps', async ({ page }) => {
+  test('200 photos import and the grid scrolls at 60fps @perf', async ({ page }) => {
     test.setTimeout(180_000);
     await gotoLibrary(page);
     const chooser = page.waitForEvent('filechooser');

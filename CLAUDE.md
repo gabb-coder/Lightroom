@@ -246,6 +246,16 @@ component library.
   photo, fractions) + the 512 px rendered copy kept in `histogramStore.image`.
   Library Auto tone / Ctrl+Cmd+U: `editingAids.autoTonePhotos` measures each
   original and applies one step per photo through `settingsSync.applyToPhotos`.
+- App and big photos (M33): `public/manifest.webmanifest` + icons
+  (`scripts/make-icons.mjs` draws them); `dist/sw.js` is built by the
+  `serviceWorker` plugin in vite.config.ts from `scripts/service-worker.js`
+  with every built and public file (precache on install, network-first page
+  loads, cache-first files, lookups ignore Vary; registered in main.tsx in
+  production only). Exports of photos larger than the GPU's texture limit
+  are downsized and the toast says so (`reducedTo`); `?maxTexture=N` lowers
+  the limit for tests. Timing-sensitive e2e tests are tagged `@perf` and run
+  in their own Playwright project after all others (it is skipped when
+  another test fails).
 - Interface (M22): every shortcut is listed in `shortcuts/shortcutList.ts`
   (the `?` / top-bar dialog renders it; a unit test reads the handler
   sources and fails if a handled key is missing, so add new shortcuts

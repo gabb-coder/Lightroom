@@ -19,7 +19,7 @@ import {
 import { exportFolder, pickFolder, supportsFolderExport, writeFile, type DirectoryHandle } from '../io/folderAccess';
 import { createZip } from '../io/zip';
 import { renderTextWatermark } from '../render/textWatermark';
-import { cancelExport, ExportCancelled, exportInWorker } from '../workers/exportClient';
+import { cancelExport, ExportCancelled, exportInWorker, type ExportResult } from '../workers/exportClient';
 import { STAGE_PROGRESS } from '../workers/exportProtocol';
 import { useAppStore } from './appStore';
 import { flushEdits } from './editPersistence';
@@ -123,11 +123,11 @@ export function exportTargets(): string[] {
 }
 
 /** Renders one photo in the worker (or on the page, see exportClient). */
-async function renderOne(photoId: string, options: ExportOptions, onProgress: (fraction: number) => void, logo: Blob | null): Promise<Blob> {
+async function renderOne(photoId: string, options: ExportOptions, onProgress: (fraction: number) => void, logo: Blob | null): Promise<ExportResult> {
   const original = await getOriginal(photoId);
   if (!original) throw new Error('This photo is no longer in the catalog.');
   const settings = await settingsOf(photoId);
-  return (await exportInWorker(original.blob, settings, options, (stage) => onProgress(STAGE_PROGRESS[stage]), logo)).blob;
+  return exportInWorker(original.blob, settings, options, (stage) => onProgress(STAGE_PROGRESS[stage]), logo);
 }
 
 /**
@@ -197,6 +197,8 @@ export async function runExport(): Promise<void> {
   const logo = await logoFor(options);
   const failed: string[] = [];
   let lastError = '';
+  /** Long edge the GPU limited a photo to, if any (M33). */
+  let reducedTo: number | undefined;
   for (let index = 0; index < total; index++) {
     const fileName = names[index] ?? '';
     const progress = (fraction: number) => setJob({ status: 'running', fileName, index, total, progress: (index + fraction) / total });
@@ -206,7 +208,9 @@ export async function runExport(): Promise<void> {
     try {
       const id = ids[index];
       if (!id || !records[index]) throw new Error('This photo is no longer in the catalog.');
-      await out.deliver(fileName, await renderOne(id, options, progress, logo));
+      const result = await renderOne(id, options, progress, logo);
+      reducedTo = result.reducedTo ?? reducedTo;
+      await out.deliver(fileName, result.blob);
     } catch (error) {
       if (error instanceof ExportCancelled) return finish({ status: 'cancelled', fileName, index, total, progress: index / total });
       failed.push(records[index]?.fileName ?? fileName);
@@ -216,7 +220,9 @@ export async function runExport(): Promise<void> {
   await out.finish();
   const last = names[total - 1] ?? '';
   const summary = out.label ? `${total > 1 ? `${total} photos. ` : ''}${out.label}` : total > 1 ? `${total} photos` : last;
-  if (failed.length === 0) return finish({ status: 'done', fileName: summary, index: total - 1, total, progress: 1 });
+  // Too big for this device's GPU: say so instead of quietly exporting smaller.
+  const note = reducedTo ? ` Larger than this device's graphics can process: exported at ${reducedTo} px on the long edge.` : '';
+  if (failed.length === 0) return finish({ status: 'done', fileName: note ? `${summary}.${note}` : summary, index: total - 1, total, progress: 1 });
   const message =
     total === 1 ? lastError : `${total - failed.length} of ${total} exported. Could not export ${failed.join(', ')}: ${lastError}`;
   finish({ status: 'error', fileName: last, index: total - 1, total, progress: 1, message });

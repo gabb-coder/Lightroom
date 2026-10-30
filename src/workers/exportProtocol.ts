@@ -15,7 +15,8 @@ export type ExportStage = 'decode' | 'render' | 'encode';
 
 export type ExportResponse =
   | { id: number; kind: 'progress'; stage: ExportStage }
-  | { id: number; kind: 'done'; blob: Blob; width: number; height: number }
+  /** `reducedTo`: the photo was larger than the GPU can hold, so it was rendered at this long edge (M33). */
+  | { id: number; kind: 'done'; blob: Blob; width: number; height: number; reducedTo?: number }
   | { id: number; kind: 'error'; error: string };
 
 /** Fraction of the work done when each stage starts (for the progress bar). */
