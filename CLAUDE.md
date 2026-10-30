@@ -125,6 +125,15 @@ component library.
   geometry is a 1-pass fast path and must stay pixel-exact. Crop editing
   math (fit to straighten, aspect presets, handles, rotate/flip) is in
   `model/crop.ts`; crop rect is normalized to the oriented image.
+- Lens and perspective (M29): `Geometry` also has distortion, vertical,
+  horizontal, scale and fringeRed/fringeBlue (`engine/geometry.ts`
+  lensParams). They act in the ORIENTED image between the output→oriented
+  affine (crop, straighten) and oriented→source (turns, flips):
+  `geometryMap` → `outputToSource` / `sourceToOutput` (Newton inverse, used
+  by `maskView` so masks, spots and the eyedropper stay aligned) and
+  `sampleOutput`. With all at defaults the single geometry matrix is used
+  as before (pixel-exact). GLSL `GEOMETRY_MAP_GLSL` is shared by the
+  geometry and display passes (`Renderer.setGeometryMap`).
 - Tone curve / color mixer (M8): `engine/curve.ts` (monotone cubic spline,
   RGB curve composed with each channel into one 1024-entry RGBA32F table,
   sampled identically on CPU and GPU, applied on sRGB-encoded values) and

@@ -37,6 +37,13 @@ const GEOMETRY_CASES: Record<string, [Partial<BasicSettings>, Partial<Geometry>]
   'straighten +7.3°': [{}, { angle: 7.3, cropRect: { x: 0.15, y: 0.15, w: 0.7, h: 0.7 } }],
   'straighten -45°': [{}, { angle: -45, cropRect: { x: 0.3, y: 0.3, w: 0.4, h: 0.4 } }],
   'straighten, uncropped (transparent corners)': [{}, { angle: 20 }],
+  // Lens and perspective (M29).
+  'lens: distortion +60': [{}, { distortion: 60 }],
+  'lens: distortion -80 (transparent corners)': [{}, { distortion: -80 }],
+  'lens: vertical +70': [{}, { vertical: 70 }],
+  'lens: horizontal -50, rotated 90 and cropped': [{}, { horizontal: -50, rotation: 1, cropRect: { x: 0.1, y: 0.1, w: 0.8, h: 0.8 } }],
+  'lens: scale 130 + fringe red/blue': [{}, { scale: 130, fringeRed: 100, fringeBlue: -100 }],
+  'lens: everything + straighten + color': [{ exposure: 0.4, saturation: 30 }, { distortion: -30, vertical: 40, horizontal: 20, scale: 112, fringeRed: -60, fringeBlue: 70, angle: 6, cropRect: { x: 0.15, y: 0.15, w: 0.7, h: 0.7 } }],
   'everything + color': [
     { exposure: 0.6, contrast: 30, saturation: 40, treatment: 'color' },
     { rotation: 1, flipH: true, angle: -3.5, cropRect: { x: 0.1, y: 0.12, w: 0.75, h: 0.7 } },
@@ -382,6 +389,7 @@ test.describe('Display pass (M20)', () => {
   ] as const;
   const OVERLAYS: { name: string; mask: Mask; geometry?: Partial<Geometry> }[] = [
     { name: 'radial', mask: { id: 'o1', kind: 'radial', cx: 0.4, cy: 0.5, rx: 0.3, ry: 0.2, angle: 30, feather: 60, invert: false, adjust: { ...ADJ } } },
+    { name: 'radial, with perspective and distortion', geometry: { vertical: 60, distortion: -40, scale: 110 }, mask: { id: 'o3', kind: 'radial', cx: 0.5, cy: 0.4, rx: 0.3, ry: 0.25, angle: 0, feather: 40, invert: false, adjust: { ...ADJ } } },
     { name: 'brush, cropped and rotated', geometry: { rotation: 3, angle: -4, cropRect: { x: 0.05, y: 0.1, w: 0.85, h: 0.8 } }, mask: { id: 'o2', kind: 'brush', aspect: 64 / 48, strokes: [{ erase: false, radius: 0.2, feather: 50, points: [0.2, 0.2, 0.8, 0.6] }], adjust: { ...ADJ } } },
   ];
   for (const c of OVERLAYS) {

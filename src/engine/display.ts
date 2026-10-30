@@ -1,4 +1,4 @@
-import { applyAffine, type Affine, type Size } from './geometry';
+import { outputToSource, type GeometryMap, type Size } from './geometry';
 import { HISTOGRAM_BINS, type Histogram } from './histogram';
 import { maskWeight, type MaskShape } from './masks';
 
@@ -26,9 +26,9 @@ export const NO_DISPLAY: DisplayOptions = { shadows: false, highlights: false, s
 export const MASK_OVERLAY_RGB = [255, 30, 60] as const;
 export const MASK_OVERLAY_OPACITY = 0.5;
 
-/** Maps output pixels to source pixels (the geometry matrix), for the mask overlay. */
+/** Maps output pixels to source pixels (engine/geometry.ts geometryMap), for the mask overlay. */
 export interface DisplayFrame {
-  matrix: Affine;
+  map: GeometryMap;
   source: Size;
 }
 
@@ -79,8 +79,8 @@ export function displayRgba8(
     out[i + 2] = clip ? clip[2] : b;
     out[i + 3] = a;
     if (o.overlay && frame && a > 0) {
-      const [sx, sy] = applyAffine(frame.matrix, x + 0.5, Math.floor(i / 4 / width) + 0.5);
-      const t = MASK_OVERLAY_OPACITY * maskWeight(o.overlay, sx, sy, frame.source.width, frame.source.height);
+      const at = outputToSource(frame.map, x + 0.5, Math.floor(i / 4 / width) + 0.5);
+      const t = at ? MASK_OVERLAY_OPACITY * maskWeight(o.overlay, at[0], at[1], frame.source.width, frame.source.height) : 0;
       for (let ch = 0; ch < 3; ch++) {
         const v = (out[i + ch] ?? 0) / 255;
         out[i + ch] = Math.round((v * (1 - t) + (MASK_OVERLAY_RGB[ch] ?? 0) / 255 * t) * 255);

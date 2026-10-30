@@ -1,5 +1,5 @@
 import { CURVE_LUT_SIZE } from '../engine/curve';
-import { geometryMatrix, isIdentityGeometry, outputSize } from '../engine/geometry';
+import { geometryMap, isIdentityGeometry, outputSize, type GeometryMap } from '../engine/geometry';
 import { BRUSH_RASTER_EDGE, type BrushRaster } from '../engine/brush';
 import { HIGHLIGHT_CLIP_RGB, isPlainDisplay, MASK_OVERLAY_OPACITY, MASK_OVERLAY_RGB, SHADOW_CLIP_RGB, type DisplayOptions } from '../engine/display';
 import type { MaskShape } from '../engine/masks';
@@ -88,7 +88,10 @@ const RETOUCH_UNIFORMS = ['image', 'spotCount', 'spotA', 'spotB'] as const;
 const DENOISE_UNIFORMS = ['image', 'lumaH', 'chromaH', 'lumaOn', 'colorOn', 'lumaTaps', 'lumaWeights', 'chromaTaps', 'chromaWeights', 'lumaSigma', 'colorSigma'] as const;
 type DenoiseUniforms = Uniforms<(typeof DENOISE_UNIFORMS)[number]>;
 const LEVEL_BLUR_UNIFORMS = ['level', 'dir', 'taps', 'weights'] as const;
-const GEOMETRY_UNIFORMS = ['image', 'flipY', 'outSize', 'rowX', 'rowY', 'vignette'] as const;
+/** engine/geometry.ts geometryMap uniforms, shared by the geometry and display passes. */
+const MAP_UNIFORMS = ['rowX', 'rowY', 'lensOn', 'afterX', 'afterY', 'lensA', 'lensB', 'fringe'] as const;
+type MapUniforms = Uniforms<(typeof MAP_UNIFORMS)[number]>;
+const GEOMETRY_UNIFORMS = ['image', 'flipY', 'outSize', 'vignette', ...MAP_UNIFORMS] as const;
 const DISPLAY_UNIFORMS = [
   'after',
   'before',
@@ -103,8 +106,7 @@ const DISPLAY_UNIFORMS = [
   'overlayKind',
   'overlayA',
   'overlayB',
-  'rowX',
-  'rowY',
+  ...MAP_UNIFORMS,
   'srcSize',
   'overlayColor',
   'overlayOpacity',
@@ -369,10 +371,10 @@ export class Renderer {
       if (!fresh || cache.before !== wantBefore) this.render(source, { ...wantBefore, geometry: params.geometry }, this.offscreen(before));
     }
     this.shownCache = { source, after: params, before: wantBefore ?? (fresh ? cache.before : null) };
-    this.displayPass(after, before, split === null ? -1 : split * target.width, display.options, target, geometryMatrix(source, params.geometry, target), source);
+    this.displayPass(after, before, split === null ? -1 : split * target.width, display.options, target, geometryMap(source, params.geometry, target), source);
   }
 
-  private displayPass(after: RenderTarget, before: RenderTarget, splitX: number, o: DisplayOptions, target: Target, toSource: readonly number[], source: SizedTexture): void {
+  private displayPass(after: RenderTarget, before: RenderTarget, splitX: number, o: DisplayOptions, target: Target, map: GeometryMap, source: SizedTexture): void {
     const { gl } = this;
     const u = this.displayUniforms;
     // Upload before binding the target: the brush upload binds its own texture unit.
@@ -386,8 +388,7 @@ export class Renderer {
       gl.uniform1i(u.overlayKind, SHAPE_KIND[overlay.kind]);
       gl.uniform4f(u.overlayA, ...overlay.a);
       gl.uniform4f(u.overlayB, overlayB[0], overlayB[1], overlayB[2], overlayB[3]);
-      gl.uniform3f(u.rowX, toSource[0] ?? 0, toSource[1] ?? 0, toSource[2] ?? 0);
-      gl.uniform3f(u.rowY, toSource[3] ?? 0, toSource[4] ?? 0, toSource[5] ?? 0);
+      this.setGeometryMap(u, map);
       gl.uniform2f(u.srcSize, source.width, source.height);
       gl.uniform3f(u.overlayColor, MASK_OVERLAY_RGB[0] / 255, MASK_OVERLAY_RGB[1] / 255, MASK_OVERLAY_RGB[2] / 255);
       gl.uniform1f(u.overlayOpacity, MASK_OVERLAY_OPACITY);
@@ -635,7 +636,7 @@ export class Renderer {
   private geometryPass(image: SizedTexture, params: PipelineParams, target: Target): void {
     const { gl } = this;
     const u = this.geometryUniforms;
-    const m = geometryMatrix(image, params.geometry, target);
+    const map = geometryMap(image, params.geometry, target);
     this.bindTarget(target);
     gl.useProgram(this.geometryProgram);
     gl.activeTexture(gl.TEXTURE0);
@@ -643,10 +644,27 @@ export class Renderer {
     gl.uniform1i(u.image, 0);
     gl.uniform1i(u.flipY, target.flipY ? 1 : 0);
     gl.uniform2i(u.outSize, target.width, target.height);
-    gl.uniform3f(u.rowX, m[0], m[1], m[2]);
-    gl.uniform3f(u.rowY, m[3], m[4], m[5]);
+    this.setGeometryMap(u, map);
     gl.uniform1f(u.vignette, params.vignette);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** Uniforms of engine/geometry.ts geometryMap (shaders.ts GEOMETRY_MAP_GLSL); the program must be in use. */
+  private setGeometryMap(u: MapUniforms, map: GeometryMap): void {
+    const { gl } = this;
+    const [a, b, c, d, e, f] = map.before;
+    gl.uniform3f(u.rowX, a, b, c);
+    gl.uniform3f(u.rowY, d, e, f);
+    gl.uniform1i(u.lensOn, map.lens ? 1 : 0);
+    if (!map.lens) return;
+    const [g, h, i, j, k, l] = map.after;
+    gl.uniform3f(u.afterX, g, h, i);
+    gl.uniform3f(u.afterY, j, k, l);
+    const o = map.oriented;
+    const half = Math.max(o.width, o.height) / 2;
+    gl.uniform4f(u.lensA, o.width / 2, o.height / 2, half, map.lens.invScale);
+    gl.uniform4f(u.lensB, map.lens.a, map.lens.b, map.lens.k, (half * half) / ((o.width / 2) ** 2 + (o.height / 2) ** 2));
+    gl.uniform2f(u.fringe, map.lens.fringeRed, map.lens.fringeBlue);
   }
 
   /** Puts `raster` in brush layer `layer` (uploading only when it changed); returns the shape's b uniform. */

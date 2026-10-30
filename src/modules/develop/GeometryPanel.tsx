@@ -3,9 +3,38 @@ import { SliderRow } from '../../components/SliderRow';
 import controls from '../../components/controls.module.css';
 import { CROP_ASPECTS, type CropAspect } from '../../model/editSettings';
 import { CROP_ASPECT_LABELS } from '../../model/historyDisplay';
-import { ANGLE_SLIDER } from '../../model/sliders';
+import { ANGLE_SLIDER, LENS_SLIDERS, type LensKey } from '../../model/sliders';
 import { useDevelopStore } from '../../state/developStore';
 import styles from './GeometryPanel.module.css';
+
+const LENS_GROUPS: readonly { label: string; keys: readonly LensKey[] }[] = [
+  { label: 'Lens', keys: ['distortion'] },
+  { label: 'Perspective', keys: ['vertical', 'horizontal', 'scale'] },
+  { label: 'Color fringe', keys: ['fringeRed', 'fringeBlue'] },
+];
+
+/** Lens and perspective (M29): distortion, keystone, scale and lateral color fringe. */
+function LensControls({ disabled }: { disabled: boolean }) {
+  const geometry = useDevelopStore((s) => s.settings.geometry);
+  const setLens = useDevelopStore((s) => s.setLens);
+  const setInteracting = useDevelopStore((s) => s.setInteracting);
+  return LENS_GROUPS.map((group) => (
+    <div key={group.label} role="group" aria-label={group.label} className={styles.lensGroup}>
+      <div className={`group-label ${styles.groupLabel}`}>{group.label}</div>
+      {group.keys.map((key) => (
+        <SliderRow
+          key={key}
+          def={LENS_SLIDERS[key]}
+          value={geometry[key]}
+          disabled={disabled}
+          onChange={(v) => setLens(key, v)}
+          onDragStart={() => setInteracting(true)}
+          onDragEnd={() => setInteracting(false)}
+        />
+      ))}
+    </div>
+  ));
+}
 
 /** "Crop and geometry" panel (design/Develop.dc.html). */
 export function GeometryPanel() {
@@ -71,6 +100,7 @@ export function GeometryPanel() {
       >
         {cropping ? 'Done cropping' : 'Edit crop'}
       </button>
+      <LensControls disabled={disabled} />
     </>
   );
 }

@@ -37,7 +37,7 @@ import { applyPresetTo, type Preset } from '../model/presets';
 import { jsonEqual } from '../model/compare';
 import { DEFAULT_SPOT_OPTIONS, spotRadius, type SpotOptions } from '../model/spotEdit';
 import type { CurveChannel } from '../model/curveEdit';
-import { BRUSH_FEATHER_SLIDER, BRUSH_SIZE_SLIDER, DETAIL_SLIDERS, EFFECTS_SLIDERS, GRADE_REGION_LABELS, gradeSliderDef, GRADING_SLIDERS, hslSliderDef, maskSliderDef, type HslProp } from '../model/sliders';
+import { BRUSH_FEATHER_SLIDER, BRUSH_SIZE_SLIDER, LENS_SLIDERS, type LensKey, DETAIL_SLIDERS, EFFECTS_SLIDERS, GRADE_REGION_LABELS, gradeSliderDef, GRADING_SLIDERS, hslSliderDef, maskSliderDef, type HslProp } from '../model/sliders';
 
 export interface BrushOptions {
   /** 1–100 (model/maskEdit.ts brushRadius). */
@@ -133,6 +133,8 @@ interface DevelopState {
   setWbPicking: (on: boolean) => void;
   setCrop: (rect: Rect) => void;
   setAngle: (angle: number) => void;
+  /** Lens and perspective (M29). */
+  setLens: (key: LensKey, value: number) => void;
   setAspect: (aspect: CropAspect) => void;
   rotate90: () => void;
   flipHorizontal: () => void;
@@ -368,6 +370,11 @@ export const useDevelopStore = create<DevelopState>()((set) => ({
       if (g.angle === angle) return s;
       const cropRect = fitCropToAngle(straightenBaseCrop(s), angle, photoOrientedSize(s, g));
       return commit(s.history, { label: 'Straighten', key: 'geometry.angle', settings: withGeometry(s.settings, { angle, cropRect }) });
+    }),
+  setLens: (key, value) =>
+    set((s) => {
+      if (s.settings.geometry[key] === value) return s;
+      return commit(s.history, { label: LENS_SLIDERS[key].historyLabel ?? LENS_SLIDERS[key].label, key: `geometry.${key}`, settings: withGeometry(s.settings, { [key]: value }) });
     }),
   setAspect: (aspect) =>
     set((s) => {

@@ -112,6 +112,17 @@ export const SPOT_OPACITY_SLIDER: SliderDef = { ...unipolar('spot-opacity', 'Opa
 
 export const ANGLE_SLIDER: SliderDef = bipolar('angle', 'Straighten', -45, 45, 0.1, 'deg');
 
+/** Lens and perspective (M29); ranges also validate stored settings. */
+export const LENS_SLIDERS = {
+  distortion: { ...bipolar('distortion', 'Distortion', -100, 100, 1, 'int'), historyLabel: 'Lens distortion' },
+  vertical: { ...bipolar('vertical', 'Vertical', -100, 100, 1, 'int'), historyLabel: 'Vertical perspective', ariaLabel: 'Vertical perspective' },
+  horizontal: { ...bipolar('horizontal', 'Horizontal', -100, 100, 1, 'int'), historyLabel: 'Horizontal perspective', ariaLabel: 'Horizontal perspective' },
+  scale: unipolar('scale', 'Scale', 50, 150, 1, 100, 'uint', 'Scale'),
+  fringeRed: { ...bipolar('fringeRed', 'Red / cyan', -100, 100, 1, 'int'), historyLabel: 'Red/cyan fringe', ariaLabel: 'Red/cyan fringe' },
+  fringeBlue: { ...bipolar('fringeBlue', 'Blue / yellow', -100, 100, 1, 'int'), historyLabel: 'Blue/yellow fringe', ariaLabel: 'Blue/yellow fringe' },
+} as const satisfies Record<string, SliderDef>;
+export type LensKey = keyof typeof LENS_SLIDERS;
+
 /** Color mixer hue / saturation / luminance offsets. */
 export const HSL_RANGE = { min: -100, max: 100 } as const;
 

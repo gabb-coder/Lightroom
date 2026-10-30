@@ -18,7 +18,7 @@ describe('parseEditSettings', () => {
       { x: 1, y: 1 },
     ];
     s.hsl.blue = { hue: -10, sat: 20, lum: 5 };
-    s.geometry = { cropRect: { x: 0.1, y: 0.1, w: 0.8, h: 0.7 }, angle: 2.5, rotation: 1, flipH: true, flipV: false, aspect: '3:2' };
+    s.geometry = { ...s.geometry, cropRect: { x: 0.1, y: 0.1, w: 0.8, h: 0.7 }, angle: 2.5, rotation: 1, flipH: true, flipV: false, aspect: '3:2', vertical: -30, horizontal: 12, distortion: 40, scale: 110, fringeRed: 5, fringeBlue: -7 };
     expect(parseEditSettings(JSON.parse(JSON.stringify(s)))).toEqual(s);
   });
 

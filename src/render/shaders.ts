@@ -7,12 +7,12 @@ import {
   DENOISE_CHROMA_MAX_TAPS,
   DENOISE_LUMA_MAX_TAPS,
 } from '../engine/denoise';
+import { MIN_PERSPECTIVE_DEN } from '../engine/geometry';
 import { CLARITY_GAIN, DEHAZE_STRENGTH, HAZE_LEVEL, HAZE_STRENGTH, PRESENCE_WEIGHT_COUNT } from '../engine/presence';
 import { SHARPEN_WEIGHT_COUNT } from '../engine/sharpen';
 import { HEAL_DIRECTIONS, RIM_STEPS } from '../engine/spots';
 import { TONE_GAMMA } from '../engine/tone';
-import { MAX_SPOTS } from '../model/editSettings';
-import { MAX_MASKS } from '../model/editSettings';
+import { MAX_MASKS, MAX_SPOTS } from '../model/editSettings';
 import { VIGNETTE_START } from '../engine/vignette';
 
 /**
@@ -471,6 +471,58 @@ void main() {
 `;
 
 /**
+ * engine/geometry.ts geometryMap: output px → source px. Without lens
+ * corrections u_rowX/u_rowY are the whole geometry matrix; with them they
+ * map to the oriented image, then lensMap (u_lensA: center, half long edge,
+ * 1 / scale; u_lensB: perspective a, b, distortion k, 1 / half diagonal²)
+ * and u_afterX/u_afterY.
+ */
+const GEOMETRY_MAP_GLSL = /* glsl */ `
+uniform vec3 u_rowX;
+uniform vec3 u_rowY;
+uniform bool u_lensOn;
+uniform vec3 u_afterX;
+uniform vec3 u_afterY;
+uniform vec4 u_lensA;
+uniform vec4 u_lensB;
+uniform vec2 u_fringe;
+vec2 beforeMap(vec2 p) {
+  vec3 v = vec3(p, 1.0);
+  return vec2(dot(u_rowX, v), dot(u_rowY, v));
+}
+vec2 afterMap(vec2 q) {
+  vec3 v = vec3(q, 1.0);
+  return vec2(dot(u_afterX, v), dot(u_afterY, v));
+}
+bool lensMap(vec2 p, out vec2 q) {
+  float h = u_lensA.z;
+  float u = (p.x - u_lensA.x) / h * u_lensA.w;
+  float w = (p.y - u_lensA.y) / h * u_lensA.w;
+  float den = 1.0 - u_lensB.x * w - u_lensB.y * u;
+  if (den < ${glslFloat(MIN_PERSPECTIVE_DEN)}) return false;
+  u /= den;
+  w /= den;
+  float f = 1.0 - u_lensB.z * (u * u + w * w) * u_lensB.w;
+  q = vec2(u_lensA.x + u * f * h, u_lensA.y + w * f * h);
+  return true;
+}
+vec2 fringePoint(vec2 q, float amount) {
+  return u_lensA.xy + (q - u_lensA.xy) * (1.0 + amount);
+}
+bool outputToSource(vec2 p, out vec2 s) {
+  vec2 b = beforeMap(p);
+  if (!u_lensOn) {
+    s = b;
+    return true;
+  }
+  vec2 q;
+  if (!lensMap(b, q)) return false;
+  s = afterMap(q);
+  return true;
+}
+`;
+
+/**
  * Spot removal (engine/spots.ts retouchRgba8): every spot in order, each
  * reading the original; heal adds the rim correction. Runs on the uploaded
  * photo before the develop pass; rows stay top-first.
@@ -802,22 +854,14 @@ precision highp int;
 uniform sampler2D u_image;
 uniform bool u_flipY;
 uniform ivec2 u_outSize;
-uniform vec3 u_rowX;
-uniform vec3 u_rowY;
 uniform float u_vignette;
 
 out vec4 outColor;
 ${VIGNETTE_GLSL}
-void main() {
-  ivec2 o = ivec2(gl_FragCoord.xy);
-  if (u_flipY) o.y = u_outSize.y - 1 - o.y;
-  vec3 p = vec3(vec2(o) + 0.5, 1.0);
-  vec2 s = vec2(dot(u_rowX, p), dot(u_rowY, p));
+${GEOMETRY_MAP_GLSL}
+vec4 sampleImage(vec2 s) {
   ivec2 size = textureSize(u_image, 0);
-  if (s.x < 0.0 || s.y < 0.0 || s.x > float(size.x) || s.y > float(size.y)) {
-    outColor = vec4(0.0);
-    return;
-  }
+  if (s.x < 0.0 || s.y < 0.0 || s.x > float(size.x) || s.y > float(size.y)) return vec4(0.0);
   vec2 uv = s - 0.5;
   vec2 i0f = floor(uv);
   vec2 f = uv - i0f;
@@ -827,7 +871,31 @@ void main() {
   vec4 c10 = texelFetch(u_image, ivec2(hi.x, lo.y), 0);
   vec4 c01 = texelFetch(u_image, ivec2(lo.x, hi.y), 0);
   vec4 c11 = texelFetch(u_image, ivec2(hi.x, hi.y), 0);
-  vec4 c = mix(mix(c00, c10, f.x), mix(c01, c11, f.x), f.y);
+  return mix(mix(c00, c10, f.x), mix(c01, c11, f.x), f.y);
+}
+/** One channel through the fringe correction, clamped inside the image. */
+float fringeChannel(vec2 q, float amount, int ch) {
+  vec2 s = afterMap(fringePoint(q, amount));
+  vec2 size = vec2(textureSize(u_image, 0));
+  return sampleImage(clamp(s, vec2(0.0), size))[ch];
+}
+void main() {
+  ivec2 o = ivec2(gl_FragCoord.xy);
+  if (u_flipY) o.y = u_outSize.y - 1 - o.y;
+  vec2 b = beforeMap(vec2(o) + 0.5);
+  vec4 c;
+  if (!u_lensOn) {
+    c = sampleImage(b);
+  } else {
+    vec2 q;
+    if (!lensMap(b, q)) {
+      outColor = vec4(0.0);
+      return;
+    }
+    c = sampleImage(afterMap(q));
+    if (c.a > 0.0 && u_fringe.x != 0.0) c.r = fringeChannel(q, u_fringe.x, 0);
+    if (c.a > 0.0 && u_fringe.y != 0.0) c.b = fringeChannel(q, u_fringe.y, 2);
+  }
   if (u_vignette != 0.0 && c.a > 0.0) {
     c.rgb = applyVignette(c.rgb, u_vignette, vignetteMask((vec2(o) + 0.5) / vec2(u_outSize)));
   }
@@ -859,14 +927,13 @@ uniform bool u_overlayOn;
 uniform int u_overlayKind;
 uniform vec4 u_overlayA;
 uniform vec4 u_overlayB;
-uniform vec3 u_rowX;
-uniform vec3 u_rowY;
 uniform vec2 u_srcSize;
 uniform vec3 u_overlayColor;
 uniform float u_overlayOpacity;
 
 out vec4 outColor;
 ${SHAPE_WEIGHT_GLSL}
+${GEOMETRY_MAP_GLSL}
 
 void main() {
   ivec2 o = ivec2(gl_FragCoord.xy);
@@ -878,9 +945,8 @@ void main() {
   if (c.a > 0.0 && u_highlights && all(equal(b, ivec3(255)))) c.rgb = u_highlightColor;
   else if (c.a > 0.0 && u_shadows && all(equal(b, ivec3(0)))) c.rgb = u_shadowColor;
   if (u_overlayOn && c.a > 0.0) {
-    vec3 p = vec3(vec2(o) + 0.5, 1.0);
-    vec2 src = vec2(dot(u_rowX, p), dot(u_rowY, p));
-    float w = shapeWeight(u_overlayKind, u_overlayA, u_overlayB, src, u_srcSize);
+    vec2 src;
+    float w = outputToSource(vec2(o) + 0.5, src) ? shapeWeight(u_overlayKind, u_overlayA, u_overlayB, src, u_srcSize) : 0.0;
     c.rgb = mix(c.rgb, u_overlayColor, u_overlayOpacity * w);
   }
   outColor = c;

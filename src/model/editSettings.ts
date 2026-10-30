@@ -37,6 +37,15 @@ export interface Geometry {
   flipV: boolean;
   /** Crop aspect preset; ratios follow the crop's current orientation. */
   aspect: CropAspect;
+  /** Lens and perspective (M29, engine/geometry.ts lensParams): −100–100. */
+  distortion: number;
+  vertical: number;
+  horizontal: number;
+  /** 50–150 %. */
+  scale: number;
+  /** Lateral color fringe: red/cyan and blue/yellow, −100–100. */
+  fringeRed: number;
+  fringeBlue: number;
 }
 
 export interface BasicSettings {
@@ -246,6 +255,19 @@ export function defaultEditSettings(): EditSettings {
     spots: [],
     detail: { sharpAmount: 0, sharpRadius: 1, nrLuma: 0, nrColor: 0 },
     effects: { vignette: 0, grain: 0, grainSize: 25 },
-    geometry: { cropRect: { x: 0, y: 0, w: 1, h: 1 }, angle: 0, rotation: 0, flipH: false, flipV: false, aspect: 'original' },
+    geometry: {
+      cropRect: { x: 0, y: 0, w: 1, h: 1 },
+      angle: 0,
+      rotation: 0,
+      flipH: false,
+      flipV: false,
+      aspect: 'original',
+      distortion: 0,
+      vertical: 0,
+      horizontal: 0,
+      scale: 100,
+      fringeRed: 0,
+      fringeBlue: 0,
+    },
   };
 }

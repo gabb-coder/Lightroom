@@ -11,7 +11,7 @@ function edited(): EditSettings {
   s.hsl.red = { hue: 10, sat: -20, lum: 5 };
   s.detail.sharpAmount = 70;
   s.effects = { vignette: -30, grain: 20, grainSize: 40 };
-  s.geometry = { cropRect: { x: 0.1, y: 0.1, w: 0.5, h: 0.6 }, angle: 3, rotation: 1, flipH: true, flipV: false, aspect: 'custom' };
+  s.geometry = { ...s.geometry, cropRect: { x: 0.1, y: 0.1, w: 0.5, h: 0.6 }, angle: 3, rotation: 1, flipH: true, flipV: false, aspect: 'custom', vertical: 20 };
   return s;
 }
 
