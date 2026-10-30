@@ -231,6 +231,14 @@ component library.
   margins (grid positions are 0, ½, 1, pixel-identical);
   `watermarkFractionsAt` inverts `watermarkRect`, `snapPlacement` snaps
   within 2% back onto a named grid position.
+- Viewers (M31): full screen (F), slideshow (Ctrl/Cmd+Enter) and compare
+  (C, Library) are full-window overlays (`components/PhotoViewer.tsx`,
+  `CompareView.tsx`) driven by `state/viewerStore.ts` / `viewerActions.ts`;
+  they own the keyboard while open (global shortcuts skip). Images are the
+  photo with its edits rendered by the export worker
+  (`state/previewCache.ts`, LRU of 8; the photo open in Develop keys on its
+  history so unsaved edits show). Compare at 1:1 renders full size; zoom
+  and pan are shared by both panes.
 - Interface (M22): every shortcut is listed in `shortcuts/shortcutList.ts`
   (the `?` / top-bar dialog renders it; a unit test reads the handler
   sources and fails if a handled key is missing, so add new shortcuts

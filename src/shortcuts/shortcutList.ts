@@ -27,6 +27,9 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
       { action: 'Develop', keys: ['D'] },
       { action: 'Export', keys: [MOD, 'Shift', 'E'] },
       { action: 'Keyboard shortcuts', keys: ['?'] },
+      { action: 'Full screen', keys: ['F'] },
+      { action: 'Compare (Library; ← → another candidate)', keys: ['C'] },
+      { action: 'Slideshow (Space pauses)', keys: [MOD, 'Enter'] },
     ],
   },
   {

@@ -162,3 +162,31 @@ export function CollectionIcon() {
     </svg>
   );
 }
+
+/** Full screen (M31): four corners pointing out. */
+export function FullScreenIcon() {
+  return (
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10" />
+    </svg>
+  );
+}
+
+/** Compare (M31): two frames side by side. */
+export function CompareIcon() {
+  return (
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+      <rect x="1.5" y="3" width="5.5" height="10" rx="1" />
+      <rect x="9" y="3" width="5.5" height="10" rx="1" />
+    </svg>
+  );
+}
+
+/** Slideshow (M31): a play triangle. */
+export function PlayIcon() {
+  return (
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M5 3.2v9.6L12.8 8z" />
+    </svg>
+  );
+}

@@ -1,4 +1,6 @@
 import { BeforeAfterIcon, CropIcon, PickIcon, RejectIcon, SplitViewIcon, StarIcon } from '../../components/icons';
+import { openFullscreen } from '../../state/viewerActions';
+import { FullScreenIcon } from '../../components/icons';
 import controls from '../../components/controls.module.css';
 import { useFileDrop } from '../../components/useFileDrop';
 import { isIdentityGeometry, outputSize } from '../../engine/geometry';
@@ -122,6 +124,9 @@ function Toolbar() {
       >
         <CropIcon />
         Crop
+      </button>
+      <button type="button" className={`${controls.button} ${styles.toolButton}`} disabled={!hasPhoto} aria-label="Full screen" title="Full screen (F)" onClick={openFullscreen}>
+        <FullScreenIcon />
       </button>
       <div className={styles.spacer} />
       <OrganizeControls />

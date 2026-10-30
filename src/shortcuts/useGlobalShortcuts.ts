@@ -15,6 +15,8 @@ import { useViewStore } from '../state/viewStore';
 import { useDeleteDialogStore } from '../state/deleteDialogStore';
 import { runAutoTone } from '../state/editingAids';
 import { useShortcutsHelpStore } from '../state/shortcutsHelpStore';
+import { openCompare, openFullscreen, openSlideshow } from '../state/viewerActions';
+import { useViewerStore } from '../state/viewerStore';
 
 const MODULE_KEYS: Readonly<Record<string, AppModule>> = {
   g: 'library',
@@ -41,6 +43,8 @@ export function useGlobalShortcuts(): void {
       if (isTextEntryTarget(event.target as TargetLike | null)) return;
       // A modal dialog (Copy / Sync settings, Remove photos) owns the keyboard.
       if (useCopyPasteStore.getState().dialog || useDeleteDialogStore.getState().ids || useShortcutsHelpStore.getState().open) return;
+      // The viewers (M31) own the keyboard while open.
+      if (useViewerStore.getState().mode || useViewerStore.getState().compare) return;
       const command = mac ? event.metaKey : event.ctrlKey;
       // Ctrl/Cmd+': make a virtual copy of the focused photo and switch to it (as in Lightroom).
       if (command && !event.shiftKey && event.key === "'" && useAppStore.getState().module !== 'export') {
@@ -72,6 +76,12 @@ export function useGlobalShortcuts(): void {
         runAutoTone();
         return;
       }
+      // Ctrl/Cmd+Enter: slideshow (as in Lightroom's impromptu slideshow).
+      if (command && !event.shiftKey && event.key === 'Enter' && useAppStore.getState().module !== 'export') {
+        event.preventDefault();
+        openSlideshow();
+        return;
+      }
       const historyAction = matchHistoryShortcut(event, mac);
       if (historyAction) {
         if (!developHasPhoto()) return;
@@ -84,6 +94,16 @@ export function useGlobalShortcuts(): void {
       if (event.key === '?') {
         event.preventDefault();
         useShortcutsHelpStore.getState().setOpen(true);
+        return;
+      }
+      // F: full screen; C: compare (Library), as in Lightroom.
+      if (event.key.toLowerCase() === 'f' && !event.shiftKey && useAppStore.getState().module !== 'export') {
+        event.preventDefault();
+        openFullscreen();
+        return;
+      }
+      if (event.key.toLowerCase() === 'c' && !event.shiftKey && useAppStore.getState().module === 'library') {
+        if (openCompare()) event.preventDefault();
         return;
       }
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
