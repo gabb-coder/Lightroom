@@ -22,6 +22,7 @@ export interface GpuExtra {
   effects?: Partial<EditSettings['effects']>;
   colorGrading?: Partial<EditSettings['colorGrading']>;
   masks?: EditSettings['masks'];
+  spots?: EditSettings['spots'];
   proxy?: boolean;
   /** Render an 1100 × 240 photo-like image instead (presence levels average blocks there). */
   large?: boolean;

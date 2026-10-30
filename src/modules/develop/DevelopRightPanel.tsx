@@ -7,6 +7,7 @@ import { ToneCurvePanel } from './ToneCurvePanel';
 import { ColorMixerPanel } from './ColorMixerPanel';
 import { ColorGradingPanel } from './ColorGradingPanel';
 import { MasksPanel } from './MasksPanel';
+import { SpotsPanel } from './SpotsPanel';
 import { colorGradingParams } from '../../engine/colorGrading';
 import { DetailPanel, EffectsPanel } from './DetailEffectsPanels';
 import { isIdentityCurveSet } from '../../engine/curve';
@@ -28,6 +29,7 @@ const SECTIONS = [
   { title: 'Color grading', open: false },
   { title: 'Detail', open: false },
   { title: 'Effects', open: false },
+  { title: 'Spot removal', open: false },
   { title: 'Masks', open: false },
   { title: 'Crop and geometry', open: false },
 ] as const;
@@ -63,6 +65,9 @@ export function DevelopRightPanel() {
   const cropping = useDevelopStore((s) => s.cropping);
   const masksEdited = useDevelopStore((s) => s.settings.masks.length > 0);
   const masksOpen = useDevelopStore((s) => s.masksOpen);
+  const spotsEdited = useDevelopStore((s) => s.settings.spots.length > 0);
+  const spotsOpen = useDevelopStore((s) => s.spotsOpen);
+  const setSpotsOpen = useDevelopStore((s) => s.setSpotsOpen);
   const setMasksOpen = useDevelopStore((s) => s.setMasksOpen);
   const setCropping = useDevelopStore((s) => s.setCropping);
   const [geometryPanelOpen, setGeometryPanelOpen] = useState(false);
@@ -84,6 +89,10 @@ export function DevelopRightPanel() {
         title === 'Masks' ? (
           <PanelSection key={title} title={title} edited={masksEdited} open={masksOpen} onOpenChange={setMasksOpen}>
             <MasksPanel />
+          </PanelSection>
+        ) : title === 'Spot removal' ? (
+          <PanelSection key={title} title={title} edited={spotsEdited} open={spotsOpen} onOpenChange={setSpotsOpen}>
+            <SpotsPanel />
           </PanelSection>
         ) : title === 'Crop and geometry' ? (
           <PanelSection key={title} title={title} edited={geometryEdited} open={geometryOpen} onOpenChange={onGeometryOpenChange}>

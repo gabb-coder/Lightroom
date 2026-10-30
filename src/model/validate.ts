@@ -14,6 +14,10 @@ import {
   type GradeWheel,
   defaultMaskAdjust,
   MAX_MASKS,
+  MAX_SPOT_RADIUS,
+  MAX_SPOTS,
+  MIN_SPOT_RADIUS,
+  type Spot,
   type BrushStroke,
   type Mask,
   type MaskAdjust,
@@ -143,6 +147,31 @@ function masks(raw: unknown): Mask[] {
   return out;
 }
 
+/** Spots (M28) with in-range values; ids kept when non-empty and unique. */
+function spots(raw: unknown): Spot[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Spot[] = [];
+  const ids = new Set<string>();
+  for (const sp of raw.slice(0, MAX_SPOTS)) {
+    if (!isObject(sp)) continue;
+    const id = typeof sp.id === 'string' && sp.id && !ids.has(sp.id) ? sp.id : `spot-${out.length + 1}-${ids.size}`;
+    ids.add(id);
+    const coord = (v: unknown) => clampNumber(v, 0, 1, 0.5);
+    out.push({
+      id,
+      mode: sp.mode === 'clone' ? 'clone' : 'heal',
+      x: coord(sp.x),
+      y: coord(sp.y),
+      sx: coord(sp.sx),
+      sy: coord(sp.sy),
+      radius: clampNumber(sp.radius, MIN_SPOT_RADIUS, MAX_SPOT_RADIUS, 0.02),
+      feather: clampNumber(sp.feather, 0, 100, 50),
+      opacity: clampNumber(sp.opacity, 0, 100, 100),
+    });
+  }
+  return out;
+}
+
 /** Brush strokes with finite, in-range values; strokes without points are dropped. */
 function brushStrokes(raw: unknown): BrushStroke[] {
   if (!Array.isArray(raw)) return [];
@@ -180,6 +209,7 @@ export function parseEditSettings(raw: unknown): EditSettings {
     hsl: Object.fromEntries(HSL_COLORS.map((c) => [c, hslAdjust(hsl[c])])) as EditSettings['hsl'],
     colorGrading: colorGrading(src.colorGrading, d.colorGrading),
     masks: masks(src.masks),
+    spots: spots(src.spots),
     detail: sliderGroup(DETAIL_SLIDERS, src.detail, d.detail),
     effects: sliderGroup(EFFECTS_SLIDERS, src.effects, d.effects),
     geometry: {

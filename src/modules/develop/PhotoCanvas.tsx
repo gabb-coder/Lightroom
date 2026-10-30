@@ -11,6 +11,7 @@ import { selectShowingBefore, useDevelopStore, type LoadedPhoto } from '../../st
 import { useViewStore } from '../../state/viewStore';
 import { CropOverlay } from './CropOverlay';
 import { MaskOverlay } from './MaskOverlay';
+import { SpotOverlay } from './SpotOverlay';
 import { SplitDivider } from './SplitDivider';
 import styles from './PhotoCanvas.module.css';
 
@@ -43,6 +44,7 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
   const cropping = useDevelopStore((s) => s.cropping);
   const geometry = useDevelopStore((s) => s.settings.geometry);
   const masksOpen = useDevelopStore((s) => s.masksOpen);
+  const spotsOpen = useDevelopStore((s) => s.spotsOpen);
   const wbPicking = useDevelopStore((s) => s.wbPicking);
   const split = useViewStore((s) => s.split);
   const zoom = useViewStore((s) => (cropping ? 'fit' : s.zoom));
@@ -53,6 +55,7 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
   const pannable = display.width > stage.width + 0.5 || display.height > stage.height + 0.5;
   const showOverlay = cropping && !showingBefore;
   const showMasks = masksOpen && !cropping && !showingBefore && !wbPicking;
+  const showSpots = spotsOpen && !cropping && !showingBefore && !wbPicking;
   const showSplit = split && !cropping && !showingBefore;
 
   useEffect(() => {
@@ -104,7 +107,7 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
       pickWhiteBalance(p.x, p.y);
       return;
     }
-    if (e.button !== 0 || cropping || showMasks) return;
+    if (e.button !== 0 || cropping || showMasks || showSpots) return;
     const area = areaRef.current;
     if (!area) return;
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -135,8 +138,8 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
   const frameLeft = Math.max(0, (stage.width - display.width) / 2);
   const frameTop = Math.max(0, (stage.height - display.height) / 2);
   // Touch (M22): a fitted photo lets a vertical swipe scroll the page (stacked phone layout); panning or a tool needs every gesture.
-  const touchAction = pannable || cropping || showMasks || wbPicking || showSplit ? 'none' : 'pan-y';
-  const cursor = wbPicking ? 'crosshair' : cropping || showMasks ? undefined : zoom === '1:1' ? (pannable ? 'grab' : 'zoom-out') : 'zoom-in';
+  const touchAction = pannable || cropping || showMasks || showSpots || wbPicking || showSplit ? 'none' : 'pan-y';
+  const cursor = wbPicking ? 'crosshair' : cropping || showMasks || showSpots ? undefined : zoom === '1:1' ? (pannable ? 'grab' : 'zoom-out') : 'zoom-in';
 
   return (
     <div ref={areaRef} className={styles.area} onWheel={onWheel} data-testid="photo-stage" data-zoom={zoom}>
@@ -157,6 +160,7 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
             <canvas ref={canvasRef} className={styles.canvas} role="img" aria-label={`Edited photo: ${photo.name}`} data-testid="photo-canvas" />
             {showOverlay && <CropOverlay oriented={orientedSize(photo, geometry.rotation)} />}
             {showMasks && display.width > 0 && <MaskOverlay source={photo} frame={display} />}
+            {showSpots && display.width > 0 && <SpotOverlay source={photo} frame={display} />}
             {showSplit && display.width > 0 && <SplitDivider />}
             {showingBefore && (
               <div className={styles.beforeBadge} data-testid="before-badge">

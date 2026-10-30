@@ -111,6 +111,38 @@ const DETAIL_CASES: Record<string, [Partial<BasicSettings>, Partial<Geometry>, G
   ],
   'proxy: sharpen 150 radius 3 at half size': [{}, {}, { detail: { sharpAmount: 150, sharpRadius: 3 }, proxy: true }],
   'proxy: grain 60 at half size': [{}, {}, { effects: { grain: 60, grainSize: 10 }, proxy: true }],
+  // Spot removal (M28): clone, heal, feather/opacity, overlapping, a spot whose source runs off the edge, with edits and geometry.
+  'spots: clone': [{}, {}, { spots: [{ id: 'a', mode: 'clone', x: 0.3, y: 0.4, sx: 0.7, sy: 0.6, radius: 0.12, feather: 0, opacity: 100 }] }],
+  'spots: heal, feathered': [{}, {}, { spots: [{ id: 'a', mode: 'heal', x: 0.5, y: 0.5, sx: 0.2, sy: 0.3, radius: 0.15, feather: 60, opacity: 100 }] }],
+  'spots: three overlapping, opacity, source off the edge': [
+    { exposure: 0.4, contrast: 20 },
+    {},
+    {
+      spots: [
+        { id: 'a', mode: 'heal', x: 0.2, y: 0.3, sx: 0.95, sy: 0.05, radius: 0.18, feather: 40, opacity: 80 },
+        { id: 'b', mode: 'clone', x: 0.3, y: 0.35, sx: 0.6, sy: 0.8, radius: 0.1, feather: 100, opacity: 60 },
+        { id: 'c', mode: 'heal', x: 0.8, y: 0.7, sx: 0.5, sy: 0.6, radius: 0.08, feather: 20, opacity: 100 },
+      ],
+    },
+  ],
+  'spots: heal with crop, rotation and sharpening': [
+    {},
+    { rotation: 1, flipH: true, cropRect: { x: 0.1, y: 0.1, w: 0.8, h: 0.75 } },
+    { detail: { sharpAmount: 60, sharpRadius: 1 }, spots: [{ id: 'a', mode: 'heal', x: 0.4, y: 0.5, sx: 0.65, sy: 0.4, radius: 0.12, feather: 50, opacity: 100 }] },
+  ],
+  'proxy: heal spot at half size': [{}, {}, { proxy: true, spots: [{ id: 'a', mode: 'heal', x: 0.45, y: 0.5, sx: 0.2, sy: 0.5, radius: 0.1, feather: 30, opacity: 100 }] }],
+  'large: heal and clone spots + noise reduction': [
+    {},
+    {},
+    {
+      large: true,
+      detail: { nrLuma: 40 },
+      spots: [
+        { id: 'a', mode: 'heal', x: 0.3, y: 0.5, sx: 0.5, sy: 0.5, radius: 0.03, feather: 50, opacity: 100 },
+        { id: 'b', mode: 'clone', x: 0.7, y: 0.3, sx: 0.8, sy: 0.7, radius: 0.02, feather: 0, opacity: 100 },
+      ],
+    },
+  ],
   // Noise reduction (M27): alone, together, before sharpening and presence, on a proxy and a larger image.
   'noise reduction: luminance 100': [{}, {}, { detail: { nrLuma: 100 } }],
   'noise reduction: color 100': [{}, {}, { detail: { nrColor: 100 } }],

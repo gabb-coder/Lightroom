@@ -18,10 +18,11 @@ function edited(): EditSettings {
 const LANDSCAPE = { width: 600, height: 400 };
 
 describe('copy / paste settings', () => {
-  it('lists the Develop panels in panel order; the default leaves out masks and crop', () => {
-    expect(SETTINGS_PANELS.map((p) => p.label)).toEqual(['Basic', 'Tone curve', 'Color mixer', 'Color grading', 'Detail', 'Effects', 'Masks', 'Crop and geometry']);
+  it('lists the Develop panels in panel order; the default leaves out spots, masks and crop', () => {
+    expect(SETTINGS_PANELS.map((p) => p.label)).toEqual(['Basic', 'Tone curve', 'Color mixer', 'Color grading', 'Detail', 'Effects', 'Spot removal', 'Masks', 'Crop and geometry']);
     expect(DEFAULT_COPY_PANELS).not.toContain('geometry');
     expect(DEFAULT_COPY_PANELS).not.toContain('masks');
+    expect(DEFAULT_COPY_PANELS).not.toContain('spots');
     expect(normalizePanels(['effects', 'basic', 'nope', 'basic'])).toEqual(['basic', 'effects']);
   });
 

@@ -52,6 +52,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
       { action: 'Zoom 1:1 and back', keys: ['Z'] },
       { action: 'Crop (Enter or Esc to finish)', keys: ['R'] },
       { action: 'White balance picker', keys: ['W'] },
+      { action: 'Spot removal (Esc to finish)', keys: ['Q'] },
       { action: 'Auto tone', keys: [MOD, 'U'] },
       { action: 'Clipping warnings', keys: ['J'] },
     ],

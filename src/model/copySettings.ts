@@ -8,7 +8,7 @@ import type { EditSettings, Geometry } from './editSettings';
  * exactly those panels on the target photo.
  */
 
-export type SettingsPanel = 'basic' | 'curve' | 'hsl' | 'colorGrading' | 'detail' | 'effects' | 'masks' | 'geometry';
+export type SettingsPanel = 'basic' | 'curve' | 'hsl' | 'colorGrading' | 'detail' | 'effects' | 'masks' | 'spots' | 'geometry';
 
 /** Panels in design order, with their Develop panel titles. */
 export const SETTINGS_PANELS: readonly { id: SettingsPanel; label: string }[] = [
@@ -18,11 +18,12 @@ export const SETTINGS_PANELS: readonly { id: SettingsPanel; label: string }[] = 
   { id: 'colorGrading', label: 'Color grading' },
   { id: 'detail', label: 'Detail' },
   { id: 'effects', label: 'Effects' },
+  { id: 'spots', label: 'Spot removal' },
   { id: 'masks', label: 'Masks' },
   { id: 'geometry', label: 'Crop and geometry' },
 ];
 
-/** Everything except masks and crop, like Lightroom: those are placed for one picture. */
+/** Everything except masks, spots and crop, like Lightroom: those are placed for one picture. */
 export const DEFAULT_COPY_PANELS: readonly SettingsPanel[] = ['basic', 'curve', 'hsl', 'colorGrading', 'detail', 'effects'];
 
 /** Settings taken from one photo, to paste onto others. */

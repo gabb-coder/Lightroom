@@ -95,6 +95,7 @@ function runGpuCheck(basic: Partial<BasicSettings>, geometry: Partial<Geometry> 
   if (extra.effects) settings.effects = { ...settings.effects, ...extra.effects };
   if (extra.colorGrading) settings.colorGrading = { ...settings.colorGrading, ...extra.colorGrading };
   if (extra.masks) settings.masks = extra.masks;
+  if (extra.spots) settings.spots = extra.spots;
   const params = pipelineParams(settings);
   const image = extra.large ? large : source;
   const gpuImage = extra.large ? largeRenderer.readPixels(params) : extra.proxy ? proxyRenderer.readPixels(params, 'proxy') : renderer.readPixels(params);

@@ -9,7 +9,9 @@ import {
 } from '../engine/denoise';
 import { CLARITY_GAIN, DEHAZE_STRENGTH, HAZE_LEVEL, HAZE_STRENGTH, PRESENCE_WEIGHT_COUNT } from '../engine/presence';
 import { SHARPEN_WEIGHT_COUNT } from '../engine/sharpen';
+import { HEAL_DIRECTIONS, RIM_STEPS } from '../engine/spots';
 import { TONE_GAMMA } from '../engine/tone';
+import { MAX_SPOTS } from '../model/editSettings';
 import { MAX_MASKS } from '../model/editSettings';
 import { VIGNETTE_START } from '../engine/vignette';
 
@@ -465,6 +467,76 @@ void main() {
     sum += u_weights[abs(i)] * luminance(texelFetch(u_image, ivec2(x, p.y), 0).rgb);
   }
   outColor = pack16(sum);
+}
+`;
+
+/**
+ * Spot removal (engine/spots.ts retouchRgba8): every spot in order, each
+ * reading the original; heal adds the rim correction. Runs on the uploaded
+ * photo before the develop pass; rows stay top-first.
+ */
+export const RETOUCH_FRAGMENT_SHADER = /* glsl */ `#version 300 es
+precision highp float;
+precision highp int;
+
+uniform sampler2D u_image;
+uniform int u_spotCount;
+uniform vec4 u_spotA[${MAX_SPOTS}];
+uniform vec4 u_spotB[${MAX_SPOTS}];
+out vec4 outColor;
+const float TAU = 6.283185307179586;
+
+vec3 sampleClamped(vec2 pos) {
+  ivec2 size = textureSize(u_image, 0);
+  vec2 uv = clamp(pos, vec2(0.5), vec2(size) - 0.5) - 0.5;
+  ivec2 i0 = ivec2(floor(uv));
+  vec2 f = uv - vec2(i0);
+  ivec2 i1 = min(i0 + 1, size - 1);
+  vec3 top = mix(texelFetch(u_image, i0, 0).rgb, texelFetch(u_image, ivec2(i1.x, i0.y), 0).rgb, f.x);
+  vec3 bottom = mix(texelFetch(u_image, ivec2(i0.x, i1.y), 0).rgb, texelFetch(u_image, i1, 0).rgb, f.x);
+  return mix(top, bottom, f.y);
+}
+float spotAlpha(float d, float r, float inner) {
+  if (d >= r) return 0.0;
+  if (d <= inner) return 1.0;
+  float t = (r - d) / (r - inner);
+  return t * t * (3.0 - 2.0 * t);
+}
+vec3 healCorrection(vec4 a, float r, vec2 pos) {
+  float step = max(1.0, 0.1 * r);
+  vec3 sum = vec3(0.0);
+  float weights = 0.0;
+  for (int k = 0; k < ${HEAL_DIRECTIONS}; k++) {
+    float angle = TAU * float(k) / ${glslFloat(HEAL_DIRECTIONS)};
+    vec2 u = vec2(cos(angle), sin(angle));
+    vec3 d = vec3(0.0);
+    for (int j = 0; j < ${RIM_STEPS}; j++) {
+      float dist = r + float(j) * step;
+      d += (sampleClamped(a.xy + dist * u) - sampleClamped(a.zw + dist * u)) / ${glslFloat(RIM_STEPS)};
+    }
+    vec2 b = a.xy + r * u;
+    vec2 q = pos - b;
+    float w = 1.0 / (dot(q, q) + 1.0);
+    sum += w * d;
+    weights += w;
+  }
+  return sum / weights;
+}
+void main() {
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec4 src = texelFetch(u_image, p, 0);
+  vec3 color = src.rgb;
+  vec2 pos = vec2(p) + 0.5;
+  for (int n = 0; n < u_spotCount; n++) {
+    vec4 a = u_spotA[n];
+    vec4 b = u_spotB[n];
+    float alpha = spotAlpha(length(pos - a.xy), b.x, b.y) * b.z;
+    if (alpha <= 0.0) continue;
+    vec3 value = sampleClamped(a.zw + pos - a.xy);
+    if (b.w > 0.5) value += healCorrection(a, b.x, pos);
+    color = color * (1.0 - alpha) + value * alpha;
+  }
+  outColor = vec4(clamp(color, 0.0, 1.0), src.a);
 }
 `;
 

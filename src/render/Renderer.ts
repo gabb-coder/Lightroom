@@ -5,6 +5,7 @@ import { HIGHLIGHT_CLIP_RGB, isPlainDisplay, MASK_OVERLAY_OPACITY, MASK_OVERLAY_
 import type { MaskShape } from '../engine/masks';
 import { hasDetailStage, type PipelineParams } from '../engine/pipeline';
 import { denoiseKernels } from '../engine/denoise';
+import { spotsPx } from '../engine/spots';
 import { CLARITY_LEVEL, levelLayout, TEXTURE_LEVEL, type LevelLayout, type LevelSpec } from '../engine/presence';
 import { sharpenKernel } from '../engine/sharpen';
 import { MAX_MASKS } from '../model/editSettings';
@@ -20,6 +21,7 @@ import {
   GEOMETRY_FRAGMENT_SHADER,
   LEVEL_BLUR_FRAGMENT_SHADER,
   LEVEL_DOWN_FRAGMENT_SHADER,
+  RETOUCH_FRAGMENT_SHADER,
   VERTEX_SHADER,
 } from './shaders';
 
@@ -82,6 +84,7 @@ const DETAIL_UNIFORMS = [
   'dehaze',
 ] as const;
 const LEVEL_DOWN_UNIFORMS = ['image', 'factor'] as const;
+const RETOUCH_UNIFORMS = ['image', 'spotCount', 'spotA', 'spotB'] as const;
 const DENOISE_UNIFORMS = ['image', 'lumaH', 'chromaH', 'lumaOn', 'colorOn', 'lumaTaps', 'lumaWeights', 'chromaTaps', 'chromaWeights', 'lumaSigma', 'colorSigma'] as const;
 type DenoiseUniforms = Uniforms<(typeof DENOISE_UNIFORMS)[number]>;
 const LEVEL_BLUR_UNIFORMS = ['level', 'dir', 'taps', 'weights'] as const;
@@ -152,13 +155,14 @@ const SCRATCH_FORMAT: Readonly<Record<IntermediateKind, 'rgba8' | 'rg8'>> = {
   denoiseLuma: 'rg8',
   denoiseChroma: 'rgba8',
   denoised: 'rgba8',
+  retouched: 'rgba8',
 };
 
 /**
  * Reused scratch targets: developed color, 16-bit blur, after detail (source
  * size), the finished After / Before images for the display pass (output size),
  * the small presence levels (M26) with their blur scratch, and noise
- * reduction's row passes and result (M27).
+ * reduction's row passes and result (M27), and the photo with spots removed (M28).
  */
 type IntermediateKind =
   | 'developed'
@@ -172,7 +176,8 @@ type IntermediateKind =
   | 'coarseScratch'
   | 'denoiseLuma'
   | 'denoiseChroma'
-  | 'denoised';
+  | 'denoised'
+  | 'retouched';
 
 interface Target {
   /** Null = the canvas. */
@@ -207,6 +212,8 @@ export class Renderer {
   private readonly geometryProgram: WebGLProgram;
   private readonly displayProgram: WebGLProgram;
   private readonly levelDownProgram: WebGLProgram;
+  private readonly retouchProgram: WebGLProgram;
+  private readonly retouchUniforms: Uniforms<(typeof RETOUCH_UNIFORMS)[number]>;
   /** Noise reduction (M27): luminance row pass, color row pass, column passes + recombination. */
   private readonly denoisePrograms: { program: WebGLProgram; uniforms: DenoiseUniforms }[];
   private readonly levelBlurProgram: WebGLProgram;
@@ -250,6 +257,8 @@ export class Renderer {
     this.geometryUniforms = locate(gl, this.geometryProgram, GEOMETRY_UNIFORMS);
     this.displayUniforms = locate(gl, this.displayProgram, DISPLAY_UNIFORMS);
     this.levelDownProgram = createProgram(gl, VERTEX_SHADER, LEVEL_DOWN_FRAGMENT_SHADER);
+    this.retouchProgram = createProgram(gl, VERTEX_SHADER, RETOUCH_FRAGMENT_SHADER);
+    this.retouchUniforms = locate(gl, this.retouchProgram, RETOUCH_UNIFORMS);
     this.denoisePrograms = [DENOISE_LUMA_H_FRAGMENT_SHADER, DENOISE_CHROMA_H_FRAGMENT_SHADER, DENOISE_V_FRAGMENT_SHADER].map((fs) => {
       const program = createProgram(gl, VERTEX_SHADER, fs);
       return { program, uniforms: locate(gl, program, DENOISE_UNIFORMS) };
@@ -333,7 +342,7 @@ export class Renderer {
     this.gl.deleteTexture(this.curveTexture);
     this.gl.deleteTexture(this.emptyBrush);
     if (this.brushTexture) this.gl.deleteTexture(this.brushTexture);
-    for (const program of [this.developProgram, this.blurProgram, this.detailProgram, this.geometryProgram, this.displayProgram, this.levelDownProgram, this.levelBlurProgram, ...this.denoisePrograms.map((d) => d.program)]) this.gl.deleteProgram(program);
+    for (const program of [this.developProgram, this.blurProgram, this.detailProgram, this.geometryProgram, this.displayProgram, this.levelDownProgram, this.levelBlurProgram, this.retouchProgram, ...this.denoisePrograms.map((d) => d.program)]) this.gl.deleteProgram(program);
   }
 
   /**
@@ -394,7 +403,8 @@ export class Renderer {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  private render(source: SizedTexture, params: PipelineParams, target: Target): void {
+  private render(original: SizedTexture, params: PipelineParams, target: Target): void {
+    const source = this.retouchPass(original, params);
     const detail = hasDetailStage(params);
     if (!params.denoise && !detail && params.vignette === 0 && isIdentityGeometry(params.geometry)) {
       this.developPass(source, params, target);
@@ -407,6 +417,23 @@ export class Renderer {
     if (params.denoise) image = this.denoisePasses(developed, params, scale);
     if (detail) image = this.detailPasses(image, params, scale);
     this.geometryPass(image, params, target);
+  }
+
+  /** Spot removal (engine/spots.ts) into the `retouched` scratch; the photo itself when there are no spots. */
+  private retouchPass(original: SizedTexture, params: PipelineParams): SizedTexture {
+    const spots = spotsPx(params.spots, original);
+    if (spots.length === 0) return original;
+    const { gl } = this;
+    const u = this.retouchUniforms;
+    const retouched = this.intermediateFor('retouched', original);
+    this.bindTarget(this.offscreen(retouched));
+    gl.useProgram(this.retouchProgram);
+    this.bindTexture(0, original.texture, u.image);
+    gl.uniform1i(u.spotCount, spots.length);
+    gl.uniform4fv(u.spotA, spots.flatMap((s) => [s.cx, s.cy, s.sx, s.sy]));
+    gl.uniform4fv(u.spotB, spots.flatMap((s) => [s.r, s.inner, s.opacity, s.heal ? 1 : 0]));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    return retouched;
   }
 
   /** Noise reduction (engine/denoise.ts): row passes into 16-bit scratch, then columns + recombination. */
