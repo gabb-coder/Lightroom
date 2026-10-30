@@ -253,6 +253,27 @@ const MASK_CASES: Record<string, [Partial<BasicSettings>, Partial<Geometry>, Gpu
       ],
     },
   ],
+  // Range masks (M30): luminance and color, soft and hard.
+  'mask: luminance range 30–70, soft': [
+    {},
+    {},
+    { masks: [{ id: 'l', kind: 'linear', x0: 0.5, y0: 2, x1: 0.5, y1: 3, adjust: { ...ADJ, exposure: 1.2 }, range: { kind: 'luminance', lo: 30, hi: 70, smooth: 40, hue: 0, width: 60 } }] },
+  ],
+  'mask: luminance range, hard edges, radial': [
+    {},
+    {},
+    { masks: [{ id: 'r', kind: 'radial', cx: 0.5, cy: 0.5, rx: 0.5, ry: 0.5, angle: 0, feather: 50, invert: false, adjust: { ...ADJ, exposure: -1 }, range: { kind: 'luminance', lo: 0, hi: 40, smooth: 0, hue: 0, width: 60 } }] },
+  ],
+  'mask: color range (blues), with global edits': [
+    { exposure: 0.3, contrast: 20 },
+    {},
+    { masks: [{ id: 'c', kind: 'linear', x0: 0.5, y0: 2, x1: 0.5, y1: 3, adjust: { ...ADJ, saturation: -80, exposure: 0.8 }, range: { kind: 'color', lo: 0, hi: 100, smooth: 50, hue: 220, width: 60 } }] },
+  ],
+  'mask: color range around red (wraps)': [
+    {},
+    {},
+    { masks: [{ id: 'c', kind: 'linear', x0: 0.5, y0: 2, x1: 0.5, y1: 3, adjust: { ...ADJ, temp: -70 }, range: { kind: 'color', lo: 0, hi: 100, smooth: 50, hue: 350, width: 40 } }] },
+  ],
   'mask: proxy at half size': [
     {},
     {},
@@ -390,6 +411,7 @@ test.describe('Display pass (M20)', () => {
   const OVERLAYS: { name: string; mask: Mask; geometry?: Partial<Geometry> }[] = [
     { name: 'radial', mask: { id: 'o1', kind: 'radial', cx: 0.4, cy: 0.5, rx: 0.3, ry: 0.2, angle: 30, feather: 60, invert: false, adjust: { ...ADJ } } },
     { name: 'radial, with perspective and distortion', geometry: { vertical: 60, distortion: -40, scale: 110 }, mask: { id: 'o3', kind: 'radial', cx: 0.5, cy: 0.4, rx: 0.3, ry: 0.25, angle: 0, feather: 40, invert: false, adjust: { ...ADJ } } },
+    { name: 'radial with a color range', mask: { id: 'o4', kind: 'radial', cx: 0.5, cy: 0.5, rx: 0.6, ry: 0.6, angle: 0, feather: 30, invert: false, adjust: { ...ADJ }, range: { kind: 'color', lo: 0, hi: 100, smooth: 50, hue: 120, width: 90 } } },
     { name: 'brush, cropped and rotated', geometry: { rotation: 3, angle: -4, cropRect: { x: 0.05, y: 0.1, w: 0.85, h: 0.8 } }, mask: { id: 'o2', kind: 'brush', aspect: 64 / 48, strokes: [{ erase: false, radius: 0.2, feather: 50, points: [0.2, 0.2, 0.8, 0.6] }], adjust: { ...ADJ } } },
   ];
   for (const c of OVERLAYS) {

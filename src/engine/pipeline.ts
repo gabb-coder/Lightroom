@@ -13,7 +13,7 @@ import { applyGeometryRgba8, type Size } from './geometry';
 import { grainOffset, grainParams, type GrainParams } from './grain';
 import { sharpenOffsets, sharpenParams, type SharpenParams } from './sharpen';
 import { vignetteAmount } from './vignette';
-import { applyMasks, maskParams, maskWeight, type MaskParams } from './masks';
+import { applyMasks, maskParams, maskWeight, rangeWeight, type MaskParams } from './masks';
 import { denoiseParams, denoiseRgba8, type DenoiseParams } from './denoise';
 import { dehazeChannel, presenceLevels, presenceOffset, presenceParams, sampleLevel, type PresenceParams } from './presence';
 
@@ -112,7 +112,8 @@ export function processRgba8(src: Uint8Array | Uint8ClampedArray, p: PipelinePar
       const n = i / 4;
       const x = (n % width) + 0.5;
       const y = Math.floor(n / width) + 0.5;
-      p.masks.forEach((m, k) => (weights[k] = maskWeight(m.shape, x, y, width, height)));
+      const rgb: [number, number, number] = [byte(i) / 255, byte(i + 1) / 255, byte(i + 2) / 255];
+      p.masks.forEach((m, k) => (weights[k] = maskWeight(m.shape, x, y, width, height) * rangeWeight(m.shape.range, rgb)));
     }
     const rgb = processPixel([byte(i) / 255, byte(i + 1) / 255, byte(i + 2) / 255], p, weights);
     out[i] = Math.round(rgb[0] * 255);

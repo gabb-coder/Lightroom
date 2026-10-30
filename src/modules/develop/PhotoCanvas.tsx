@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEven
 import { orientedSize, outputSize } from '../../engine/geometry';
 import { displayGeometry } from '../../model/crop';
 import { maskView } from '../../model/maskEdit';
-import { pickWhiteBalance } from '../../state/editingAids';
+import { pickRangeColor, pickWhiteBalance } from '../../state/editingAids';
 import { containSize } from '../../hooks/fitSize';
 import { useElementSize } from '../../hooks/useElementSize';
 import { displaySize, FULL_VIEW, rectCenter, scrollForCenter, visibleRect, zoomScale } from '../../model/zoom';
@@ -46,6 +46,7 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
   const masksOpen = useDevelopStore((s) => s.masksOpen);
   const spotsOpen = useDevelopStore((s) => s.spotsOpen);
   const wbPicking = useDevelopStore((s) => s.wbPicking);
+  const rangePicking = useDevelopStore((s) => s.rangePicking);
   const split = useViewStore((s) => s.split);
   const zoom = useViewStore((s) => (cropping ? 'fit' : s.zoom));
   const panToken = useViewStore((s) => s.panToken);
@@ -54,7 +55,7 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
   const display = zoom === 'fit' ? containSize(stage, shown.width / shown.height) : displaySize(shown, zoomScale(zoom, stage, shown, window.devicePixelRatio || 1));
   const pannable = display.width > stage.width + 0.5 || display.height > stage.height + 0.5;
   const showOverlay = cropping && !showingBefore;
-  const showMasks = masksOpen && !cropping && !showingBefore && !wbPicking;
+  const showMasks = masksOpen && !cropping && !showingBefore && !wbPicking && !rangePicking;
   const showSpots = spotsOpen && !cropping && !showingBefore && !wbPicking;
   const showSplit = split && !cropping && !showingBefore;
 
@@ -100,6 +101,14 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
   };
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.button === 0 && rangePicking) {
+      // Range eyedropper (M30): same mapping as the white balance picker.
+      const box = e.currentTarget.getBoundingClientRect();
+      const p = maskView(photo, shownGeometry, display).fromFrame(e.clientX - box.left, e.clientY - box.top);
+      e.stopPropagation();
+      pickRangeColor(p.x, p.y);
+      return;
+    }
     if (e.button === 0 && wbPicking) {
       // Eyedropper: frame px → normalized photo point, through the shown geometry.
       const box = e.currentTarget.getBoundingClientRect();
@@ -139,7 +148,7 @@ export function PhotoCanvas({ photo }: { photo: LoadedPhoto }) {
   const frameTop = Math.max(0, (stage.height - display.height) / 2);
   // Touch (M22): a fitted photo lets a vertical swipe scroll the page (stacked phone layout); panning or a tool needs every gesture.
   const touchAction = pannable || cropping || showMasks || showSpots || wbPicking || showSplit ? 'none' : 'pan-y';
-  const cursor = wbPicking ? 'crosshair' : cropping || showMasks || showSpots ? undefined : zoom === '1:1' ? (pannable ? 'grab' : 'zoom-out') : 'zoom-in';
+  const cursor = wbPicking || rangePicking ? 'crosshair' : cropping || showMasks || showSpots ? undefined : zoom === '1:1' ? (pannable ? 'grab' : 'zoom-out') : 'zoom-in';
 
   return (
     <div ref={areaRef} className={styles.area} onWheel={onWheel} data-testid="photo-stage" data-zoom={zoom}>

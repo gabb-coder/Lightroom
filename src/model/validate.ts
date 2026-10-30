@@ -13,6 +13,8 @@ import {
   type GradeRegion,
   type GradeWheel,
   defaultMaskAdjust,
+  defaultMaskRange,
+  type MaskRange,
   MAX_MASKS,
   MAX_SPOT_RADIUS,
   MAX_SPOTS,
@@ -113,6 +115,21 @@ function maskAdjust(raw: unknown): MaskAdjust {
   return out;
 }
 
+/** A range mask (M30) in range, or undefined for none. */
+function maskRange(raw: unknown): MaskRange | undefined {
+  if (!isObject(raw) || (raw.kind !== 'color' && raw.kind !== 'luminance')) return undefined;
+  const d = defaultMaskRange();
+  const lo = clampNumber(raw.lo, 0, 100, d.lo);
+  return {
+    kind: raw.kind,
+    lo,
+    hi: clampNumber(raw.hi, lo, 100, Math.max(lo, d.hi)),
+    smooth: clampNumber(raw.smooth, 0, 100, d.smooth),
+    hue: clampNumber(raw.hue, 0, 360, d.hue),
+    width: clampNumber(raw.width, 5, 180, d.width),
+  };
+}
+
 /** Masks with valid geometry; ids are kept when they are non-empty strings and unique. */
 function masks(raw: unknown): Mask[] {
   if (!Array.isArray(raw)) return [];
@@ -120,6 +137,7 @@ function masks(raw: unknown): Mask[] {
   const ids = new Set<string>();
   for (const m of raw.slice(0, MAX_MASKS)) {
     if (!isObject(m)) continue;
+    const before = out.length;
     const id = typeof m.id === 'string' && m.id && !ids.has(m.id) ? m.id : `mask-${out.length + 1}-${ids.size}`;
     ids.add(id);
     const coord = (v: unknown, fallback: number) => clampNumber(v, -1, 2, fallback);
@@ -144,6 +162,9 @@ function masks(raw: unknown): Mask[] {
     } else if (m.kind === 'brush') {
       out.push({ id, kind: 'brush', aspect: clampNumber(m.aspect, 0.01, 100, 1.5), strokes: brushStrokes(m.strokes), adjust: maskAdjust(m.adjust) });
     }
+    const range = maskRange(m.range);
+    const added = out[before];
+    if (added && range) added.range = range;
   }
   return out;
 }

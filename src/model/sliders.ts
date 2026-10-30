@@ -112,6 +112,15 @@ export const SPOT_OPACITY_SLIDER: SliderDef = { ...unipolar('spot-opacity', 'Opa
 
 export const ANGLE_SLIDER: SliderDef = bipolar('angle', 'Straighten', -45, 45, 0.1, 'deg');
 
+/** Range masks (M30). */
+export const RANGE_SLIDERS = {
+  lo: { ...unipolar('range-lo', 'Low', 0, 100, 1, 0, 'uint', 'Mask range'), ariaLabel: 'Range low' },
+  hi: { ...unipolar('range-hi', 'High', 0, 100, 1, 100, 'uint', 'Mask range'), ariaLabel: 'Range high' },
+  smooth: { ...unipolar('range-smooth', 'Smoothness', 0, 100, 1, 50, 'uint', 'Mask range'), ariaLabel: 'Range smoothness' },
+  hue: { ...unipolar('range-hue', 'Hue', 0, 360, 1, 30, 'hue', 'Mask range'), track: HUE_TRACK, ariaLabel: 'Range hue' },
+  width: { ...unipolar('range-width', 'Width', 5, 180, 1, 60, 'deg', 'Mask range'), ariaLabel: 'Range width' },
+} as const satisfies Record<string, SliderDef>;
+
 /** Lens and perspective (M29); ranges also validate stored settings. */
 export const LENS_SLIDERS = {
   distortion: { ...bipolar('distortion', 'Distortion', -100, 100, 1, 'int'), historyLabel: 'Lens distortion' },

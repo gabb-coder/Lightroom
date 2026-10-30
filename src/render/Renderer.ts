@@ -53,6 +53,7 @@ const DEVELOP_UNIFORMS = [
   'maskGain',
   'maskTone',
   'maskSat',
+  'maskRange',
   'cgOn',
   'cgTint',
   'cgLum',
@@ -106,6 +107,8 @@ const DISPLAY_UNIFORMS = [
   'overlayKind',
   'overlayA',
   'overlayB',
+  'overlayRange',
+  'photo',
   ...MAP_UNIFORMS,
   'srcSize',
   'overlayColor',
@@ -389,12 +392,15 @@ export class Renderer {
       gl.uniform4f(u.overlayA, ...overlay.a);
       gl.uniform4f(u.overlayB, overlayB[0], overlayB[1], overlayB[2], overlayB[3]);
       this.setGeometryMap(u, map);
+      gl.uniform4f(u.overlayRange, ...overlay.range);
       gl.uniform2f(u.srcSize, source.width, source.height);
       gl.uniform3f(u.overlayColor, MASK_OVERLAY_RGB[0] / 255, MASK_OVERLAY_RGB[1] / 255, MASK_OVERLAY_RGB[2] / 255);
       gl.uniform1f(u.overlayOpacity, MASK_OVERLAY_OPACITY);
     }
     this.bindTexture(0, after.texture, u.after);
     this.bindTexture(1, before.texture, u.before);
+    // The photo's own pixels, for range masks in the overlay (unit 2 holds the brush array).
+    this.bindTexture(3, source.texture, u.photo);
     gl.uniform1i(u.flipY, target.flipY ? 1 : 0);
     gl.uniform1f(u.splitX, splitX);
     gl.uniform1i(u.shadows, o.shadows ? 1 : 0);
@@ -617,6 +623,7 @@ export class Renderer {
     gl.uniform1fv(u.maskGain, masks.map((m) => m.exposureGain));
     gl.uniform3fv(u.maskTone, masks.flatMap((m) => [m.tone.contrast, m.tone.highlights, m.tone.shadows]));
     gl.uniform1fv(u.maskSat, masks.map((m) => m.saturationScale));
+    gl.uniform4fv(u.maskRange, masks.flatMap((m) => m.shape.range));
   }
 
   private setColorGrading(params: PipelineParams): void {

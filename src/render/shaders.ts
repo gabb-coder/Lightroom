@@ -323,11 +323,46 @@ float shapeWeight(int kind, vec4 a, vec4 b, vec2 p, vec2 size) {
 }
 `;
 
+/** engine/masks.ts hueOf, rangeWeight (M30): range masks judged on the photo's own color. */
+const RANGE_GLSL = /* glsl */ `
+float hueOf(vec3 c) {
+  float mx = max(c.r, max(c.g, c.b));
+  float d = mx - min(c.r, min(c.g, c.b));
+  if (d <= 0.0) return 0.0;
+  float h;
+  if (mx == c.r) h = (c.g - c.b) / d;
+  else if (mx == c.g) h = (c.b - c.r) / d + 2.0;
+  else h = (c.r - c.g) / d + 4.0;
+  return 60.0 * (h - 6.0 * floor(h / 6.0));
+}
+float rangeFall(float d, float soft) { return soft > 0.0 ? max(0.0, 1.0 - d / soft) : 0.0; }
+float rangeWeight(vec4 range, vec3 c) {
+  int kind = int(range.x + 0.5);
+  if (kind == 1) {
+    float y = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+    if (y < range.y) return rangeFall(range.y - y, range.w);
+    if (y > range.z) return rangeFall(y - range.z, range.w);
+    return 1.0;
+  }
+  if (kind == 2) {
+    float mx = max(c.r, max(c.g, c.b));
+    if (mx <= 0.0) return 0.0;
+    float sat = (mx - min(c.r, min(c.g, c.b))) / mx;
+    float raw = abs(hueOf(c) - range.y);
+    float dist = min(raw, 360.0 - raw);
+    float w = dist <= range.z ? 1.0 : max(0.0, 1.0 - (dist - range.z) / max(range.z, 1.0));
+    return w * clamp((sat - 0.05) / 0.1, 0.0, 1.0) * clamp((mx - 0.03) / 0.05, 0.0, 1.0);
+  }
+  return 1.0;
+}
+`;
+
 /** engine/masks.ts: maskWeight, adjustForMask, applyMasks (up to MAX_MASKS, in order) */
 const MASKS_GLSL = /* glsl */ `
 ${SHAPE_WEIGHT_GLSL}
-float maskWeight(int i, vec2 p, vec2 size) {
-  return shapeWeight(u_maskKind[i], u_maskA[i], u_maskB[i], p, size);
+${RANGE_GLSL}
+float maskWeight(int i, vec2 p, vec2 size, vec3 photo) {
+  return shapeWeight(u_maskKind[i], u_maskA[i], u_maskB[i], p, size) * rangeWeight(u_maskRange[i], photo);
 }
 vec3 adjustForMask(vec3 c, int i) {
   vec3 out3 = c * u_maskWB[i] * u_maskGain[i];
@@ -335,10 +370,10 @@ vec3 adjustForMask(vec3 c, int i) {
   out3 = applyTone(out3, Tone(t.x, t.y, t.z, 0.0, 0.0));
   return applySaturation(out3, u_maskSat[i]);
 }
-vec3 applyMasks(vec3 c, vec2 p, vec2 size) {
+vec3 applyMasks(vec3 c, vec2 p, vec2 size, vec3 photo) {
   for (int i = 0; i < ${MAX_MASKS}; i++) {
     if (i >= u_maskCount) break;
-    float w = maskWeight(i, p, size);
+    float w = maskWeight(i, p, size, photo);
     if (w <= 0.0) continue;
     vec3 adjusted = adjustForMask(c, i);
     c = w >= 1.0 ? adjusted : mix(c, adjusted, w);
@@ -409,6 +444,7 @@ uniform vec3 u_maskWB[${MAX_MASKS}];
 uniform float u_maskGain[${MAX_MASKS}];
 uniform vec3 u_maskTone[${MAX_MASKS}];
 uniform float u_maskSat[${MAX_MASKS}];
+uniform vec4 u_maskRange[${MAX_MASKS}];
 uniform bool u_cgOn;
 uniform vec3 u_cgTint[4];
 uniform float u_cgLum[4];
@@ -435,7 +471,7 @@ void main() {
   c = applyWhiteBalance(c, u_whiteBalance);
   c = applyExposure(c, u_exposureGain);
   c = applyTone(c, Tone(u_contrast, u_highlights, u_shadows, u_whites, u_blacks));
-  if (u_maskCount > 0) c = applyMasks(c, vec2(p) + 0.5, vec2(size));
+  if (u_maskCount > 0) c = applyMasks(c, vec2(p) + 0.5, vec2(size), src.rgb);
   c = applyCurve(c);
   c = applyHsl(c);
   c = applyVibrance(c, u_vibrance);
@@ -927,12 +963,15 @@ uniform bool u_overlayOn;
 uniform int u_overlayKind;
 uniform vec4 u_overlayA;
 uniform vec4 u_overlayB;
+uniform vec4 u_overlayRange;
+uniform sampler2D u_photo;
 uniform vec2 u_srcSize;
 uniform vec3 u_overlayColor;
 uniform float u_overlayOpacity;
 
 out vec4 outColor;
 ${SHAPE_WEIGHT_GLSL}
+${RANGE_GLSL}
 ${GEOMETRY_MAP_GLSL}
 
 void main() {
@@ -946,7 +985,15 @@ void main() {
   else if (c.a > 0.0 && u_shadows && all(equal(b, ivec3(0)))) c.rgb = u_shadowColor;
   if (u_overlayOn && c.a > 0.0) {
     vec2 src;
-    float w = outputToSource(vec2(o) + 0.5, src) ? shapeWeight(u_overlayKind, u_overlayA, u_overlayB, src, u_srcSize) : 0.0;
+    float w = 0.0;
+    if (outputToSource(vec2(o) + 0.5, src)) {
+      w = shapeWeight(u_overlayKind, u_overlayA, u_overlayB, src, u_srcSize);
+      // Range masks (M30): the photo's own color at that point, nearest pixel.
+      if (u_overlayRange.x > 0.5 && w > 0.0) {
+        ivec2 q = clamp(ivec2(floor(src)), ivec2(0), ivec2(u_srcSize) - 1);
+        w *= rangeWeight(u_overlayRange, texelFetch(u_photo, q, 0).rgb);
+      }
+    }
     c.rgb = mix(c.rgb, u_overlayColor, u_overlayOpacity * w);
   }
   outColor = c;

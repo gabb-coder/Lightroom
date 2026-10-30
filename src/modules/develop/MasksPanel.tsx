@@ -1,8 +1,9 @@
 import { SliderRow } from '../../components/SliderRow';
 import controls from '../../components/controls.module.css';
-import { MAX_MASKS, type Mask, type MaskAdjustKey, type MaskKind, type RadialMask } from '../../model/editSettings';
+import { EyedropperIcon } from '../../components/icons';
+import { defaultMaskRange, MAX_MASKS, type Mask, type MaskAdjustKey, type MaskKind, type MaskRange, type RadialMask } from '../../model/editSettings';
 import { maskNames } from '../../model/maskEdit';
-import { BRUSH_FEATHER_SLIDER, BRUSH_SIZE_SLIDER, MASK_ANGLE_SLIDER, MASK_FEATHER_SLIDER, maskSliderDef } from '../../model/sliders';
+import { BRUSH_FEATHER_SLIDER, BRUSH_SIZE_SLIDER, MASK_ANGLE_SLIDER, MASK_FEATHER_SLIDER, maskSliderDef, RANGE_SLIDERS } from '../../model/sliders';
 import { useDevelopStore } from '../../state/developStore';
 import { useViewStore } from '../../state/viewStore';
 import styles from './MasksPanel.module.css';
@@ -83,6 +84,79 @@ function BrushOptions({ disabled }: { disabled: boolean }) {
   );
 }
 
+const RANGE_KINDS: readonly { kind: MaskRange['kind']; label: string }[] = [
+  { kind: 'none', label: 'None' },
+  { kind: 'color', label: 'Color' },
+  { kind: 'luminance', label: 'Luminance' },
+];
+
+/** Range mask (M30): limit the selected mask to a color or a brightness band. */
+function RangeControls({ mask, disabled }: { mask: Mask; disabled: boolean }) {
+  const updateMask = useDevelopStore((s) => s.updateMask);
+  const setInteracting = useDevelopStore((s) => s.setInteracting);
+  const picking = useDevelopStore((s) => s.rangePicking);
+  const setRangePicking = useDevelopStore((s) => s.setRangePicking);
+  const range = mask.range ?? defaultMaskRange();
+  const set = (patch: Partial<MaskRange>, prop: string) => {
+    const next = { ...range, ...patch };
+    // Keep the band ordered.
+    if (prop === 'lo' && next.hi < next.lo) next.hi = next.lo;
+    if (prop === 'hi' && next.lo > next.hi) next.lo = next.hi;
+    updateMask(mask.id, { range: next }, 'Mask range', prop === 'kind' ? null : `masks.${mask.id}.range.${prop}`);
+  };
+  const slider = (prop: 'lo' | 'hi' | 'smooth' | 'hue' | 'width') => (
+    <SliderRow
+      key={prop}
+      def={RANGE_SLIDERS[prop]}
+      value={range[prop]}
+      disabled={disabled}
+      onChange={(v) => set({ [prop]: v }, prop)}
+      onDragStart={() => setInteracting(true)}
+      onDragEnd={() => setInteracting(false)}
+    />
+  );
+  return (
+    <div role="group" aria-label="Range" className={styles.range}>
+      <div className={styles.rangeHeader}>
+        <div className={`group-label ${styles.groupLabel}`}>Range</div>
+        <div className={controls.segmented} role="group" aria-label="Range mask">
+          {RANGE_KINDS.map((k) => (
+            <button key={k.kind} type="button" className={controls.segment} aria-pressed={range.kind === k.kind} disabled={disabled} onClick={() => set({ kind: k.kind }, 'kind')}>
+              {k.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {range.kind === 'color' && (
+        <>
+          <div className={styles.rangePick}>
+            <button
+              type="button"
+              className={`${controls.button} ${styles.tool}`}
+              aria-pressed={picking}
+              disabled={disabled}
+              title="Click a color on the photo"
+              onClick={() => setRangePicking(!picking)}
+            >
+              <EyedropperIcon /> Pick a color
+            </button>
+          </div>
+          {picking && <p className={styles.hint}>Click the color to limit this mask to. Esc cancels.</p>}
+          {slider('hue')}
+          {slider('width')}
+        </>
+      )}
+      {range.kind === 'luminance' && (
+        <>
+          {slider('lo')}
+          {slider('hi')}
+          {slider('smooth')}
+        </>
+      )}
+    </div>
+  );
+}
+
 /** O: tint the selected mask's area on the photo. */
 function OverlayToggle({ disabled }: { disabled: boolean }) {
   const show = useViewStore((s) => s.showMaskOverlay);
@@ -157,6 +231,7 @@ export function MasksPanel() {
             <AdjustSlider key={`${selected.id}-${k}`} mask={selected} prop={k} disabled={disabled} />
           ))}
           {selected.kind === 'radial' && <RadialOptions mask={selected} disabled={disabled} />}
+          <RangeControls mask={selected} disabled={disabled} />
         </div>
       )}
     </>

@@ -95,3 +95,29 @@
   width: fit-content;
   margin: 4px 0 0 auto;
 }
+
+/* Range masks (M30). */
+.range {
+  margin-top: 10px;
+}
+
+.rangeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.rangeHeader .groupLabel {
+  margin: 0;
+}
+
+.rangePick {
+  display: flex;
+  margin-bottom: 6px;
+}
+
+.rangePick svg {
+  margin-right: 4px;
+}
